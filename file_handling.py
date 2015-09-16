@@ -1,7 +1,7 @@
 '''Handling HBNL files
 '''
 
-import os, shutil
+import os, shutil, subprocess
 import utils
 from collections import OrderedDict
 
@@ -91,7 +91,7 @@ def parse_filename(filename):
 		run_number = session_piece[1]
 		
 		subject_piece = pieces[3]
-		filetype = 'neuroscan' # preliminary
+		system = 'neuroscan' # preliminary
 		fam_number = subject_piece[1:5]
 		subject = subject_piece[5:8]
 		if fam_number in ['0000','0001']:
@@ -106,11 +106,11 @@ def parse_filename(filename):
 			family = fam_number
 			site = site_hash[ subject_piece[0].lower() ]
 			if not subject_piece[0].isdigit():
-				filetype = 'masscomp'
+				system = 'masscomp'
 			 
 	# masscomp
 	else:
-		filetype = 'masscomp'
+		system = 'masscomp'
 		experiment_short = filename[:2]
 		experiment = experiment_shorthands[ experiment_short ]
 		site_letter = filename[3]
@@ -131,7 +131,7 @@ def parse_filename(filename):
 			
 		subject = filename[8:11]
 
-	return {'filetype':filetype,
+	return {'system':system,
 			'experiment':experiment,
 			'session': session_letter,
 			'run':run_number,
@@ -148,7 +148,7 @@ def parse_filename_tester():
 			]
 	for case in cases:
 		info = parse_filename(case[0])
-		if ( (info['filetype'] != case[1]) or (info['experiment'] != case[2]) or
+		if ( (info['system'] != case[1]) or (info['experiment'] != case[2]) or
 			(info['site'] != case[3]) or (int(info['family']) != case[4]) or (int(info['subject']) != case[5]) or
 			(info['session'] != case[6]) or (int(info['run']) != case[7] ) ):
 			print ( info, ' mismatch for case: ', case )
@@ -190,6 +190,49 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
 ##		EEG
 ##
 ##############################
+
+def parse_maybe_numeric(st):
+	proc = st.replace('-','')
+	dec = False
+	if '.' in st:
+		dec = True
+		proc = st.replace('.','')
+	if proc.isnumeric():
+		if dec:
+			return float(st)
+		else:
+			return int(st)
+	return st
+
+class cnth1_file:
+
+	def __init__(s,filepath):
+		s.filepath = filepath
+		s.filename = os.path.split(filepath)[1]
+		s.file_info = parse_filename(s.filename)
+
+	def read_trial_info(s,nlines=-1):
+		h5header = subprocess.check_output(['/opt/bin/print_h5_header',s.filepath])
+		head_lines = h5header.decode().split('\n')
+		hD = {}
+		for L in head_lines[:nlines]:
+			if L[:8] == 'category':
+				cat = L[9:].split('"')[1]
+				hD[cat]= {}
+				curD = hD[cat]
+			elif L[:len(cat)] == cat:
+				subcat = L.split(cat)[1].strip()
+				hD[cat][subcat] = {}
+				curD = hD[cat][subcat]
+			else:
+				parts = L.split(';')
+				var = parts[0].split('"')[1]
+				val = parse_maybe_numeric( parts[1].split(',')[0].strip() )
+
+				curD[var] = val
+				
+		s.trial_info = hD
+
 
 
 class mt_file:
@@ -494,7 +537,7 @@ def move_picked_files_to_processed( from_base, from_folders, working_directory, 
 						if 'subjects' in file_info['site']:
 							counts['non coga'] += 1
 
-						if file_info['filetype'] == 'masscomp':
+						if file_info['system'] == 'masscomp':
 							counts['masscomp'] +=1
 							type_short = 'mc'
 							session_path = None

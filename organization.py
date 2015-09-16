@@ -46,10 +46,12 @@ class Neuropsych(Acquisition):
 		I.update(info)
 		Acquisition.__init__(s,I)
 		
-				
+			
 class Electrophysiology(Acquisition):
 	
-	def_info = {'technique':'EEG'}
+	def_info = {'technique':'EEG',
+				'system':'unknown'}
+
 	collection = 'EEG'
 	
 	part_name = 'experiment'

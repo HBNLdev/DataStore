@@ -4,7 +4,7 @@
 master_path = '/export/home/mort/projects/EEG-master-file/EEG-master-file-08.csv' #'/processed_data/master-file/EEG-master-file-08.csv'
 master= None
 
-import datetime
+import datetime, os
 import pandas as pd
 
 def calc_date_w_Qs(dstr):
@@ -44,6 +44,19 @@ def load_master( preloaded= None, force_reload=False):
 			master[dcol] = master[dcol].map(calc_date_w_Qs).apply( pd.to_datetime )
 	
 	return
+
+def masterYOB():
+	'''Writes _YOB version of master file in same location
+	'''
+	load_master()
+	masterY = master.copy()
+	masterY['DOB'] = masterY['DOB'].apply( lambda d: d.year )
+	masterY.rename(columns={'DOB':'YOB'}, inplace=True)
+
+	outname = master_path.replace('.csv','_YOB.csv')
+	masterY.to_csv(outname,na_rep='.',index=False,date_format='%m/%d/%Y',float_format='%.5f')
+
+	return masterY
 
 def ids_with_exclusions():
 	return master[ master['no-exp'].notnull() ]['ID'].tolist()
@@ -121,8 +134,11 @@ def sessions_for_subject_experiment( subject_id, experiment ):
 		
 def protect_dates(filepath):
 
+	path, filename = os.path.split(filepath)
+	newname = filename.replace('.','_protectedDates.')
+
 	inf = open(filepath)
-	outf = open( 'tmp.csv','w')
+	outf = open( os.path.join(path,newname),'w')
 	for line in inf:
 		lparts = line.split(',')
 		newline = []
