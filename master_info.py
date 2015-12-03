@@ -1,7 +1,7 @@
 '''EEGmaster
 '''
 
-master_path = '/export/home/mort/projects/EEG-master-file/EEG-master-file-08.csv' #'/processed_data/master-file/EEG-master-file-08.csv'
+master_path = '/export/home/mort/projects/EEG-master-file/EEG-master-file-10.csv' #'/processed_data/master-file/EEG-master-file-08.csv'
 master= None
 
 import datetime, os
@@ -29,14 +29,18 @@ def calc_date_w_Qs(dstr):
 		print('problem with date: '+dstr)
 		return None 
 
-def load_master( preloaded= None, force_reload=False):
+def load_master( preloaded= None, force_reload=False, custom_path=None):
 	global master
-	if type(preloaded) == pd.core.frame.DataFrame:
+	if type(preloaded) == pd.core.frame.DataFrame and not custom_path:
 		master = preloaded
 		return
-			
+	
+	if custom_path:
+		master_path_use= custom_path
+	else: master_path_use= master_path
+
 	if not type(master)==pd.core.frame.DataFrame  or force_reload:	
-		master = pd.read_csv(master_path, 
+		master = pd.read_csv(master_path_use, 
 							converters={'ID':str}, na_values=['.'],low_memory=False)
 	
 		master.set_index('ID',drop=False,inplace=True)#verify_integrity=True)

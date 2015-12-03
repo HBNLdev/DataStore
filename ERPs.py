@@ -25,6 +25,7 @@ def process_ERPs_for_study( study ):
 	subjectsDF = MI.frame_for_study( study )
 	
 	for sub in subjectsDF['ID']:
+		pass
 
 
 class analysis_file:

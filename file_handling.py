@@ -19,6 +19,7 @@ site_hash = {'a':'uconn',
 			 '6':'ucsd',
 			 '7':'howard'
 			}
+site_hash_rev = { v:k for k,v in site_hash.items() if k in [str(n) for n in range(1,8)] }
 			
 experiment_shorthands = {'aa': 'ap3',
 							 'ab': 'abk',
@@ -80,7 +81,10 @@ experiment_shorthands = {'aa': 'ap3',
 							 'va': 'va3',
 							 'vp': 'vp3'}
 							
-def parse_filename(filename):
+def parse_filename(filename,include_full_ID=False):
+
+	if os.path.sep in filename:
+		filename = os.path.split()[1]
 
 	#neuroscan type
 	if '_' in filename:
@@ -131,7 +135,7 @@ def parse_filename(filename):
 			
 		subject = filename[8:11]
 
-	return {'system':system,
+	output = {'system':system,
 			'experiment':experiment,
 			'session': session_letter,
 			'run':run_number,
@@ -139,7 +143,15 @@ def parse_filename(filename):
 			'family': family,
 			'subject': subject}
 
+	if include_full_ID:
+		try:
+			output['ID'] = site_hash_rev[site]+family+subject
+		except: output['ID'] = filename
+
+	return output
+
 def parse_filename_tester():
+
 	cases = [ ('vp3_6_e1_10162024_avg.mt','neuroscan','vp3','uconn',162,24,'e',1), 
 			 ('vp2e0157027.mt','masscomp','vp3','washu',157,27,'a',1),
 			 ('aod_5_a1_c0000857_avg.h1','neuroscan','aod','c-subjects',0,857,'a',1),
@@ -230,7 +242,7 @@ class cnth1_file:
 				val = parse_maybe_numeric( parts[1].split(',')[0].strip() )
 
 				curD[var] = val
-				
+			
 		s.trial_info = hD
 
 
@@ -248,7 +260,12 @@ class mt_file:
 								'vp3':{(1,'tt'):['N1','P3'],
 									  (2,'nt'):['N1','P3'],
 									  (3,'nv'):['N1','P3']
-									  }
+									  },
+								'ant':{(1,'j'):['P3','N4'],
+										#(2,'p'):['P3','N4'],
+										(3,'a'):['P3','N4'],
+										(4,'w'):['P3','N4']
+										}
 							  }
 	data_structure = '{(case#,peak):{electrodes:(amplitude,latency),reaction_time:time} }' # string for reference
 	
@@ -451,7 +468,7 @@ class tolt_summary_file(neuropsych_summary):
 
 	def __init__(s,filepath):
 		neuropsych_summary.__init__(s,filepath)
-		s.read_file()
+		s.rdead_file()
 
 class cbst_summary_file(neuropsych_summary):
 	
