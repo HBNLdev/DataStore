@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from bokeh.plotting import figure
-from bokeh.models import Plot, ColumnDataSource
+from bokeh.models import Plot, ColumnDataSource, CustomJS, BoxSelectTool, TapTool, Rect
 from bokeh.properties import Instance
 from bokeh.server.app import bokeh_app
 from bokeh.server.utils.plugins import object_page
@@ -37,7 +37,8 @@ class DashApp(HBox):
 	freq = Instance(Slider)
 	
 	plot = Instance(Plot)
-	source = Instance(ColumnDataSource)
+	data_source = Instance(ColumnDataSource)
+	rect_source = Instance(ColumnDataSource)
 
 	two_sessions_query = O.Mdb.subjects.find( {'b-age':{ '$gt': 0 }} )
 	EEGsubjects = pd.DataFrame( list( two_sessions_query ) )
@@ -50,8 +51,11 @@ class DashApp(HBox):
 		two_sesDF = df[['a-age','b-age']]
 		two_sesDF.columns= ['Aage','Bage']
 		#obj.source = ColumnDataSource( data= dict(x=[],y=[]))
-		#obj.source = ColumnDataSource( data= df[['a-age','b-age']] )
-		obj.source = ColumnDataSource( data = dict( Aage=df['a-age'].tolist(), Bage=df['b-age'].tolist() ))
+		#obj.source = ColumnDataSource( data= df[['a-age','b-age']] 
+		obj.data_source = ColumnDataSource( data = dict( Aage=df['a-age'].tolist(), 
+															Bage=df['b-age'].tolist() ))
+		obj.rect_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[] ))
+		
 		obj.text = TextInput( title="title", name='title', value='first two session ages')
 
 		Aage_range= [ df['a-age'].min(), df['a-age'].max() ]
@@ -69,16 +73,54 @@ class DashApp(HBox):
 		 				options=['this','that','other','what'])
 
 		toolset = "crosshair,pan,reset,resize,save,wheel_zoom"
+		tap_callback = CustomJS( args=dict(source=obj.data_source), code="""
+		 	alert('clicked');
+		 	""" )
+		box_callback = CustomJS(args=dict(source=obj.rect_source), code="""
+		        // get data source from Callback args
+		        console.dir(cb_data)
+		        var data = source.get('data');
+
+		        /// get BoxSelectTool dimensions from cb_data parameter of Callback
+		        var geometry = cb_data['geometry'];
+
+		        /// calculate Rect attributes
+		        var width = geometry['x1'] - geometry['x0'];
+		        var height = geometry['y1'] - geometry['y0'];
+		        var x = geometry['x0'] + width/2;
+		        var y = geometry['y0'] + height/2;
+
+		        /// update data source with new Rect attributes
+		        data['x'].push(x);
+		        data['y'].push(y);
+		        data['width'].push(width);
+		        data['height'].push(height);
+
+		        // trigger update of data source
+		        source.trigger('change');
+		    """)
+		box = BoxSelectTool( callback=box_callback )
+		tap = TapTool( callback=tap_callback )
 
 		plot = figure( title_text_font_size="12pt",
 					plot_height=400, plot_width=400,
-					tools=toolset,
+					tools=[box,tap],#toolset,
 					title=obj.text.value,
 					x_range=[0, 100], y_range=[0,100])
-		plot.circle('Aage','Bage', source=obj.source)# line_width=3, line_alpha=0.6)
+
+
+		rect = Rect(x='x',
+            y='y',
+            width='width',
+            height='height',
+            fill_alpha=0.3,
+            fill_color='#CC5555')
+		plot.add_glyph( obj.rect_source, rect, selection_glyph=rect, nonselection_glyph=rect )
+		#print(obj.source)
+		plot.circle('Aage','Bage', source=obj.data_source)# line_width=3, line_alpha=0.6)
 
 		obj.plot = plot
-		obj.update_data()
+		#obj.update_data()
 
 		obj.inputs= VBoxForm( 
 				children=[ obj.text, obj.Aage_min, obj.Aage_max, 
@@ -122,7 +164,10 @@ class DashApp(HBox):
 	#					s.amplitude.value)
 		#sd = data.to_dict()
 		#print(sd.keys())
-		s.source.data= dict( Aage=data['a-age'].tolist(), Bage=data['b-age'].tolist() )
+		#D = s.source.data
+		#print([ (k,len(v)) for k,v in D.items()])
+		s.data_source.data= dict( Aage=data['a-age'].tolist(), Bage=data['b-age'].tolist() )
+							#	x=D['x'], y=D['y'], width=D['width'], height=D['height'] )
 
 @bokeh_app.route("/bokeh/HBNLdash/")
 @object_page("dashtest")

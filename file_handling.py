@@ -175,23 +175,24 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
 			path = dName
 			if 'reject' not in path:
 				fullpath = os.path.join(path,filename)
-				if shutil.fnmatch.fnmatch( filename, filter_pattern ):
-					if file_parameters:
-						file_info = parse_filename( filename )
-					
-						param_ck = [file_parameters[k]==file_info[k] for k in file_parameters]
-					else: param_ck = [True]
-					if time_range:
-						time_ck = False
-						stats = os.stat( fullpath )
-						if time_range[0] < stats.st_ctime < time_range[1]:
-							time_ck = True
-					else: time_ck = True
-					if filter_list:
-						filter_ck = any([s in filename for s in filter_list])
-					else: filter_ck = True	
-					if all(param_ck) and time_ck and filter_ck:
-						file_list.append( fullpath )
+				if os.path.exists(fullpath):
+					if shutil.fnmatch.fnmatch( filename, filter_pattern ):
+						if file_parameters:
+							file_info = parse_filename( filename )
+						
+							param_ck = [file_parameters[k]==file_info[k] for k in file_parameters]
+						else: param_ck = [True]
+						if time_range:
+							time_ck = False
+							stats = os.stat( fullpath )
+							if time_range[0] < stats.st_ctime < time_range[1]:
+								time_ck = True
+						else: time_ck = True
+						if filter_list:
+							filter_ck = any([s in filename for s in filter_list])
+						else: filter_ck = True	
+						if all(param_ck) and time_ck and filter_ck:
+							file_list.append( fullpath )
 
 	return file_list
 
