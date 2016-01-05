@@ -140,35 +140,6 @@ class avgh1:
 			else:
 				leg_flag = False
 
-			
-			# splot = figure(width=props['width'], height=height, 
-			# 	title=s.electrodes[eind], tools=[tap],
-			# 	min_border=props['min_border'])
-			# splot.y_range = Range1d(min_val,max_val)
-			# splot.title_text_font_size = '8pt'
-			# splot.xaxis.axis_label_text_font_size = '12pt'
-
-			# for cs_ind,case in enumerate(case_list):
-			# 	case_ind = s.case_num_map[case]-1
-			# 	leg = None
-			# 	if eind == 0:
-			# 		leg = case
-			# 	splot.line( x=tms, y=pot[case_ind,eind,:], color=colors[cs_ind],
-			# 				line_width=3, line_alpha=0.85, legend=leg)
-
-			# if eind ==0:
-			# 	splot.legend.orientation='top_left'
-			# 	splot.legend.label_text_font_size = '8pt'
-			# 	splot.legend.background_fill_alpha = 0
-			# 	splot.legend.label_standoff = 0
-			# 	splot.legend.legend_padding = 2
-			# 	splot.legend.legend_spacing = 0
-			# splot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
-			# if n_elec - eind < n_per_row+1:
-			# 	splot.xaxis.axis_label="Time (s)"
-			# else: 
-			# 	splot.xaxis[0].ticker = FixedTicker(ticks=[])
-			# plots[-1].append(splot)
 			splot = s.make_plot_for_channel(potentials,eind,props,case_list,tools,bot_flag,leg_flag)
 			plots[-1].append(splot)
 		g=gridplot(plots,border_space=-40)
