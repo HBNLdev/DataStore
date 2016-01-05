@@ -1,9 +1,9 @@
 '''HBNL dashboard
 
 to start:
-	bokeh-server --script HBNLdataDash.py
+	bokeh-server --script PeakPicker.py
 point browser to:
-	http://localhost:5006/bokeh/HBNLdash/
+	http://localhost:5006/bokeh/PeakPicker/
 
 '''
 

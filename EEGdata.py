@@ -43,13 +43,17 @@ class avgh1:
 		if 'cases' not in dir(s):
 			case_info = s.loaded['file']['run']['case']['case']
 			s.cases = {}
+			s.case_num_map = {}
 			for vals in case_info.value:
 				#print([type(v) for v in vals])
 				dvals = [ v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in vals   ]
 				caseD = { n:v for n,v in zip(case_info.dtype.names, dvals) }
 				s.cases[ caseD['case_num'] ] = caseD
+				s.case_num_map[ caseD['case_type'] ] = caseD['case_num']
+			#s.case_num_map = { D['case_type']:k for k,D in s.cases.items() }
+
 		else:
-			returns
+			return
 
 	def prepare_plot_data(s):
 		
@@ -102,21 +106,23 @@ class avgh1:
 		props = default_props
 
 		s.extract_case_data()
-		case_num_map = { D['case_type']:k for k,D in s.cases.items() }
-		#case_num_map = { cs:num for   }
-		tms,pot = s.prepare_plot_data()
-		min_val = int(np.floor(np.min(pot)))
-		max_val = int(np.ceil(np.max(pot)))
+		
+		tms,potentials = s.prepare_plot_data()
+
+		props['times'] = tms
+		min_val = int(np.floor(np.min(potentials)))
+		max_val = int(np.ceil(np.max(potentials)))
+		props['yrange'] = [min_val,max_val]
 
 		if len(case_list) > 3:
-			colors = brewer['Spectral'][len(case_list)]
-		else: colors=['#2222DD','#DD2222','#66DD66']
+			props['colors'] = brewer['Spectral'][len(case_list)]
+		else: props['colors'] = ['#2222DD','#DD2222','#66DD66']
 
 		callback = CustomJS( code="alert('clicked')" )
 		#callback = CustomJS( code="function(){ var data = source.get('data'); console.dir(data); }" )
 
 		plots = []
-		n_elec = pot.shape[1]
+		n_elec = potentials.shape[1]
 		n_per_row = int(np.ceil(n_elec**0.5))
 
 		for eind in range(n_elec):
@@ -124,37 +130,85 @@ class avgh1:
 				plots.append([])
 			electrode = s.electrodes[eind]
 			tap = TapTool( callback=callback )
+			tools=[tap]
 			if n_elec - eind < n_per_row+1:
-				height = props['height']+props['extra_bottom_height']
+				bot_flag = True
 			else:
-				height = props['height']
-			splot = figure(width=props['width'], height=height, 
-				title=s.electrodes[eind], tools=[tap],
-				min_border=props['min_border'])
-			splot.y_range = Range1d(min_val,max_val)
-			splot.title_text_font_size = '8pt'
-			splot.xaxis.axis_label_text_font_size = '12pt'
+				bot_flag = False
+			if eind == 0:
+				leg_flag = True
+			else:
+				leg_flag = False
 
-			for cs_ind,case in enumerate(case_list):
-				case_ind = case_num_map[case]-1
-				leg = None
-				if eind == 0:
-					leg = case
-				splot.line( x=tms, y=pot[case_ind,eind,:], color=colors[cs_ind],
-							line_width=3, line_alpha=0.85, legend=leg)
+			
+			# splot = figure(width=props['width'], height=height, 
+			# 	title=s.electrodes[eind], tools=[tap],
+			# 	min_border=props['min_border'])
+			# splot.y_range = Range1d(min_val,max_val)
+			# splot.title_text_font_size = '8pt'
+			# splot.xaxis.axis_label_text_font_size = '12pt'
 
-			if eind ==0:
-				splot.legend.orientation='top_left'
-				splot.legend.label_text_font_size = '8pt'
-				splot.legend.background_fill_alpha = 0
-				splot.legend.label_standoff = 0
-				splot.legend.legend_padding = 2
-				splot.legend.legend_spacing = 0
-			splot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
-			if n_elec - eind < n_per_row+1:
-				splot.xaxis.axis_label="Time (s)"
-			else: 
-				splot.xaxis[0].ticker = FixedTicker(ticks=[])
+			# for cs_ind,case in enumerate(case_list):
+			# 	case_ind = s.case_num_map[case]-1
+			# 	leg = None
+			# 	if eind == 0:
+			# 		leg = case
+			# 	splot.line( x=tms, y=pot[case_ind,eind,:], color=colors[cs_ind],
+			# 				line_width=3, line_alpha=0.85, legend=leg)
+
+			# if eind ==0:
+			# 	splot.legend.orientation='top_left'
+			# 	splot.legend.label_text_font_size = '8pt'
+			# 	splot.legend.background_fill_alpha = 0
+			# 	splot.legend.label_standoff = 0
+			# 	splot.legend.legend_padding = 2
+			# 	splot.legend.legend_spacing = 0
+			# splot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
+			# if n_elec - eind < n_per_row+1:
+			# 	splot.xaxis.axis_label="Time (s)"
+			# else: 
+			# 	splot.xaxis[0].ticker = FixedTicker(ticks=[])
+			# plots[-1].append(splot)
+			splot = s.make_plot_for_channel(potentials,eind,props,case_list,tools,bot_flag,leg_flag)
 			plots[-1].append(splot)
 		g=gridplot(plots,border_space=-40)
 		show(g)
+
+
+	def make_plot_for_channel(s,pot,el_ind,props,case_list,tools,bottom_label=False,legend=False):
+
+		if bottom_label:
+			height = props['height']+props['extra_bottom_height']
+		else:
+			height = props['height'] 
+
+
+		plot = figure(width=props['width'], height=height, 
+			title=s.electrodes[el_ind], tools=tools,
+			min_border=props['min_border'])
+		plot.y_range = Range1d(*props['yrange'])
+		plot.title_text_font_size = '8pt'
+		plot.xaxis.axis_label_text_font_size = '12pt'
+
+		for cs_ind,case in enumerate(case_list):
+			case_ind = s.case_num_map[case]-1
+			leg = None
+			if legend:
+				leg = case
+			plot.line( x=props['times'], y=pot[case_ind,el_ind,:], color=props['colors'][cs_ind],
+						line_width=3, line_alpha=0.85, name=case, legend=leg)
+
+		if legend:
+			plot.legend.orientation='top_left'
+			plot.legend.label_text_font_size = '8pt'
+			plot.legend.background_fill_alpha = 0
+			plot.legend.label_standoff = 0
+			plot.legend.legend_padding = 2
+			plot.legend.legend_spacing = 0
+		plot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
+		if bottom_label:
+			plot.xaxis.axis_label="Time (s)"
+		else: 
+			plot.xaxis[0].ticker = FixedTicker(ticks=[])
+		
+		return plot
