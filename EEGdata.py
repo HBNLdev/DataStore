@@ -103,7 +103,8 @@ class avgh1:
 		default_props = {'width':250,
 						'height':150,
 						'min_border':2,
-						'extra_bottom_height':50}
+						'extra_bottom_height':50,
+						'font size':'8pt'}
 
 		default_props.update(props)
 		props = default_props
@@ -196,8 +197,8 @@ class avgh1:
 			title=electrode, #tools=tools,
 			min_border=props['min_border'])
 		plot.y_range = Range1d(*props['yrange'])
-		plot.title_text_font_size = '8pt'
-		plot.xaxis.axis_label_text_font_size = '12pt'
+		plot.title_text_font_size = props['font size']
+		plot.xaxis.axis_label_text_font_size = props['font size']
 
 		for cs_ind,case in enumerate(case_list):
 			case_ind = s.case_num_map[case]-1
@@ -214,11 +215,20 @@ class avgh1:
 
 		if legend:
 			plot.legend.orientation='top_left'
-			plot.legend.label_text_font_size = '8pt'
-			plot.legend.background_fill_alpha = 0
-			plot.legend.label_standoff = 0
+			plot.legend.label_text_font_size = props['font size']
+			#plot.legend.background_fill_color = '#444' # fill not working
+			#plot.legend.background_fill_alpha = 0.2
+			plot.legend.label_text_align = 'left'
+			#plot.legend.label_text_baseline = 'top'
+			plot.legend.label_width = 20
+			plot.legend.label_height = 12
+			plot.legend.label_standoff = 10
 			plot.legend.legend_padding = 2
-			plot.legend.legend_spacing = 0
+			plot.legend.legend_spacing = 2
+			#plot.legend.glyph_height = 10
+			plot.legend.glyph_width = 15
+			plot.legend.glyph_height= 12
+
 		plot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
 		if bottom_label:
 			plot.xaxis.axis_label="Time (s)"
