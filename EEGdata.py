@@ -208,7 +208,7 @@ class avgh1:
 			if mode == 'server':
 				print(case)
 				plot.line( x='times', y=electrode+'_'+case, color=props['colors'][cs_ind],
-						line_width=3, line_alpha=0.85, name=case, legend=leg, source=source)
+						line_width=3, line_alpha=0.85, name=case+'_line', legend=leg, source=source)
 			else: #notebook for now
 				plot.line( x=props['times'], y=pot[case_ind,el_ind,:], color=props['colors'][cs_ind],
 						line_width=3, line_alpha=0.85, name=case, legend=leg)

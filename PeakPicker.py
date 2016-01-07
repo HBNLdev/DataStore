@@ -30,7 +30,7 @@ class PickerApp(VBox):
 	inputs = Instance(VBoxForm)
 	text = Instance(TextInput)
 
-	toggle = Instance(CheckboxGroup)
+	case_toggle = Instance(CheckboxGroup)
 
 	gridplot = Instance(GridPlot)
 	data_source = Instance(ColumnDataSource)
@@ -47,7 +47,8 @@ class PickerApp(VBox):
 		
 		obj.text = TextInput( title="title", name='title', value=PickerApp.exp_path)
 
-		obj.toggle = CheckboxGroup( labels=eeg.case_list,active=[0],inline=True)
+		obj.case_toggle = CheckboxGroup( labels=eeg.case_list, inline=True,
+				active=[n for n in range(len(eeg.case_list))] )
 
 
 		toolset = "crosshair,pan,reset,resize,save,wheel_zoom"
@@ -86,7 +87,7 @@ class PickerApp(VBox):
 					source=obj.data_source)
 
 		obj.inputs= VBoxForm( 
-				children=[ obj.text, obj.toggle ])
+				children=[ obj.text, obj.case_toggle ])
 		obj.children.append( obj.inputs )
 		obj.children.append( obj.gridplot )
 		return obj
@@ -97,7 +98,18 @@ class PickerApp(VBox):
 		if not s.text:
 			return
 
+		s.case_toggle.on_click(s.checkbox_handler)
+
 		s.text.on_change('value', s, 'input_change')
+
+	def checkbox_handler(s,active):
+
+	    for n,nm in enumerate(PickerApp.eeg_exp.case_list):
+	    	label = nm+'_line'
+	    	selections=s.gridplot.select(dict(name=label))
+	    	for sel in selections:
+	    		sel.glyph.line_alpha= 1 if n in s.case_toggle.active else 0
+
 
 	def input_change(s, obj, attrname, old, new):
 		s.update_data()
