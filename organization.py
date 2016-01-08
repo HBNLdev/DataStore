@@ -61,6 +61,21 @@ class Electrophysiology(Acquisition):
 		I = s.def_info.copy()
 		I.update(info)
 		Acquisition.__init__(s,I)
+
+class ElectrophysiologyCalculations(Acquisition):
+
+	def_info = {'technique':'EEG'}
+
+	collection = 'EEGresults'
+
+	part_name = 'experiment'
+	repeat_name = 'session'
+
+	def __init__(s,info={}):
+		I = s.def_info.copy()
+		I.update(info)
+		Acquisition.__init__(s,I)		
+
 	
 class SSAGA(Acquisition):
 	
@@ -117,7 +132,5 @@ class ProcessingStep:
 			s.output = DataDescription(oup)
 		
 		s.function = fxn
-		
-		
 		
 
