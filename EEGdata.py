@@ -5,7 +5,7 @@ import numpy as np
 import h5py, os
 import bokeh
 from bokeh.plotting import figure, output_notebook, show, gridplot
-from bokeh.models import FixedTicker, CustomJS, TapTool, Range1d, ColumnDataSource
+from bokeh.models import FixedTicker, CustomJS, TapTool, Range1d, ColumnDataSource, GridPlot
 from bokeh.palettes import brewer
 
 import study_info as SI
@@ -44,10 +44,12 @@ class avgh1:
 			case_info = s.loaded['file']['run']['case']['case']
 			s.cases = {}
 			s.case_num_map = {}
+			s.case_list = []
 			for vals in case_info.value:
 				dvals = [ v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in vals   ]
 				caseD = { n:v for n,v in zip(case_info.dtype.names, dvals) }
 				s.cases[ caseD['case_num'] ] = caseD
+				s.case_list.append(caseD['case_type'])
 				s.case_num_map[ caseD['case_type'] ] = caseD['case_num']
 
 		else:
@@ -94,17 +96,23 @@ class avgh1:
 		g=gridplot([plots])
 		show(g)
 
-	def selected_cases_by_channel(s,case_list,channel_list='all',props={}):
+	def selected_cases_by_channel(s,cases='all',channels='all',props={}, 
+			mode='notebook',source=None):
+
+		# Setup properties for plots 
 		default_props = {'width':250,
 						'height':150,
 						'min_border':2,
-						'extra_bottom_height':50}
+						'extra_bottom_height':50,
+						'font size':'8pt'}
 
 		default_props.update(props)
 		props = default_props
 
 		s.extract_case_data()
-		
+		if cases == 'all':
+			cases = s.case_list
+
 		tms,potentials = s.prepare_plot_data()
 
 		props['times'] = tms
@@ -112,21 +120,21 @@ class avgh1:
 		max_val = int(np.ceil(np.max(potentials)))
 		props['yrange'] = [min_val,max_val]
 
-		if len(case_list) > 3:
-			props['colors'] = brewer['Spectral'][len(case_list)]
+		if len(cases) > 3:
+			props['colors'] = brewer['Spectral'][len(cases)]
 		else: props['colors'] = ['#2222DD','#DD2222','#66DD66']
 
 		callback = CustomJS( code="alert('clicked')" )
 
-		if channel_list ==  'all':
-			channel_list = s.electrodes
+		if channels ==  'all':
+			channels = s.electrodes
 
 		
-		n_plots = len(channel_list) #potentials.shape[1]
-		n_per_row = int(np.ceil(n_plots**0.5))
+		n_plots = len( channels ) #potentials.shape[1]
+		n_per_row = int( np.ceil(n_plots**0.5) )
 
 		plots = []
-		for plot_ind,electrode in enumerate(channel_list):
+		for plot_ind,electrode in enumerate(channels):
 			eind= s.electrodes.index(electrode)
 			if plot_ind % n_per_row == 0:
 				plots.append([])
@@ -142,14 +150,19 @@ class avgh1:
 			else:
 				leg_flag = False
 
-			splot = s.make_plot_for_channel(potentials,eind,props,case_list,tools,
-										bottom_label=bot_flag,legend=leg_flag)
+			splot = s.make_plot_for_channel(potentials,eind,props,cases,tools,
+										bottom_label=bot_flag,legend=leg_flag, mode=mode,
+										source=source)
 			plots[-1].append(splot)
+		
 		g=gridplot(plots,border_space=-40)
-		show(g)
+		if mode == 'server':
+			return g
+		else:
+			show(g)
 
-
-	def make_data_source(s,times,potentials,channels='all'):
+	def make_data_source(s,channels='all'):
+		times, potentials = s.prepare_plot_data()
 		s.extract_case_data()
 
 		source_dict = dict(
@@ -170,20 +183,22 @@ class avgh1:
 
 
 	def make_plot_for_channel(s,pot,el_ind,props,case_list,tools,
-						mode='notebook',bottom_label=False,legend=False):
+						mode='notebook',bottom_label=False,legend=False,
+						source=None):
 
 		if bottom_label:
 			height = props['height']+props['extra_bottom_height']
 		else:
 			height = props['height'] 
 
+		electrode = s.electrodes[el_ind]
 
 		plot = figure(width=props['width'], height=height, 
-			title=s.electrodes[el_ind], #tools=tools,
+			title=electrode, #tools=tools,
 			min_border=props['min_border'])
 		plot.y_range = Range1d(*props['yrange'])
-		plot.title_text_font_size = '8pt'
-		plot.xaxis.axis_label_text_font_size = '12pt'
+		plot.title_text_font_size = props['font size']
+		plot.xaxis.axis_label_text_font_size = props['font size']
 
 		for cs_ind,case in enumerate(case_list):
 			case_ind = s.case_num_map[case]-1
@@ -191,19 +206,29 @@ class avgh1:
 			if legend:
 				leg = case
 			if mode == 'server':
+				print(case)
 				plot.line( x='times', y=electrode+'_'+case, color=props['colors'][cs_ind],
-						line_width=3, line_alpha=0.85, name=case, legend=leg)
+						line_width=3, line_alpha=0.85, name=case+'_line', legend=leg, source=source)
 			else: #notebook for now
 				plot.line( x=props['times'], y=pot[case_ind,el_ind,:], color=props['colors'][cs_ind],
 						line_width=3, line_alpha=0.85, name=case, legend=leg)
 
 		if legend:
 			plot.legend.orientation='top_left'
-			plot.legend.label_text_font_size = '8pt'
-			plot.legend.background_fill_alpha = 0
-			plot.legend.label_standoff = 0
+			plot.legend.label_text_font_size = props['font size']
+			#plot.legend.background_fill_color = '#444' # fill not working
+			#plot.legend.background_fill_alpha = 0.2
+			plot.legend.label_text_align = 'left'
+			#plot.legend.label_text_baseline = 'top'
+			plot.legend.label_width = 20
+			plot.legend.label_height = 12
+			plot.legend.label_standoff = 10
 			plot.legend.legend_padding = 2
-			plot.legend.legend_spacing = 0
+			plot.legend.legend_spacing = 2
+			#plot.legend.glyph_height = 10
+			plot.legend.glyph_width = 15
+			plot.legend.glyph_height= 12
+
 		plot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
 		if bottom_label:
 			plot.xaxis.axis_label="Time (s)"
