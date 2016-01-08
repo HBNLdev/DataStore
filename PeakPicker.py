@@ -2,8 +2,10 @@
 
 to start:
 	bokeh-server --script PeakPicker.py
+	*add --ip 138.5.49.214 to make the page accessible across out LAN
 point browser to:
 	http://localhost:5006/bokeh/PeakPicker/
+	*replace 'localhost' with url if on another computer
 
 '''
 
@@ -14,7 +16,8 @@ import numpy as np
 import pandas as pd
 
 from bokeh.plotting import figure
-from bokeh.models import Plot, ColumnDataSource, CustomJS, BoxSelectTool, TapTool, Rect, GridPlot
+from bokeh.models import Plot, ColumnDataSource, CustomJS, BoxSelectTool, TapTool, Rect, GridPlot, \
+				BoxZoomTool, ResetTool, PanTool
 from bokeh.properties import Instance
 from bokeh.server.app import bokeh_app
 from bokeh.server.utils.plugins import object_page
@@ -35,6 +38,8 @@ class PickerApp(VBox):
 	gridplot = Instance(GridPlot)
 	data_source = Instance(ColumnDataSource)
 
+	rect_source = Instance(ColumnDataSource)
+
 	exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
 	eeg_exp = EEGdata.avgh1( exp_path )
 
@@ -44,47 +49,55 @@ class PickerApp(VBox):
 		eeg = PickerApp.eeg_exp
 
 		obj.data_source = eeg.make_data_source()
-		
+		obj.rect_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[] ))
+
+
 		obj.text = TextInput( title="title", name='title', value=PickerApp.exp_path)
 
 		obj.case_toggle = CheckboxGroup( labels=eeg.case_list, inline=True,
 				active=[n for n in range(len(eeg.case_list))] )
 
 
-		toolset = "crosshair,pan,reset,resize,save,wheel_zoom"
+		#toolset = ['crosshair','pan','reset','resize','save','wheel_zoom']
+
+		box_callback = CustomJS(args=dict(source=obj.rect_source), code="""
+		        // get data source from Callback args
+		        console.dir(cb_data)
+		        var data = source.get('data');
+
+		        /// get BoxSelectTool dimensions from cb_data parameter of Callback
+		        var geometry = cb_data['geometry'];
+
+		        /// calculate Rect attributes
+		        var width = geometry['x1'] - geometry['x0'];
+		        var height = geometry['y1'] - geometry['y0'];
+		        var x = geometry['x0'] + width/2;
+		        var y = geometry['y0'] + height/2;
+
+		        /// update data source with new Rect attributes
+		        data['x'].push(x);
+		        data['y'].push(y);
+		        data['width'].push(width);
+		        data['height'].push(height);
+
+		        // trigger update of data source
+		        source.trigger('change');
+		    """)
+		def box_generator():
+			box = BoxSelectTool( callback=box_callback )
+			return box
+
 		tap_callback = CustomJS( args=dict(source=obj.data_source), code="""
 		 	alert('clicked');
 		 	""" )
-		# box_callback = CustomJS(args=dict(source=obj.rect_source), code="""
-		#         // get data source from Callback args
-		#         console.dir(cb_data)
-		#         var data = source.get('data');
-
-		#         /// get BoxSelectTool dimensions from cb_data parameter of Callback
-		#         var geometry = cb_data['geometry'];
-
-		#         /// calculate Rect attributes
-		#         var width = geometry['x1'] - geometry['x0'];
-		#         var height = geometry['y1'] - geometry['y0'];
-		#         var x = geometry['x0'] + width/2;
-		#         var y = geometry['y0'] + height/2;
-
-		#         /// update data source with new Rect attributes
-		#         data['x'].push(x);
-		#         data['y'].push(y);
-		#         data['width'].push(width);
-		#         data['height'].push(height);
-
-		#         // trigger update of data source
-		#         source.trigger('change');
-		#     """)
-		# box = BoxSelectTool( callback=box_callback )
 		tap = TapTool( callback=tap_callback )
 
 		obj.gridplot = eeg.selected_cases_by_channel(cases='all',
 					channels=['FZ','CZ','PZ','F3','C3','P3'],
 					props={'width':200,'height':165}, mode='server',
-					source=obj.data_source)
+					source=obj.data_source,
+					tool_gen=[box_generator,BoxZoomTool, ResetTool, PanTool]
+					)
 
 		obj.inputs= VBoxForm( 
 				children=[ obj.text, obj.case_toggle ])

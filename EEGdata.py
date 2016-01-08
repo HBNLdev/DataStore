@@ -97,7 +97,7 @@ class avgh1:
 		show(g)
 
 	def selected_cases_by_channel(s,cases='all',channels='all',props={}, 
-			mode='notebook',source=None):
+			mode='notebook',source=None,tools=[],tool_gen=[]):
 
 		# Setup properties for plots 
 		default_props = {'width':250,
@@ -124,12 +124,9 @@ class avgh1:
 			props['colors'] = brewer['Spectral'][len(cases)]
 		else: props['colors'] = ['#2222DD','#DD2222','#66DD66']
 
-		callback = CustomJS( code="alert('clicked')" )
-
 		if channels ==  'all':
 			channels = s.electrodes
 
-		
 		n_plots = len( channels ) #potentials.shape[1]
 		n_per_row = int( np.ceil(n_plots**0.5) )
 
@@ -138,9 +135,7 @@ class avgh1:
 			eind= s.electrodes.index(electrode)
 			if plot_ind % n_per_row == 0:
 				plots.append([])
-			
-			tap = TapTool( callback=callback )
-			tools=[tap]
+
 			if n_plots - plot_ind < n_per_row+1:
 				bot_flag = True
 			else:
@@ -152,10 +147,11 @@ class avgh1:
 
 			splot = s.make_plot_for_channel(potentials,eind,props,cases,tools,
 										bottom_label=bot_flag,legend=leg_flag, mode=mode,
-										source=source)
+										source=source, tool_gen=tool_gen)
 			plots[-1].append(splot)
 		
-		g=gridplot(plots,border_space=-40)
+		g=gridplot( plots, border_space=-40)#, tools=[TapTool()])#tools )
+		print(g)
 		if mode == 'server':
 			return g
 		else:
@@ -184,7 +180,7 @@ class avgh1:
 
 	def make_plot_for_channel(s,pot,el_ind,props,case_list,tools,
 						mode='notebook',bottom_label=False,legend=False,
-						source=None):
+						source=None,tool_gen=None):
 
 		if bottom_label:
 			height = props['height']+props['extra_bottom_height']
@@ -194,11 +190,16 @@ class avgh1:
 		electrode = s.electrodes[el_ind]
 
 		plot = figure(width=props['width'], height=height, 
-			title=electrode, #tools=tools,
+			title=electrode,
+			tools=tools,
 			min_border=props['min_border'])
 		plot.y_range = Range1d(*props['yrange'])
 		plot.title_text_font_size = props['font size']
 		plot.xaxis.axis_label_text_font_size = props['font size']
+
+		if tool_gen:
+			plot.add_tools(*[g() for g in tool_gen])
+
 
 		for cs_ind,case in enumerate(case_list):
 			case_ind = s.case_num_map[case]-1
