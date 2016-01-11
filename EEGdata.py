@@ -39,6 +39,22 @@ class avgh1:
 
 		s.loaded.visititems(disp_node)
 
+	def extract_subject_data(s):
+		if 'subject' not in dir(s):
+			sub_info = s.loaded['file']['subject']['subject'][0]
+			dvals = [ v[0].decode() if type(v) == np.ndarray else v for v in sub_info]
+			s.subject = { n:v for n,v in zip(sub_info.dtype.names, dvals) }
+		else:
+			return
+
+	def extract_exp_data(s):
+		if 'exp' not in dir(s):
+			exp_info = s.loaded['file']['experiment']['experiment'][0]
+			dvals = [ v[0].decode() if type(v) == np.ndarray else v for v in exp_info]
+			s.exp = { n:v for n,v in zip(exp_info.dtype.names, dvals) }
+		else:
+			return
+
 	def extract_case_data(s):
 		if 'cases' not in dir(s):
 			case_info = s.loaded['file']['run']['case']['case']
