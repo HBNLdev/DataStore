@@ -111,7 +111,7 @@ class avgh1:
 		gender 	= s.subject['gender']
 		age 	= int(s.subject['age'])
 		cases 	= list(s.cases.keys())
-		chans 	= s.electrodes[0:31]+s.electrodes[32:62]
+		chans 	= s.electrodes[0:31]+s.electrodes[32:62] # only head chans
 		peaks 	= ['N1','P3'] # test case
 		indices = [ [sid], [expname], [expver], [gender], [age],
 					cases, chans, peaks ]
@@ -139,10 +139,56 @@ class avgh1:
 
 	def prepare_plot_data(s):
 		
+		s.extract_exp_data()
+		
 		potentials = s.loaded['zdata']['zdata']
-		times = np.array(range(potentials.shape[2]))/s.samp_freq
+		# times = np.array(range(potentials.shape[2]))/s.samp_freq
+		start_ms = -s.exp['pre_stim_time_ms']
+		end_ms = s.exp['post_stim_time_ms']
+		times = np.linspace(start_ms, end_ms, potentials.shape[2] + 1)[:-1]
 
-		return times,potentials
+		return times, potentials
+
+	def find_peak(s):
+		# erps is cases x chans x pts
+		lats,erps = s.prepare_plot_data()
+		
+		case = 0; start_ms = 200; end_ms = 600 # test case
+		peak_polarity = 'p' # test case
+		chan_scope = 'all' # test case
+
+		start_pt = np.argmin(np.fabs( lats-start_ms ))
+		end_pt   = np.argmin(np.fabs( lats-end_ms ))
+			
+		if chan_scope == 'one': # find peak for one chan
+			chan 	= 0 # test case
+			erpa 	= erps[case,chan,:]
+		elif chan_scope == 'all': # find peak for all chans
+			erpa = erps[case,:,:]
+			erpa = erpa.swapaxes(0,1)
+		else:
+			return # error, the range is not correctly specified
+
+		if peak_polarity == 'p': # find the max
+			peak_val = np.max(erpa[start_pt:end_pt+1], axis=0)
+			peak_pt  = np.argmax(erpa[start_pt:end_pt+1], axis=0) + start_pt
+		elif peak_polarity == 'n': # find the min
+			peak_val = np.min(erpa[start_pt:end_pt+1], axis=0)
+			peak_pt  = np.argmin(erpa[start_pt:end_pt+1], axis=0) + start_pt
+		else:
+			return # error, the peak polarity is not correctly specified
+
+		if chan_scope == 'one': #test
+			if peak_pt == start_pt or peak_pt == end_pt:
+				pass # peak is at an edge
+		elif chan_scope == 'all':
+			if any(peak_pt == start_pt) or any(peak_pt == end_pt):
+				pass # at least one peak is at an edge
+
+		peak_ms = lats[peak_pt] # convert to ms if necessary
+
+		return peak_val, peak_ms
+			
 
 	def butterfly_channels_by_case(s,channel_list=['FZ','CZ','PZ'], offset=0):
 		s.extract_case_data()
