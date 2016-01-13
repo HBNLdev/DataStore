@@ -4,8 +4,8 @@
 import numpy as np
 import h5py, os
 import bokeh
-from bokeh.plotting import figure, output_notebook, show, gridplot
-from bokeh.models import FixedTicker, CustomJS, TapTool, Range1d, ColumnDataSource, GridPlot
+from bokeh.plotting import figure, gridplot
+from bokeh.models import FixedTicker, CustomJS, TapTool, Range1d, ColumnDataSource
 from bokeh.palettes import brewer
 
 import study_info as SI
@@ -93,7 +93,7 @@ class avgh1:
 			splot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
 			splot.xaxis.axis_label="Time (s)"
 			plots.append(splot)
-		g=gridplot([plots])
+		g=GridPlot([plots])
 		show(g)
 
 	def selected_cases_by_channel(s,cases='all',channels='all',props={}, 
@@ -103,7 +103,7 @@ class avgh1:
 		default_props = {'width':250,
 						'height':150,
 						'min_border':2,
-						'extra_bottom_height':50,
+						'extra_bottom_height':20,
 						'font size':'8pt'}
 
 		default_props.update(props)
@@ -150,11 +150,10 @@ class avgh1:
 										source=source, tool_gen=tool_gen)
 			plots[-1].append(splot)
 		
-		g=gridplot( plots, border_space=-40)#, tools=[TapTool()])#tools )
-		print(g)
 		if mode == 'server':
-			return g
+			return plots
 		else:
+			g=gridplot( plots, border_space=-40)#, tools=[TapTool()])#tools )
 			show(g)
 
 	def make_data_source(s,channels='all'):
@@ -189,10 +188,16 @@ class avgh1:
 
 		electrode = s.electrodes[el_ind]
 
-		plot = figure(width=props['width'], height=height, 
+		plot = figure(#plot_width=props['width'], plot_height=height, 
 			title=electrode,
-			tools=tools,
-			min_border=props['min_border'])
+			tools=tools
+			)
+		plot.min_border_left = props['min_border']
+		plot.min_border_right = props['min_border']
+		plot.min_border_top = props['min_border']
+		plot.min_border_bottom = props['min_border']
+		plot.plot_width = props['width']
+		plot.plot_height = height
 		plot.y_range = Range1d(*props['yrange'])
 		plot.title_text_font_size = props['font size']
 		plot.xaxis.axis_label_text_font_size = props['font size']
@@ -207,7 +212,7 @@ class avgh1:
 			if legend:
 				leg = case
 			if mode == 'server':
-				print(case)
+				#print(case)
 				plot.line( x='times', y=electrode+'_'+case, color=props['colors'][cs_ind],
 						line_width=3, line_alpha=0.85, name=case+'_line', legend=leg, source=source)
 			else: #notebook for now
@@ -215,7 +220,7 @@ class avgh1:
 						line_width=3, line_alpha=0.85, name=case, legend=leg)
 
 		if legend:
-			plot.legend.orientation='top_left'
+			plot.legend.location='top_left'
 			plot.legend.label_text_font_size = props['font size']
 			#plot.legend.background_fill_color = '#444' # fill not working
 			#plot.legend.background_fill_alpha = 0.2
