@@ -117,7 +117,12 @@ def input_change(attr,old,new):
 def apply_handler():
 	print('Apply')
 	#print( dir() )
-	print(pick_source.to_df())
+	limitsDF = pick_source.to_df()
+	start = limitsDF[ 'start' ].values[-1]
+	finish = limitsDF[ 'finish' ].values[-1]
+	
+	pval,pms = eeg.find_peak(start_ms=start,end_ms=finish)
+	print( 'Values:',pval, 'Times:',pms)
 
 def checkbox_handler(active):
     for n,nm in enumerate(eeg.case_list):

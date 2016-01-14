@@ -149,11 +149,12 @@ class avgh1:
 
 		return times, potentials
 
-	def find_peak(s):
+	def find_peak(s, case = 0, start_ms = 200, end_ms = 600,
+		 chan_scope='all', chan=0, peak_polarity='p'):
 		# erps is cases x chans x pts
 		lats,erps = s.prepare_plot_data()
 		
-		case = 0; start_ms = 200; end_ms = 600 # test case
+		 # test case
 		peak_polarity = 'p' # test case
 		chan_scope = 'all' # test case
 
@@ -365,7 +366,7 @@ class avgh1:
 
 		plot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
 		if bottom_label:
-			plot.xaxis.axis_label="Time (s)"
+			plot.xaxis.axis_label="Time (ms)"
 		else: 
 			plot.xaxis[0].ticker = FixedTicker(ticks=[])
 		
