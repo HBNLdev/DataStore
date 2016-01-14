@@ -22,12 +22,13 @@ import organization as O
 import EEGdata
 
 from bokeh.plotting import Figure, gridplot, hplot, vplot
-from bokeh.models import Plot, ColumnDataSource, CustomJS, BoxSelectTool, TapTool, Rect, GridPlot, \
+from bokeh.models import Plot, Segment, ColumnDataSource, CustomJS, \
+					BoxSelectTool, TapTool, GridPlot, \
 				BoxZoomTool, ResetTool, PanTool, WheelZoomTool
 
 from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, CheckboxGroup, \
 				RadioButtonGroup, Button
-from bokeh.io import curdoc
+from bokeh.io import curdoc, curstate
 
 
 exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
@@ -35,8 +36,8 @@ eeg_exp = EEGdata.avgh1( exp_path )
 eeg = eeg_exp
 
 data_source = eeg.make_data_source()
-rect_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
-								 start=[], finish=[] ))
+pick_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
+								 start=[], finish=[], bots=[], tops=[] ))
 
 
 text = TextInput( title="file", name='file', value=exp_path)
@@ -52,7 +53,7 @@ save_button = Button( label="Save" )
 
 		#toolset = ['crosshair','pan','reset','resize','save','wheel_zoom']
 
-box_callback = CustomJS(args=dict(source=rect_source), code="""
+box_callback = CustomJS(args=dict(source=pick_source), code="""
 		        // get data source from Callback args
 		        console.dir(cb_data)
 		        var data = source.get('data');
@@ -73,9 +74,13 @@ box_callback = CustomJS(args=dict(source=rect_source), code="""
 		        data['height'].push(height);
 		        data['start'].push(geometry['x0'])
 		        data['finish'].push(geometry['x1'])
+		        data['bots'].push(-5)
+		        data['tops'].push(25)
  		        console.dir(data)
 		        // trigger update of data source
 		        source.trigger('change');
+		        source.set('data',data)
+		        console.dir(source)
 		    """)
 def box_generator():
 	box = BoxSelectTool( callback=box_callback )
@@ -96,6 +101,12 @@ gridplots = eeg.selected_cases_by_channel(cases='all',
 			tool_gen=[box_generator,BoxZoomTool, WheelZoomTool, ResetTool, PanTool]
 			)
 
+pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
+				line_width=1,line_alpha=0.65,line_color='#FF6666')
+pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
+				line_width=1,line_alpha=0.65,line_color='#FF6666')
+gridplots[0][1].add_glyph(pick_source,pick_starts)
+gridplots[0][1].add_glyph(pick_source,pick_finishes)
 
 def update_data():
 	pass
@@ -105,7 +116,8 @@ def input_change(attr,old,new):
 
 def apply_handler():
 	print('Apply')
-	print(rect_source.to_df())
+	#print( dir() )
+	print(pick_source.to_df())
 
 def checkbox_handler(active):
     for n,nm in enumerate(eeg.case_list):
