@@ -90,6 +90,7 @@ def parse_filename(filename,include_full_ID=False):
 	if '_' in filename:
 		pieces = filename.split('_')
 		experiment = pieces[0]
+		version = pieces[1]
 		session_piece = pieces[2]
 		session_letter = session_piece[0]
 		run_number = session_piece[1]
@@ -141,7 +142,9 @@ def parse_filename(filename,include_full_ID=False):
 			'run':run_number,
 			'site':site,
 			'family': family,
-			'subject': subject}
+			'subject': subject,
+			'id': subject_piece,
+			'version': version}
 
 	if include_full_ID:
 		try:
@@ -317,7 +320,7 @@ class mt_file:
 			key = (Ld['case_num'], Ld['peak'])
 			if key not in s.data:
 				s.data[key] = {}
-			s.data[key][Ld['electrode'][0]+Ld['electrode'][1].upper()] = (Ld['amplitude'],Ld['latency'])
+			s.data[key][ Ld['electrode'].upper() ] = (Ld['amplitude'],Ld['latency'])
 			if 'reaction_time' not in s.data[key]:
 				s.data[key]['reaction_time'] = Ld['reaction_time']
 		return
@@ -327,7 +330,7 @@ class mt_file:
 			s.parse_file()
 		cases_peaks = list( s.data.keys() )
 		cases_peaks.sort()
-		header_data = {}
+		header_data = OrderedDict()
 		for cp in cases_peaks:
 			if cp[0] not in header_data:
 				header_data[ cp[0] ] = 0
@@ -338,6 +341,9 @@ class mt_file:
 			s.header_text += '#case '+ str(cs) + '; npeaks '+ str(ch_count) +';\n'
 	
 		print(s.header_text)
+
+	def build_file(s):
+		pass
 	
 	def check_header_for_experiment(s):
 		expected = s.cases_peaks_by_experiment[s.file_info['experiment']]

@@ -2,11 +2,13 @@
 '''
 
 import numpy as np
+import pandas as pd
 import h5py, os
 import bokeh
 from bokeh.plotting import figure, gridplot
 from bokeh.models import FixedTicker, CustomJS, TapTool, Range1d, ColumnDataSource
 from bokeh.palettes import brewer
+from collections import OrderedDict
 
 import study_info as SI
 import file_handling as FH
@@ -23,6 +25,7 @@ class avgh1:
 		s.electrodes = [ s.decode() for s in list(s.loaded['file']['run']['run'])[0][-2] ]
 
 		s.samp_freq = 256
+		s.peak = OrderedDict()
 
 	def show_file_hierarchy(s):
 		def disp_node( name, node):
@@ -38,6 +41,30 @@ class avgh1:
 
 
 		s.loaded.visititems(disp_node)
+
+	def extract_subject_data(s):
+		if 'subject' not in dir(s):
+			sub_info = s.loaded['file']['subject']['subject'][0]
+			dvals = [ v[0].decode() if type(v) == np.ndarray else v for v in sub_info]
+			s.subject = { n:v for n,v in zip(sub_info.dtype.names, dvals) }
+		else:
+			return
+
+	def extract_exp_data(s):
+		if 'exp' not in dir(s):
+			exp_info = s.loaded['file']['experiment']['experiment'][0]
+			dvals = [ v[0].decode() if type(v) == np.ndarray else v for v in exp_info]
+			s.exp = { n:v for n,v in zip(exp_info.dtype.names, dvals) }
+		else:
+			return
+
+	def extract_transforms_data(s):
+		if 'transforms' not in dir(s):
+			transforms_info = s.loaded['file']['transforms']['transforms'][0]
+			dvals = [ v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in transforms_info]
+			s.transforms = { n:v for n,v in zip(transforms_info.dtype.names, dvals) }
+		else:
+			return
 
 	def extract_case_data(s):
 		if 'cases' not in dir(s):
@@ -55,12 +82,113 @@ class avgh1:
 		else:
 			return
 
+	def build_mt(s):
+		s.extract_subject_data()
+		s.extract_exp_data()
+		s.extract_transforms_data()
+		s.extract_case_data()
+		s.build_mt_header()
+		s.build_mt_body()
+		s.mt = s.mt_header + s.mt_body
+
+	def build_mt_header(s):
+		chans = s.electrodes[0:31]+s.electrodes[32:62]
+		peaks = ['N1','P3'] # for testing
+		n_peaks = len(peaks)
+		s.mt_header = ''
+		s.mt_header += '#nchans ' + str(len(chans)) + ';\n'
+		for case in s.cases.keys():
+			s.mt_header += '#case ' + str(case) + ' (' + s.cases[case]['case_type'] + '); npeaks ' + str(n_peaks) + ';\n'
+		s.mt_header += '#hipass ' + str(s.transforms['hi_pass_filter']) + '\n'
+		s.mt_header += '#lopass ' + str(s.transforms['lo_pass_filter']) + '\n'
+		s.mt_header += '#thresh ' + str(s.exp['threshold_value']) + '\n'
+
+	def build_mt_body(s):
+		# indices
+		sid 	= s.subject['subject_id']
+		expname = s.exp['exp_name']
+		expver 	= s.exp['exp_version']
+		gender 	= s.subject['gender']
+		age 	= int(s.subject['age'])
+		cases 	= list(s.cases.keys())
+		chans 	= s.electrodes[0:31]+s.electrodes[32:62] # only head chans
+		peaks 	= ['N1','P3'] # test case
+		indices = [ [sid], [expname], [expver], [gender], [age],
+					cases, chans, peaks ]
+		index 	= pd.MultiIndex.from_product(indices,
+					names=FH.mt_file.columns[:-3])
+
+		# data
+		n_lines = len(cases) * len(chans) * len(peaks)
+		amp 	= np.random.normal(10,5,n_lines) # test case
+		lat 	= np.random.normal(300,100,n_lines) # test case
+		rt = []
+		for case in s.cases.keys():
+		    rt.extend([s.cases[case]['mean_resp_time']]*len(peaks)*len(chans))
+		data = {'amplitude':amp, 'latency':lat, 'mean_rt':rt}
+		
+		# making CSV structure
+		df = pd.DataFrame(data,index=index)
+		mt_string = df.to_csv(path_or_buf=None, sep=' ', na_rep='NaN',
+			float_format='%.3f', header=False, index=True,
+			index_label=None, line_terminator='\n')
+		s.mt_body = mt_string
+
+	def apply_peak(s, case, peak):
+		pass
+
 	def prepare_plot_data(s):
 		
+		s.extract_exp_data()
+		
 		potentials = s.loaded['zdata']['zdata']
-		times = np.array(range(potentials.shape[2]))/s.samp_freq
+		# times = np.array(range(potentials.shape[2]))/s.samp_freq
+		start_ms = -s.exp['pre_stim_time_ms']
+		end_ms = s.exp['post_stim_time_ms']
+		times = np.linspace(start_ms, end_ms, potentials.shape[2] + 1)[:-1]
 
-		return times,potentials
+		return times, potentials
+
+	def find_peak(s):
+		# erps is cases x chans x pts
+		lats,erps = s.prepare_plot_data()
+		
+		case = 0; start_ms = 200; end_ms = 600 # test case
+		peak_polarity = 'p' # test case
+		chan_scope = 'all' # test case
+
+		start_pt = np.argmin(np.fabs( lats-start_ms ))
+		end_pt   = np.argmin(np.fabs( lats-end_ms ))
+			
+		if chan_scope == 'one': # find peak for one chan
+			chan 	= 0 # test case
+			erpa 	= erps[case,chan,:]
+		elif chan_scope == 'all': # find peak for all chans
+			erpa = erps[case,:,:]
+			erpa = erpa.swapaxes(0,1)
+		else:
+			return # error, the range is not correctly specified
+
+		if peak_polarity == 'p': # find the max
+			peak_val = np.max(erpa[start_pt:end_pt+1], axis=0)
+			peak_pt  = np.argmax(erpa[start_pt:end_pt+1], axis=0) + start_pt
+		elif peak_polarity == 'n': # find the min
+			peak_val = np.min(erpa[start_pt:end_pt+1], axis=0)
+			peak_pt  = np.argmin(erpa[start_pt:end_pt+1], axis=0) + start_pt
+		else:
+			return # error, the peak polarity is not correctly specified
+
+		if chan_scope == 'one': #test
+			if peak_pt == start_pt or peak_pt == end_pt:
+				pass # peak is at an edge
+		elif chan_scope == 'all':
+			if any(peak_pt == start_pt) or any(peak_pt == end_pt):
+				pass # at least one peak is at an edge
+
+		peak_ms = lats[peak_pt] # convert to ms if necessary
+
+		return peak_val, peak_ms
+			
 
 	def butterfly_channels_by_case(s,channel_list=['FZ','CZ','PZ'], offset=0):
 		s.extract_case_data()
