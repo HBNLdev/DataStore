@@ -45,7 +45,7 @@ class avgh1:
 	def extract_subject_data(s):
 		if 'subject' not in dir(s):
 			sub_info = s.loaded['file']['subject']['subject'][0]
-			dvals = [ v[0].decode() if type(v) == np.ndarray else v for v in sub_info]
+			dvals = [ v[0].decode() if type(v) == np.ndarray else v for v in sub_info ]
 			s.subject = { n:v for n,v in zip(sub_info.dtype.names, dvals) }
 		else:
 			return
@@ -53,7 +53,7 @@ class avgh1:
 	def extract_exp_data(s):
 		if 'exp' not in dir(s):
 			exp_info = s.loaded['file']['experiment']['experiment'][0]
-			dvals = [ v[0].decode() if type(v) == np.ndarray else v for v in exp_info]
+			dvals = [ v[0].decode() if type(v) == np.ndarray else v for v in exp_info ]
 			s.exp = { n:v for n,v in zip(exp_info.dtype.names, dvals) }
 		else:
 			return
@@ -61,7 +61,7 @@ class avgh1:
 	def extract_transforms_data(s):
 		if 'transforms' not in dir(s):
 			transforms_info = s.loaded['file']['transforms']['transforms'][0]
-			dvals = [ v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in transforms_info]
+			dvals = [ v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in transforms_info ]
 			s.transforms = { n:v for n,v in zip(transforms_info.dtype.names, dvals) }
 		else:
 			return
@@ -73,7 +73,7 @@ class avgh1:
 			s.case_num_map = {}
 			s.case_list = []
 			for vals in case_info.value:
-				dvals = [ v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in vals   ]
+				dvals = [ v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in vals ]
 				caseD = { n:v for n,v in zip(case_info.dtype.names, dvals) }
 				s.cases[ caseD['case_num'] ] = caseD
 				s.case_list.append(caseD['case_type'])
@@ -159,7 +159,8 @@ class avgh1:
 
 		start_pt = np.argmin(np.fabs( lats-start_ms ))
 		end_pt   = np.argmin(np.fabs( lats-end_ms ))
-			
+		
+		# get data
 		if chan_scope == 'one': # find peak for one chan
 			chan 	= 0 # test case
 			erpa 	= erps[case,chan,:]
@@ -169,6 +170,7 @@ class avgh1:
 		else:
 			return # error, the range is not correctly specified
 
+		# find min/max in range
 		if peak_polarity == 'p': # find the max
 			peak_val = np.max(erpa[start_pt:end_pt+1], axis=0)
 			peak_pt  = np.argmax(erpa[start_pt:end_pt+1], axis=0) + start_pt
@@ -178,6 +180,7 @@ class avgh1:
 		else:
 			return # error, the peak polarity is not correctly specified
 
+		# check if at edge
 		if chan_scope == 'one': #test
 			if peak_pt == start_pt or peak_pt == end_pt:
 				pass # peak is at an edge
