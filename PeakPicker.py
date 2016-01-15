@@ -1,7 +1,7 @@
 '''HBNL dashboard
 
 to start:
-	bokeh serve --show PeakPicker.py
+	/usr/local/bin/bokeh serve PeakPicker.py
 	*add --ip 138.5.49.214 to make the page accessible across out LAN
 point browser to:
 	http://localhost:5006/PeakPicker/
@@ -24,7 +24,8 @@ import EEGdata
 from bokeh.plotting import Figure, gridplot, hplot, vplot
 from bokeh.models import Plot, Segment, ColumnDataSource, CustomJS, \
 					BoxSelectTool, TapTool, GridPlot, \
-				BoxZoomTool, ResetTool, PanTool, WheelZoomTool
+				BoxZoomTool, ResetTool, PanTool, WheelZoomTool, \
+				Asterisk
 
 from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, CheckboxGroup, \
 				RadioButtonGroup, Button
@@ -35,7 +36,7 @@ exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg
 eeg_exp = EEGdata.avgh1( exp_path )
 eeg = eeg_exp
 
-data_source = eeg.make_data_source()
+data_source, peak_source = eeg.make_data_sources()
 pick_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
 								 start=[], finish=[], bots=[], tops=[] ))
 
@@ -94,10 +95,12 @@ tap = TapTool( callback=tap_callback )
 plot_props = {'width':200, 'height':120,
 				 'extra_bottom_height':40, # for bottom row
 				'min_border':2}
+
+chans = ['FZ','CZ','PZ','F3','C3','P3']
 gridplots = eeg.selected_cases_by_channel(cases='all',
-			channels=['FZ','CZ','PZ','F3','C3','P3'],
+			channels=chans,
 			props=plot_props,  mode='server',
-			source=data_source,
+			source=data_source, peak_source=peak_source,
 			tool_gen=[box_generator,BoxZoomTool, WheelZoomTool, ResetTool, PanTool]
 			)
 
@@ -105,24 +108,42 @@ pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
 				line_width=1,line_alpha=0.65,line_color='#FF6666')
 pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
 				line_width=1,line_alpha=0.65,line_color='#FF6666')
-gridplots[0][1].add_glyph(pick_source,pick_starts)
-gridplots[0][1].add_glyph(pick_source,pick_finishes)
+#gridplots[0][1].add_glyph(pick_source,pick_starts)
+#gridplots[0][1].add_glyph(pick_source,pick_finishes)
 
-def update_data():
-	pass
+gcount = -1
+for g_row in gridplots:
+	for gp in g_row:
+		gcount +=1
+		chan = chans[gcount]
+		marker = Asterisk( x=chan+'_time',y=chan+'_pot',
+					size=4, fill_alpha=1, fill_color='black', name=chan+'_peak')
+		gp.add_glyph( peak_source, marker)
+		gp.add_glyph(pick_source,pick_starts)
+		gp.add_glyph(pick_source,pick_finishes)
+
+def update_data( peak_data ):
+	peak_source.data = peak_data
 
 def input_change(attr,old,new):
 	pass
 
 def apply_handler():
 	print('Apply')
-	#print( dir() )
+	print( dir(peak_source) )
+	#print( peak_source.data )
 	limitsDF = pick_source.to_df()
 	start = limitsDF[ 'start' ].values[-1]
 	finish = limitsDF[ 'finish' ].values[-1]
 	
 	pval,pms = eeg.find_peak(start_ms=start,end_ms=finish)
+	eeg.update_peak_source( peak_source.data, eeg.case_list[0],'P1',pval, pms)
+	peak_source.set()
 	print( 'Values:',pval, 'Times:',pms)
+	print( peak_source.to_df() )
+	cdoc = curdoc()
+	print( cdoc, dir(cdoc) )
+	#update_data(peak_data = peak_source.data )
 
 def checkbox_handler(active):
     for n,nm in enumerate(eeg.case_list):

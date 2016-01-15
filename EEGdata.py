@@ -225,8 +225,9 @@ class avgh1:
 		g=GridPlot([plots])
 		show(g)
 
-	def selected_cases_by_channel(s,cases='all',channels='all',props={}, 
-			mode='notebook',source=None,tools=[],tool_gen=[]):
+	def selected_cases_by_channel(s,cases='all', channels='all', props={}, 
+			mode='notebook', source=None, peak_source=None,
+			tools=[], tool_gen=[]):
 
 		# Setup properties for plots 
 		default_props = {'width':250,
@@ -285,26 +286,38 @@ class avgh1:
 			g=gridplot( plots, border_space=-40)#, tools=[TapTool()])#tools )
 			show(g)
 
-	def make_data_source(s,channels='all'):
+	def make_data_sources(s,channels='all'):
 		times, potentials = s.prepare_plot_data()
 		s.extract_case_data()
 
-		source_dict = dict(
-						times=times)
+		pot_source_dict = dict( times=times )
+		peak_source_dict = dict( case_peaks = ['test']  )
 
 		if channels == 'all':
 			channels = s.electrodes
 
 		for chan in channels:
 			ch_ind = s.electrodes.index(chan)
+			peak_source_dict[ chan+'_pot'] = [18]
+			peak_source_dict[ chan+'_time'] = [450]			
 			for cs_ind,cs in s.cases.items():
-				source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
+				pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
 
-		source = ColumnDataSource(
-			data = source_dict )
 
-		return source
+		pot_source = ColumnDataSource(
+			data = pot_source_dict )
+		peak_source = ColumnDataSource(
+			data = peak_source_dict )
 
+		return pot_source, peak_source
+
+	def update_peak_source(s, psD, case, peak, pot_vals, times ):
+		''' assumes all channels
+		'''
+		psD[ 'case_peaks' ].append( case +'_'+ peak)
+		for chan, val, tm in zip(s.electrodes,pot_vals,times):
+			psD[ chan+'_pot' ].append( val )
+			psD[ chan+'_time' ].append( tm )
 
 	def make_plot_for_channel(s,pot,el_ind,props,case_list,tools,
 						mode='notebook',bottom_label=False,legend=False,
