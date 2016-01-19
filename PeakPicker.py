@@ -21,15 +21,16 @@ import pandas as pd
 import organization as O
 import EEGdata
 
-from bokeh.plotting import Figure, gridplot, hplot, vplot
+from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
 from bokeh.models import Plot, Segment, ColumnDataSource, CustomJS, \
 					BoxSelectTool, TapTool, GridPlot, \
-				BoxZoomTool, ResetTool, PanTool, WheelZoomTool, \
+				BoxZoomTool, ResetTool, PanTool, WheelZoomTool, ResizeTool, \
 				Asterisk
 
 from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, CheckboxGroup, \
 				RadioButtonGroup, Button
-from bokeh.io import curdoc, curstate
+from bokeh.client import push_session
+from bokeh.io import curdoc, curstate, set_curdoc
 
 
 exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
@@ -92,16 +93,18 @@ tap_callback = CustomJS( args=dict(source=data_source), code="""
  	""" )
 tap = TapTool( callback=tap_callback )
 
-plot_props = {'width':200, 'height':120,
+plot_props = {'width':180, 'height':110,
 				 'extra_bottom_height':40, # for bottom row
 				'min_border':2}
 
 chans = ['FZ','CZ','PZ','F3','C3','P3']
+#chans = eeg.electrodes[:31]
 gridplots = eeg.selected_cases_by_channel(cases='all',
 			channels=chans,
 			props=plot_props,  mode='server',
 			source=data_source, peak_source=peak_source,
-			tool_gen=[box_generator,BoxZoomTool, WheelZoomTool, ResetTool, PanTool]
+			tool_gen=[box_generator,BoxZoomTool, WheelZoomTool, 
+					ResetTool, PanTool, ResizeTool]
 			)
 
 pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
@@ -139,10 +142,18 @@ def apply_handler():
 	pval,pms = eeg.find_peak(start_ms=start,end_ms=finish)
 	eeg.update_peak_source( peak_source.data, eeg.case_list[0],'P1',pval, pms)
 	peak_source.set()
+
 	print( 'Values:',pval, 'Times:',pms)
 	print( peak_source.to_df() )
-	cdoc = curdoc()
-	print( cdoc, dir(cdoc) )
+	print( dir(peak_source) )
+	#push_session(curdoc())
+	peak_source.trigger('data', peak_source.data, peak_source.data)
+
+	# cdoc = curdoc()
+	# print( cdoc, dir(cdoc) )
+	# cstate = curstate()
+	# print( cstate, dir(cstate) )
+	# set_curdoc( cdoc )
 	#update_data(peak_data = peak_source.data )
 
 def checkbox_handler(active):
@@ -168,5 +179,11 @@ text.on_change('value', input_change)
 inputs= VBox( children=[ text, case_chooser, peak_chooser, 
  					apply_button, save_button, case_toggle ])
 
+page = VBox( children=[inputs])
 curdoc().add_root(inputs)
 grid = gridplot( gridplots ) # gridplot works properly outside of curdoc
+
+
+#output_server("picker")
+#session = push_session( curdoc() )
+#session.loop_until_closed()

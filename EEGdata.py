@@ -252,7 +252,7 @@ class avgh1:
 
 		if len(cases) > 3:
 			props['colors'] = brewer['Spectral'][len(cases)]
-		else: props['colors'] = ['#2222DD','#DD2222','#66DD66']
+		else: props['colors'] = ['#DD2222','#66DD66','#2222DD']
 
 		if channels ==  'all':
 			channels = s.electrodes
@@ -291,15 +291,15 @@ class avgh1:
 		s.extract_case_data()
 
 		pot_source_dict = dict( times=times )
-		peak_source_dict = dict( case_peaks = ['test']  )
+		peak_source_dict = dict( case_peaks = []  )
 
 		if channels == 'all':
 			channels = s.electrodes
 
 		for chan in channels:
 			ch_ind = s.electrodes.index(chan)
-			peak_source_dict[ chan+'_pot'] = [18]
-			peak_source_dict[ chan+'_time'] = [450]			
+			peak_source_dict[ chan+'_pot'] = []
+			peak_source_dict[ chan+'_time'] = []			
 			for cs_ind,cs in s.cases.items():
 				pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
 
@@ -356,10 +356,10 @@ class avgh1:
 			if mode == 'server':
 				#print(case)
 				plot.line( x='times', y=electrode+'_'+case, color=props['colors'][cs_ind],
-						line_width=3, line_alpha=0.85, name=case+'_line', legend=leg, source=source)
+						line_width=1.5, line_alpha=0.85, name=case+'_line', legend=leg, source=source)
 			else: #notebook for now
 				plot.line( x=props['times'], y=pot[case_ind,el_ind,:], color=props['colors'][cs_ind],
-						line_width=3, line_alpha=0.85, name=case, legend=leg)
+						line_width=2, line_alpha=0.85, name=case, legend=leg)
 
 		if legend:
 			plot.legend.location='top_left'
