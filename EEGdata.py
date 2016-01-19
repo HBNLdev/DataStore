@@ -342,7 +342,27 @@ class avgh1:
 		plot.plot_height = height
 		plot.y_range = Range1d(*props['yrange'])
 		plot.title_text_font_size = props['font size']
+
+		# Axes
 		plot.xaxis.axis_label_text_font_size = props['font size']
+		plot.xaxis.major_label_text_font_size = props['font size']
+		plot.xaxis.major_label_text_align = 'right'
+		plot.yaxis.major_label_text_font_size = props['font size']
+
+		plot.outline_line_color = None
+
+		plot.yaxis[0].ticker.desired_num_ticks=2
+		plot.yaxis.major_tick_line_width = 1 
+		plot.yaxis.minor_tick_line_color = None
+		plot.yaxis.major_tick_in = 4
+		plot.yaxis.major_tick_out = 0
+
+		plot.ygrid.grid_line_color = None
+		
+		plot.xgrid.grid_line_alpha = 0.35
+		plot.xaxis.minor_tick_line_color = None
+		plot.xaxis.major_tick_out = 0
+		plot.xaxis.major_tick_in = 2
 
 		if tool_gen:
 			plot.add_tools(*[g() for g in tool_gen])
@@ -377,7 +397,6 @@ class avgh1:
 			plot.legend.glyph_width = 15
 			plot.legend.glyph_height= 12
 
-		plot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
 		if bottom_label:
 			plot.xaxis.axis_label="Time (ms)"
 		else: 

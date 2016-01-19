@@ -95,7 +95,7 @@ tap = TapTool( callback=tap_callback )
 
 plot_props = {'width':180, 'height':110,
 				 'extra_bottom_height':40, # for bottom row
-				'min_border':2}
+				'min_border':4}
 
 chans = ['FZ','CZ','PZ','F3','C3','P3']
 #chans = eeg.electrodes[:31]
