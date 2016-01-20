@@ -267,9 +267,9 @@ class avgh1:
 						'height':150,
 						'min_border':2,
 						'extra_bottom_height':20,
-						'font size':'8pt',
+						'font size':8,
 						'axis alpha':0,
-						'outline alpha':0,
+						'outline alpha':1,
 						'grid alpha':0.75}
 
 		default_props.update(props)
@@ -401,6 +401,12 @@ class avgh1:
 			title=electrode,
 			tools=tools
 			)
+		plot.title_standoff = 0
+		plot.title_text_align='left'
+		plot.title_text_baseline='top'
+		#plot.border_fill='#888'
+
+		#plot.min_border = props['min_border']
 		plot.min_border_left = props['min_border']
 		plot.min_border_right = props['min_border']
 		plot.min_border_top = props['min_border']
@@ -409,16 +415,18 @@ class avgh1:
 		plot.plot_height = height
 		plot.y_range = Range1d(*props['yrange'])
 		plot.x_range = Range1d(*props['xrange'])
-		plot.title_text_font_size = props['font size']
+		plot.title_text_font_size = str(props['font size'])+'pt'
 
 		# Axes
-		plot.xaxis.axis_label_text_font_size = props['font size']		
+		plot.xaxis.axis_label_text_font_size = str(props['font size'])+'pt'		
 		#plot.outline_line_alpha = props['outline alpha']
 		#plot.grid.grid_line_alpha = props['grid alpha']
 
-		plot.xaxis.major_label_text_font_size = props['font size']
+		plot.xaxis.major_label_text_font_size = str(props['font size']-2)+'pt'
 		plot.xaxis.major_label_text_align = 'right'
-		plot.yaxis.major_label_text_font_size = props['font size']
+		plot.xaxis.major_label_standoff = 0
+
+		plot.yaxis.major_label_text_font_size = str(props['font size']-2)+'pt'
 
 		plot.outline_line_color = None
 

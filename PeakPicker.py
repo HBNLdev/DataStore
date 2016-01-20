@@ -12,8 +12,8 @@ point browser to:
 # import logging
 # logging.basic.Config(level=logging.DEBUG)
 import sys
-repo_path = '/export/home/mike/python/mort-collab'
-# repo_path = '/export/home/mort/programs/dev'
+#repo_path = '/export/home/mike/python/mort-collab'
+repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
 import numpy as np
@@ -94,9 +94,9 @@ tap_callback = CustomJS( args=dict(source=data_source), code="""
  	""" )
 tap = TapTool( callback=tap_callback )
 
-plot_props = {'width':180, 'height':110,
+plot_props = {'width':180, 'height':75,
 				 'extra_bottom_height':40, # for bottom row
-				'min_border':4}
+				'min_border':-10}
 
 #chans = ['FZ','CZ','PZ','F3','C3','P3']
 #chans = eeg.electrodes[:31]
@@ -193,7 +193,7 @@ inputs= VBox( children=[ text, case_chooser, peak_chooser,
 
 page = VBox( children=[inputs])
 curdoc().add_root(inputs)
-grid = gridplot( gridplots ) # gridplot works properly outside of curdoc
+grid = gridplot( gridplots, border_space=0 ) # gridplot works properly outside of curdoc
 
 
 #output_server("picker")
