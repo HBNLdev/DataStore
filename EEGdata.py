@@ -200,7 +200,6 @@ class avgh1:
 		for chan in channels:
 			ind_lst.append( s.electrodes.index(chan) )
 		disp_pots = np.take(potentials, ind_lst, 1)
-
 		
 		min_val = int(np.floor(np.min(disp_pots)))
 		max_val = int(np.ceil(np.max(disp_pots)))
@@ -392,12 +391,30 @@ class avgh1:
 		plot.y_range = Range1d(*props['yrange'])
 		plot.x_range = Range1d(*props['xrange'])
 		plot.title_text_font_size = props['font size']
-		plot.xaxis.axis_label_text_font_size = props['font size']
+
+		# Axes
+		plot.xaxis.axis_label_text_font_size = props['font size']		
+		#plot.outline_line_alpha = props['outline alpha']
+		#plot.grid.grid_line_alpha = props['grid alpha']
+
+		plot.xaxis.major_label_text_font_size = props['font size']
+		plot.xaxis.major_label_text_align = 'right'
+		plot.yaxis.major_label_text_font_size = props['font size']
+
+		plot.outline_line_color = None
+
+		plot.yaxis[0].ticker.desired_num_ticks=2
+		plot.yaxis.major_tick_line_width = 1 
+		plot.yaxis.minor_tick_line_color = None
+		plot.yaxis.major_tick_in = 4
+		plot.yaxis.major_tick_out = 0
+
+		plot.ygrid.grid_line_color = None
 		
-		plot.outline_line_alpha = props['outline alpha']
-		plot.grid.grid_line_alpha = props['grid alpha']
-
-
+		plot.xgrid.grid_line_alpha = 0.35
+		plot.xaxis.minor_tick_line_color = None
+		plot.xaxis.major_tick_out = 0
+		plot.xaxis.major_tick_in = 2
 
 		if tool_gen:
 			plot.add_tools(*[g() for g in tool_gen])
@@ -432,7 +449,6 @@ class avgh1:
 			plot.legend.glyph_width = 15
 			plot.legend.glyph_height= 12
 
-		plot.yaxis[0].ticker=FixedTicker(ticks=[])#tick_locs,tags=channel_list)
 		if bottom_label:
 			plot.xaxis.axis_label="Time (ms)"
 		else: 

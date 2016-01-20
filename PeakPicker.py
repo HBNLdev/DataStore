@@ -94,9 +94,9 @@ tap_callback = CustomJS( args=dict(source=data_source), code="""
  	""" )
 tap = TapTool( callback=tap_callback )
 
-plot_props = {'width':200, 'height':120,
-				'extra_bottom_height':30, # for bottom row
-				'min_border':2}
+plot_props = {'width':180, 'height':110,
+				 'extra_bottom_height':40, # for bottom row
+				'min_border':4}
 
 #chans = ['FZ','CZ','PZ','F3','C3','P3']
 #chans = eeg.electrodes[:31]
