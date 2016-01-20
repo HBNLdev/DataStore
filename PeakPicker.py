@@ -12,7 +12,8 @@ point browser to:
 # import logging
 # logging.basic.Config(level=logging.DEBUG)
 import sys
-repo_path = '/export/home/mort/programs/dev'
+repo_path = '/export/home/mike/python/mort-collab'
+# repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
 import numpy as np
@@ -93,19 +94,28 @@ tap_callback = CustomJS( args=dict(source=data_source), code="""
  	""" )
 tap = TapTool( callback=tap_callback )
 
-plot_props = {'width':180, 'height':110,
-				 'extra_bottom_height':40, # for bottom row
+plot_props = {'width':200, 'height':120,
+				'extra_bottom_height':30, # for bottom row
 				'min_border':2}
 
-chans = ['FZ','CZ','PZ','F3','C3','P3']
+#chans = ['FZ','CZ','PZ','F3','C3','P3']
 #chans = eeg.electrodes[:31]
+#chans.append(eeg.electrodes[63])
+chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
+		 'FC5', 'FC1', 'FC2', 'FC6', 'T7', 'C3', 'CZ',  'C4',  'T8', 'CP5',
+		 'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
+		 'O1',  'O2']
+
 gridplots = eeg.selected_cases_by_channel(cases='all',
 			channels=chans,
 			props=plot_props,  mode='server',
 			source=data_source, peak_source=peak_source,
 			tool_gen=[box_generator,BoxZoomTool, WheelZoomTool, 
-					ResetTool, PanTool, ResizeTool]
+					ResetTool, PanTool, ResizeTool],
+			style='layout'
 			)
+
+print(gridplots)
 
 pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
 				line_width=1,line_alpha=0.65,line_color='#FF6666')
@@ -117,13 +127,14 @@ pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
 gcount = -1
 for g_row in gridplots:
 	for gp in g_row:
-		gcount +=1
-		chan = chans[gcount]
-		marker = Asterisk( x=chan+'_time',y=chan+'_pot',
-					size=4, fill_alpha=1, fill_color='black', name=chan+'_peak')
-		gp.add_glyph( peak_source, marker)
-		gp.add_glyph(pick_source,pick_starts)
-		gp.add_glyph(pick_source,pick_finishes)
+		if gp != None:
+			gcount +=1
+			chan = chans[gcount]
+			marker = Asterisk( x=chan+'_time',y=chan+'_pot',
+						size=4, fill_alpha=1, fill_color='black', name=chan+'_peak')
+			gp.add_glyph( peak_source, marker)
+			gp.add_glyph(pick_source,pick_starts)
+			gp.add_glyph(pick_source,pick_finishes)
 
 def update_data( peak_data ):
 	peak_source.data = peak_data
@@ -144,6 +155,7 @@ def apply_handler():
 	peak_source.set()
 
 	print( 'Values:',pval, 'Times:',pms)
+	print( 'Values:',len(pval), 'Times:',len(pms) )
 	print( peak_source.to_df() )
 	print( dir(peak_source) )
 	#push_session(curdoc())

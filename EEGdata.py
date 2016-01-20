@@ -194,6 +194,18 @@ class avgh1:
 		return peak_val, peak_ms
 			
 
+	def get_yscale(s, potentials, channels):
+
+		ind_lst = []
+		for chan in channels:
+			ind_lst.append( s.electrodes.index(chan) )
+		disp_pots = np.take(potentials, ind_lst, 1)
+
+		
+		min_val = int(np.floor(np.min(disp_pots)))
+		max_val = int(np.ceil(np.max(disp_pots)))
+		return min_val, max_val
+
 	def butterfly_channels_by_case(s,channel_list=['FZ','CZ','PZ'], offset=0):
 		s.extract_case_data()
 
@@ -230,14 +242,17 @@ class avgh1:
 
 	def selected_cases_by_channel(s,cases='all', channels='all', props={}, 
 			mode='notebook', source=None, peak_source=None,
-			tools=[], tool_gen=[]):
+			tools=[], tool_gen=[], style='grid'):
 
 		# Setup properties for plots 
 		default_props = {'width':250,
 						'height':150,
 						'min_border':2,
 						'extra_bottom_height':20,
-						'font size':'8pt'}
+						'font size':'8pt',
+						'axis alpha':0,
+						'outline alpha':0,
+						'grid alpha':0.75}
 
 		default_props.update(props)
 		props = default_props
@@ -249,9 +264,11 @@ class avgh1:
 		tms,potentials = s.prepare_plot_data()
 
 		props['times'] = tms
-		min_val = int(np.floor(np.min(potentials)))
-		max_val = int(np.ceil(np.max(potentials)))
+
+		min_val, max_val = s.get_yscale(potentials, channels)
+
 		props['yrange'] = [min_val,max_val]
+		props['xrange'] = [-100,700]
 
 		if len(cases) > 3:
 			props['colors'] = brewer['Spectral'][len(cases)]
@@ -259,30 +276,59 @@ class avgh1:
 
 		if channels ==  'all':
 			channels = s.electrodes
+		elif channels == 'core_31':
+			channels = s.electrodes[0:31]
+			channels.append(s.electrodes[63])
 
-		n_plots = len( channels ) #potentials.shape[1]
-		n_per_row = int( np.ceil(n_plots**0.5) )
+		if style == 'grid':
+			n_plots = len( channels ) #potentials.shape[1]
+			n_per_row = int( np.ceil(n_plots**0.5) )
 
-		plots = []
-		for plot_ind,electrode in enumerate(channels):
-			eind= s.electrodes.index(electrode)
-			if plot_ind % n_per_row == 0:
+			plots = []
+			for plot_ind,electrode in enumerate(channels):
+				eind= s.electrodes.index(electrode)
+				if plot_ind % n_per_row == 0:
+					plots.append([])
+
+				if n_plots - plot_ind < n_per_row+1:
+					bot_flag = True
+				else:
+					bot_flag = False
+				if plot_ind == 0:
+					leg_flag = True
+				else:
+					leg_flag = False
+
+				splot = s.make_plot_for_channel(potentials,eind,props,cases,tools,
+											bottom_label=bot_flag,legend=leg_flag, mode=mode,
+											source=source, tool_gen=tool_gen)
+				plots[-1].append(splot)
+
+		elif style == 'layout':
+			layout = []
+			layout.append( [None, 'FP1', 'Y',  'FP2', 'X']  )
+			layout.append( ['F7', 'AF1', None, 'AF2', 'F8']  )
+			layout.append( [None, 'F3', 'FZ',  'F4',  None]  )
+			layout.append( ['FC5','FC1', None, 'FC2', 'FC6'] )
+			layout.append( ['T7', 'C3', 'CZ',  'C4',  'T8']  )
+			layout.append( ['CP5','CP1', None, 'CP2', 'CP6'] )
+			layout.append( [None, 'P3', 'PZ',  'P4',  None]  )
+			layout.append( ['P7', 'PO1', None, 'PO2', 'P8']  )
+			layout.append( [None, 'O1',  None, 'O2',  None]  )
+
+			plots = []
+			for row in layout:
 				plots.append([])
+				for cell in row:
+					if cell == None:
+						plots[-1].append(None)
+					else:
+						eind= s.electrodes.index(cell)
+						splot = s.make_plot_for_channel(potentials,eind,props,
+							cases,tools, mode=mode, source=source,
+							tool_gen=tool_gen)
+						plots[-1].append(splot)
 
-			if n_plots - plot_ind < n_per_row+1:
-				bot_flag = True
-			else:
-				bot_flag = False
-			if plot_ind == 0:
-				leg_flag = True
-			else:
-				leg_flag = False
-
-			splot = s.make_plot_for_channel(potentials,eind,props,cases,tools,
-										bottom_label=bot_flag,legend=leg_flag, mode=mode,
-										source=source, tool_gen=tool_gen)
-			plots[-1].append(splot)
-		
 		if mode == 'server':
 			return plots
 		else:
@@ -344,8 +390,14 @@ class avgh1:
 		plot.plot_width = props['width']
 		plot.plot_height = height
 		plot.y_range = Range1d(*props['yrange'])
+		plot.x_range = Range1d(*props['xrange'])
 		plot.title_text_font_size = props['font size']
 		plot.xaxis.axis_label_text_font_size = props['font size']
+		
+		plot.outline_line_alpha = props['outline alpha']
+		plot.grid.grid_line_alpha = props['grid alpha']
+
+
 
 		if tool_gen:
 			plot.add_tools(*[g() for g in tool_gen])
@@ -384,6 +436,8 @@ class avgh1:
 		if bottom_label:
 			plot.xaxis.axis_label="Time (ms)"
 		else: 
-			plot.xaxis[0].ticker = FixedTicker(ticks=[])
-		
+			plot.xaxis[0].ticker = FixedTicker(ticks=[0,400])
+			plot.grid.ticker = plot.xaxis[0].ticker
+		plot.axis.axis_line_alpha = props['axis alpha']
+
 		return plot
