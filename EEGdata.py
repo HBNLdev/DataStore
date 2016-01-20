@@ -195,12 +195,31 @@ class avgh1:
 			
 
 	def get_yscale(s, potentials, channels):
-
+		# get full list of display channels
 		ind_lst = []
 		for chan in channels:
 			ind_lst.append( s.electrodes.index(chan) )
-		disp_pots = np.take(potentials, ind_lst, 1)
+
+		# find means / stds
+		pots = np.take(potentials, ind_lst, 1)
+		pots_mean = np.mean(pots, axis=2)
+		pots_mean2 = np.mean(pots_mean, axis=1)
+		pots_meanstd = np.std(pots_mean, axis=1)
+
+		# find indices of outlying channels
+		n_std = 2 # num of stdev away from mean to detect
+		out_means = np.logical_or(
+			pots_mean.T <  pots_mean2 - n_std*pots_meanstd,
+			pots_mean.T >  pots_mean2 + n_std*pots_meanstd)
+		out_finds = out_means.any(axis=1)
+		out_inds = np.nonzero(out_finds)[0]
 		
+		# remove outlying chans from calculation
+		for ind in out_inds:
+			ind_lst.remove(ind)
+		disp_pots = np.take(potentials, ind_lst, 1)
+
+		# calculate min / max for y limits
 		min_val = int(np.floor(np.min(disp_pots)))
 		max_val = int(np.ceil(np.max(disp_pots)))
 		return min_val, max_val
