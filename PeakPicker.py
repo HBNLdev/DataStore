@@ -34,7 +34,8 @@ from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
 
-exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
+# exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
+exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
 eeg_exp = EEGdata.avgh1( exp_path )
 eeg = eeg_exp
 
@@ -115,7 +116,8 @@ gridplots = eeg.selected_cases_by_channel(cases='all',
 			style='layout'
 			)
 
-print(gridplots)
+#print(gridplots)
+#print(rangecheck)
 
 pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
 				line_width=1,line_alpha=0.65,line_color='#FF6666')

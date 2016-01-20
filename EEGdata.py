@@ -216,7 +216,7 @@ class avgh1:
 		
 		# remove outlying chans from calculation
 		for ind in out_inds:
-			ind_lst.remove(ind)
+			ind_lst.remove( s.electrodes.index(channels[ind]) )
 		disp_pots = np.take(potentials, ind_lst, 1)
 
 		# calculate min / max for y limits
