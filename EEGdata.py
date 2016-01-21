@@ -23,7 +23,7 @@ class avgh1:
 		# s.cases = SI.experiments_parts[s.file_info['experiment']]
 		s.loaded = h5py.File(s.filepath,'r')
 		s.electrodes = [ s.decode() for s in list(s.loaded['file']['run']['run'])[0][-2] ]
-
+		s.electrodes_61	= s.electrodes[0:31]+s.electrodes[32:62]
 		s.samp_freq = 256
 		# s.peak = OrderedDict()
 
@@ -69,7 +69,7 @@ class avgh1:
 	def extract_case_data(s):
 		if 'cases' not in dir(s):
 			case_info = s.loaded['file']['run']['case']['case']
-			s.cases = {}
+			s.cases = OrderedDict()
 			s.case_num_map = {}
 			s.case_list = []
 			for vals in case_info.value:
@@ -82,13 +82,13 @@ class avgh1:
 		else:
 			return
 
-	def build_mt(s):
+	def build_mt(s, peaks, amp, lat):
 		s.extract_subject_data()
 		s.extract_exp_data()
 		s.extract_transforms_data()
 		s.extract_case_data()
 		s.build_mt_header()
-		s.build_mt_body()
+		s.build_mt_body(peaks, amp, lat)
 		s.mt = s.mt_header + s.mt_body
 
 	def build_mt_header(s):
@@ -103,7 +103,7 @@ class avgh1:
 		s.mt_header += '#lopass ' + str(s.transforms['lo_pass_filter']) + '\n'
 		s.mt_header += '#thresh ' + str(s.exp['threshold_value']) + '\n'
 
-	def build_mt_body(s):
+	def build_mt_body(s, peaks, amp, lat):
 		# indices
 		sid 	= s.subject['subject_id']
 		expname = s.exp['exp_name']
@@ -111,8 +111,8 @@ class avgh1:
 		gender 	= s.subject['gender']
 		age 	= int(s.subject['age'])
 		cases 	= list(s.cases.keys())
-		chans 	= s.electrodes[0:31]+s.electrodes[32:62] # only head chans
-		peaks 	= ['N1','P3'] # test case
+		chans 	= s.electrodes_61 # only head chans
+		# peaks 	= ['N1','P3'] # test case
 		indices = [ [sid], [expname], [expver], [gender], [age],
 					cases, chans, peaks ]
 		index 	= pd.MultiIndex.from_product(indices,
@@ -120,11 +120,11 @@ class avgh1:
 
 		# data
 		n_lines = len(cases) * len(chans) * len(peaks)
-		amp 	= np.random.normal(10,5,n_lines) # test case
-		lat 	= np.random.normal(300,100,n_lines) # test case
+		# amp 	= np.random.normal(10,5,n_lines) # test case
+		# lat 	= np.random.normal(300,100,n_lines) # test case
 		rt = []
 		for case in s.cases.keys():
-		    rt.extend([s.cases[case]['mean_resp_time']]*len(peaks)*len(chans))
+		    rt.extend( [ s.cases[case]['mean_resp_time'] ] * len(peaks) * len(chans) )
 		data = {'amplitude':amp, 'latency':lat, 'mean_rt':rt}
 		
 		# making CSV structure
@@ -360,7 +360,11 @@ class avgh1:
 				mt = FH.mt_file( mt_path )
 				mt.parse_file()
 				s.mt_data = mt.data
-				s.peaks = mt.data.keys()
+				s.case_peaks = mt.data.keys()
+				peak_lst = []
+				for c_pk in s.case_peaks:
+				    peak_lst.append(c_pk[1])
+				s.peaks = list(set(peak_lst))
 			else:
 				return
 		else:
@@ -383,7 +387,7 @@ class avgh1:
 			peak_source_dict[ chan+'_time'] = []
 		
 		if 'mt_data' in dir(s):
-			for c_pk in s.peaks:
+			for c_pk in s.case_peaks:
 				peak_source_dict['case_peaks'].append(c_pk)
 				for chan in channels:
 					if chan != 'X' and chan != 'Y' and chan != 'BLANK':

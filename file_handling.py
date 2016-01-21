@@ -314,12 +314,12 @@ class mt_file:
 		of = open(s.fullpath,'r')
 		data_lines = of.readlines()[s.header_lines:]
 		of.close()
-		s.data = {}
+		s.data = OrderedDict()
 		for L in data_lines:
 			Ld = { c:v for c,v in zip( s.columns,L.split() )  }
 			key = (Ld['case_num'], Ld['peak'])
 			if key not in s.data:
-				s.data[key] = {}
+				s.data[key] = OrderedDict()
 			s.data[key][ Ld['electrode'].upper() ] = (Ld['amplitude'],Ld['latency'])
 			if 'reaction_time' not in s.data[key]:
 				s.data[key]['reaction_time'] = Ld['reaction_time']

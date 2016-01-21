@@ -172,6 +172,35 @@ def apply_handler():
 	# set_curdoc( cdoc )
 	#update_data(peak_data = peak_source.data )
 
+def save_handler():
+	print('Save')
+	
+	# get list of unique peaks
+	c_pks = peak_source.data['case_peaks']
+	peak_lst = []
+	for c_pk in c_pks:
+		peak_lst.append(c_pk[1])
+	peaks = list(set(peak_lst))
+
+	# get amps and lats as ( peak, chan, case ) shaped arrays
+	n_cases = len(eeg.cases)
+	n_chans = 61 # only core 61 chans
+	n_peaks = len(peaks)
+	amps = np.empty( (n_peaks, n_chans, n_cases) )
+	lats = np.empty( (n_peaks, n_chans, n_cases) )
+	for icase, case in enumerate(eeg.cases.keys()):
+		for ichan, chan in enumerate(eeg.electrodes_61): # only core 61 chans
+			for ipeak, peak in enumerate(peaks):
+				amps[ipeak, ichan, icase] = peak_source.data[chan+'_pot'][c_pks.index( (str(case),peak) )]
+				lats[ipeak, ichan, icase] =	peak_source.data[chan+'_time'][c_pks.index( (str(case),peak) )]
+
+	# reshape into 1d arrays
+	amps1d = amps.ravel('F')
+	lats1d = lats.ravel('F')
+
+	eeg.build_mt(peaks, amps1d, lats1d)
+	print(eeg.mt)
+
 def checkbox_handler(active):
     for n,nm in enumerate(eeg.case_list):
     	label = nm+'_line'
@@ -187,6 +216,7 @@ def input_change(attr, old, new):
 
 case_toggle.on_click(checkbox_handler)
 apply_button.on_click(apply_handler)
+save_button.on_click(save_handler)
 
 text.on_change('value', input_change)
 
