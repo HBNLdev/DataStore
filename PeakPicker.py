@@ -118,9 +118,11 @@ gridplots = eeg.selected_cases_by_channel(cases='all',
 print(gridplots)
 
 pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
-				line_width=1,line_alpha=0.65,line_color='#FF6666')
+				line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+				line_dash='dashed')
 pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
-				line_width=1,line_alpha=0.65,line_color='#FF6666')
+				line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+				line_dash='dashdot')
 #gridplots[0][1].add_glyph(pick_source,pick_starts)
 #gridplots[0][1].add_glyph(pick_source,pick_finishes)
 
@@ -131,7 +133,7 @@ for g_row in gridplots:
 			gcount +=1
 			chan = chans[gcount]
 			marker = Asterisk( x=chan+'_time',y=chan+'_pot',
-						size=4, fill_alpha=1, fill_color='black', name=chan+'_peak')
+						size=4, fill_alpha=1, fill_color='black', name='case_peaks')
 			gp.add_glyph( peak_source, marker)
 			gp.add_glyph(pick_source,pick_starts)
 			gp.add_glyph(pick_source,pick_finishes)
@@ -174,6 +176,7 @@ def checkbox_handler(active):
     	selections=grid.select(dict(name=label))
     	for sel in selections:
     		sel.glyph.line_alpha= 1 if n in active else 0
+
 
 
 def input_change(attr, old, new):
