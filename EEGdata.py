@@ -394,8 +394,8 @@ class avgh1:
 						peak_source_dict[ chan+'_pot'].append( float(s.mt_data[c_pk][chan][0]) )
 						peak_source_dict[ chan+'_time'].append( float(s.mt_data[c_pk][chan][1]) )
 					else:
-						peak_source_dict[ chan+'_pot'].append( None )
-						peak_source_dict[ chan+'_time'].append( None )
+						peak_source_dict[ chan+'_pot'].append( np.nan )
+						peak_source_dict[ chan+'_time'].append( np.nan )
 
 		# potentials
 		for chan in channels:

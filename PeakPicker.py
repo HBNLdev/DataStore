@@ -12,8 +12,8 @@ point browser to:
 # import logging
 # logging.basic.Config(level=logging.DEBUG)
 import sys
-repo_path = '/export/home/mike/python/mort-collab'
-# repo_path = '/export/home/mort/programs/dev'
+#repo_path = '/export/home/mike/python/mort-collab'
+repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
 import numpy as np
@@ -191,8 +191,10 @@ def save_handler():
 	for icase, case in enumerate(eeg.cases.keys()):
 		for ichan, chan in enumerate(eeg.electrodes_61): # only core 61 chans
 			for ipeak, peak in enumerate(peaks):
-				amps[ipeak, ichan, icase] = peak_source.data[chan+'_pot'][c_pks.index( (str(case),peak) )]
-				lats[ipeak, ichan, icase] =	peak_source.data[chan+'_time'][c_pks.index( (str(case),peak) )]
+				amps[ipeak, ichan, icase] = \
+						peak_source.data[chan+'_pot'][c_pks.index( (str(case),peak) )]
+				lats[ipeak, ichan, icase] =	\
+						peak_source.data[chan+'_time'][c_pks.index( (str(case),peak) )]
 
 	# reshape into 1d arrays
 	amps1d = amps.ravel('F')
