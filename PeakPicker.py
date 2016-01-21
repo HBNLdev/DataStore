@@ -34,8 +34,8 @@ from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
 
-exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
-# exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
+#exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
+exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
 eeg_exp = EEGdata.avgh1( exp_path )
 eeg = eeg_exp
 
@@ -47,11 +47,14 @@ pick_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
 
 text = TextInput( title="file", name='file', value=exp_path)
 
-case_toggle = CheckboxGroup( labels=eeg.case_list, inline=True,
-				active=[n for n in range(len(eeg.case_list))] )
+case_choices = eeg.case_list
+case_toggle = CheckboxGroup( labels=case_choices, inline=True,
+				active=[n for n in range(len(case_choices))] )
 
-case_chooser = RadioButtonGroup( labels=eeg.case_list, active=0 )
-peak_chooser = RadioButtonGroup( labels=['P3','P4','N1','N2','N3','N4'], active=0)
+case_chooser = RadioButtonGroup( labels=case_choices, active=0 )
+peak_choices = ['P1','P3','P4','N1','N2','N3','N4']
+peak_chooser = RadioButtonGroup( labels=peak_choices, active=0)
+pick_state = {'case':case_choices[0], 'peak':peak_choices[0]}
 
 apply_button = Button( label="Apply", type='default' )
 save_button = Button( label="Save" )
@@ -156,14 +159,16 @@ def apply_handler():
 	start = limitsDF[ 'start' ].values[-1]
 	finish = limitsDF[ 'finish' ].values[-1]
 	
-	pval,pms = eeg.find_peak(start_ms=start,end_ms=finish)
-	eeg.update_peak_source( peak_source.data, eeg.case_list[0],'P1',pval, pms)
+	pval,pms = eeg.find_peak(pick_state['case'],start_ms=start,end_ms=finish)
+	eeg.update_peak_source( peak_source.data, 
+				pick_state['case'],pick_state['peak'],pval, pms)
 	peak_source.set()
 
+	print( 'pick_state: ', pick_state)
 	print( 'Values:',pval, 'Times:',pms)
 	print( 'Values:',len(pval), 'Times:',len(pms) )
 	print( peak_source.to_df() )
-	print( dir(peak_source) )
+	#print( dir(peak_source) )
 	#push_session(curdoc())
 	peak_source.trigger('data', peak_source.data, peak_source.data)
 
@@ -205,8 +210,20 @@ def save_handler():
 	eeg.build_mt(peaks, amps1d, lats1d)
 	print(eeg.mt)
 
+def case_toggle_handler(active):
+	chosen_case = case_choices[active]
+	pick_state['case'] = chosen_case
+	for case in case_choices:
+		width = 2.5 if case == chosen_case else 1.5
+		selections = grid.select(dict(name=case+'_line'))
+		for sel in selections:
+			sel.glyph.line_width = width
+
+def peak_toggle_handler(active):
+	pick_state['peak'] = peak_choices[active]
+
 def checkbox_handler(active):
-    for n,nm in enumerate(eeg.case_list):
+    for n,nm in enumerate(case_choices):
     	label = nm+'_line'
     	selections=grid.select(dict(name=label))
     	for sel in selections:
@@ -218,6 +235,8 @@ def input_change(attr, old, new):
 	s.update_data()
 	s.plot.title = s.text.value
 
+case_chooser.on_click(case_toggle_handler)
+peak_chooser.on_click(peak_toggle_handler)
 
 case_toggle.on_click(checkbox_handler)
 apply_button.on_click(apply_handler)

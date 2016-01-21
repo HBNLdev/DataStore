@@ -149,9 +149,10 @@ class avgh1:
 
 		return times, potentials
 
-	def find_peak(s, case = 0, start_ms = 200, end_ms = 600,
+	def find_peak(s, case, start_ms = 200, end_ms = 600,
 		 chan_scope='all', chan=0, peak_polarity='p'):
 		# erps is cases x chans x pts
+		caseN = s.case_list.index(case)
 		lats,erps = s.prepare_plot_data()
 		
 		 # test case
@@ -164,9 +165,9 @@ class avgh1:
 		# get data
 		if chan_scope == 'one': # find peak for one chan
 			chan 	= 0 # test case
-			erpa 	= erps[case,chan,:]
+			erpa 	= erps[caseN,chan,:]
 		elif chan_scope == 'all': # find peak for all chans
-			erpa = erps[case,:,:]
+			erpa = erps[caseN,:,:]
 			erpa = erpa.swapaxes(0,1)
 		else:
 			return # error, the range is not correctly specified
