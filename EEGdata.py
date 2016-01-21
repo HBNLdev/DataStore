@@ -20,12 +20,12 @@ class avgh1:
 		s.filepath = filepath
 		s.filename = os.path.split(s.filepath)[1]
 		s.file_info = FH.parse_filename(s.filename)
-		#s.cases = SI.experiments_parts[s.file_info['experiment']]
+		# s.cases = SI.experiments_parts[s.file_info['experiment']]
 		s.loaded = h5py.File(s.filepath,'r')
 		s.electrodes = [ s.decode() for s in list(s.loaded['file']['run']['run'])[0][-2] ]
 
 		s.samp_freq = 256
-		s.peak = OrderedDict()
+		# s.peak = OrderedDict()
 
 	def show_file_hierarchy(s):
 		def disp_node( name, node):
@@ -353,23 +353,51 @@ class avgh1:
 			g=gridplot( plots, border_space=-40)#, tools=[TapTool()])#tools )
 			show(g)
 
+	def extract_mt_data(s):
+		if 'mt_data' not in dir(s):
+			mt_path = os.path.splitext(s.filepath)[0] + '.mt'
+			if os.path.isfile(mt_path):
+				mt = FH.mt_file( mt_path )
+				mt.parse_file()
+				s.mt_data = mt.data
+				s.peaks = mt.data.keys()
+			else:
+				return
+		else:
+			return
+
 	def make_data_sources(s,channels='all'):
 		times, potentials = s.prepare_plot_data()
 		s.extract_case_data()
+		s.extract_mt_data()
 
 		pot_source_dict = dict( times=times )
-		peak_source_dict = dict( case_peaks = []  )
 
 		if channels == 'all':
 			channels = s.electrodes
+	
+		#peaks
+		peak_source_dict = dict( case_peaks = []  )
+		for chan in channels:
+			peak_source_dict[ chan+'_pot'] = []
+			peak_source_dict[ chan+'_time'] = []
+		
+		if 'mt_data' in dir(s):
+			for c_pk in s.peaks:
+				peak_source_dict['case_peaks'].append(c_pk)
+				for chan in channels:
+					if chan != 'X' and chan != 'Y' and chan != 'BLANK':
+						peak_source_dict[ chan+'_pot'].append( float(s.mt_data[c_pk][chan][0]) )
+						peak_source_dict[ chan+'_time'].append( float(s.mt_data[c_pk][chan][1]) )
+					else:
+						peak_source_dict[ chan+'_pot'].append( None )
+						peak_source_dict[ chan+'_time'].append( None )
 
+		# potentials
 		for chan in channels:
 			ch_ind = s.electrodes.index(chan)
-			peak_source_dict[ chan+'_pot'] = []
-			peak_source_dict[ chan+'_time'] = []			
 			for cs_ind,cs in s.cases.items():
 				pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
-
 
 		pot_source = ColumnDataSource(
 			data = pot_source_dict )

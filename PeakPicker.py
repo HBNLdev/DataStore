@@ -12,8 +12,8 @@ point browser to:
 # import logging
 # logging.basic.Config(level=logging.DEBUG)
 import sys
-#repo_path = '/export/home/mike/python/mort-collab'
-repo_path = '/export/home/mort/programs/dev'
+repo_path = '/export/home/mike/python/mort-collab'
+# repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
 import numpy as np
@@ -34,12 +34,13 @@ from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
 
-# exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
-exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
+exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
+# exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
 eeg_exp = EEGdata.avgh1( exp_path )
 eeg = eeg_exp
 
 data_source, peak_source = eeg.make_data_sources()
+print(peak_source.data)
 pick_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
 								 start=[], finish=[], bots=[], tops=[] ))
 
@@ -95,9 +96,9 @@ tap_callback = CustomJS( args=dict(source=data_source), code="""
  	""" )
 tap = TapTool( callback=tap_callback )
 
-plot_props = {'width':180, 'height':75,
+plot_props = {'width':180, 'height':110,
 				 'extra_bottom_height':40, # for bottom row
-				'min_border':-10}
+				'min_border':4}
 
 #chans = ['FZ','CZ','PZ','F3','C3','P3']
 #chans = eeg.electrodes[:31]
@@ -116,6 +117,7 @@ gridplots = eeg.selected_cases_by_channel(cases='all',
 			style='layout'
 			)
 
+#print(out_inds)
 #print(gridplots)
 #print(rangecheck)
 
@@ -195,7 +197,7 @@ inputs= VBox( children=[ text, case_chooser, peak_chooser,
 
 page = VBox( children=[inputs])
 curdoc().add_root(inputs)
-grid = gridplot( gridplots, border_space=0 ) # gridplot works properly outside of curdoc
+grid = gridplot( gridplots ) # gridplot works properly outside of curdoc
 
 
 #output_server("picker")
