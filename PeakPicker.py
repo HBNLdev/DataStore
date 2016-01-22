@@ -141,7 +141,8 @@ for g_row in gridplots:
 			chan = chans[gcount]
 			for case in case_choices:
 				marker = Asterisk( x=chan+'_time',y=chan+'_pot',
-						size=4, fill_alpha=1, fill_color='black', name=case+'_peak')
+						size=4, line_alpha=1,line_color='black',
+						name=case+'_peak')
 				gp.add_glyph( peak_sources[case], marker)
 			gp.add_glyph(pick_source,pick_starts)
 			gp.add_glyph(pick_source,pick_finishes)
@@ -228,11 +229,16 @@ def peak_toggle_handler(active):
 
 def checkbox_handler(active):
     for n,nm in enumerate(case_choices):
+    	alpha = 1 if n in active else 0
     	label = nm+'_line'
-    	selections=grid.select(dict(name=label))
+    	selections = grid.select(dict(name=label))
     	for sel in selections:
-    		sel.glyph.line_alpha= 1 if n in active else 0
-
+    		sel.glyph.line_alpha = alpha
+    	marker_label = nm+'_peak'
+    	selections = grid.select(dict(name=marker_label))
+    	for sel in selections:
+    		#sel.fill_alpha = alpha
+    		sel.line_alpha = alpha
 
 
 def input_change(attr, old, new):
