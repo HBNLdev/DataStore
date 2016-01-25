@@ -24,10 +24,10 @@ import organization as O
 import EEGdata
 
 from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
-from bokeh.models import Plot, Segment, ColumnDataSource, CustomJS, \
+from bokeh.models import Plot, Panel, Tabs, ColumnDataSource, CustomJS, \
 					BoxSelectTool, TapTool, GridPlot, \
 				BoxZoomTool, ResetTool, PanTool, WheelZoomTool, ResizeTool, \
-				Asterisk
+				Asterisk, Segment
 
 from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, CheckboxGroup, \
 				RadioButtonGroup, Button
@@ -35,8 +35,8 @@ from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
 
-exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
-#exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
+#exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
+exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
 eeg_exp = EEGdata.avgh1( exp_path )
 eeg = eeg_exp
 
@@ -119,6 +119,7 @@ gridplots = eeg.selected_cases_by_channel(cases='all',
 					ResetTool, PanTool, ResizeTool],
 			style='layout'
 			)
+print(type(gridplots[0][1]),dir(gridplots[0][1]))
 
 #print(out_inds)
 #print(gridplots)
@@ -221,8 +222,9 @@ def case_toggle_handler(active):
 	for case in case_choices:
 		width = 2.5 if case == chosen_case else 1.5
 		selections = grid.select(dict(name=case+'_line'))
+		#print( dir(selections[0]))
 		for sel in selections:
-			sel.glyph.line_width = width
+			sel.line_width = width
 
 def peak_toggle_handler(active):
 	pick_state['peak'] = peak_choices[active]
@@ -233,7 +235,7 @@ def checkbox_handler(active):
     	label = nm+'_line'
     	selections = grid.select(dict(name=label))
     	for sel in selections:
-    		sel.glyph.line_alpha = alpha
+    		sel.line_alpha = alpha
     	marker_label = nm+'_peak'
     	selections = grid.select(dict(name=marker_label))
     	for sel in selections:
@@ -257,14 +259,22 @@ save_button.on_click(save_handler)
 
 text.on_change('value', input_change)
 
+file_chooser = TextInput( title="files", name='file_chooser',
+				 value='file1\nfile2\nfile3')
 
+# LAYOUT
+navigation = Panel( child=file_chooser, title='Navigate' )
 
 inputs= VBox( children=[ text, case_chooser, peak_chooser, 
  					apply_button, save_button, case_toggle ])
 
-page = VBox( children=[inputs])
-curdoc().add_root(inputs)
-grid = gridplot( gridplots ) # gridplot works properly outside of curdoc
+grid = GridPlot( children=gridplots ) # gridplot works properly outside of curdoc
+page = VBox( children=[inputs, grid])
+picking = Panel( child=page, title='pick')
+
+tabs = Tabs( tabs=[navigation, picking])
+
+curdoc().add_root(tabs)
 
 case_toggle_handler(0)
 peak_toggle_handler(0)

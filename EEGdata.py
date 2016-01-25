@@ -6,7 +6,8 @@ import pandas as pd
 import h5py, os
 import bokeh
 from bokeh.plotting import figure, gridplot
-from bokeh.models import FixedTicker, CustomJS, TapTool, Range1d, ColumnDataSource
+from bokeh.models import FixedTicker, CustomJS, TapTool, Range1d, \
+				ColumnDataSource, Plot, Line
 from bokeh.palettes import brewer
 from collections import OrderedDict
 
@@ -397,7 +398,7 @@ class avgh1:
 				case_name = s.case_list[int(case)-1]
 				peak_sourcesD[case_name]['peaks'].append(peak)
 				for chan in channels:
-					if chan not in ['X','Y','BLANK']:#!= 'X' and chan != 'Y' and chan != 'BLANK':
+					if chan not in ['X',' Y','BLANK']:#!= 'X' and chan != 'Y' and chan != 'BLANK':
 						peak_sourcesD[case_name][ chan+'_pot'].append( float(s.mt_data[c_pk][chan][0]) )
 						peak_sourcesD[case_name][ chan+'_time'].append( float(s.mt_data[c_pk][chan][1]) )
 					else:
@@ -437,7 +438,7 @@ class avgh1:
 
 		electrode = s.electrodes[el_ind]
 
-		plot = figure(#plot_width=props['width'], plot_height=height, 
+		plot = Plot(#plot_width=props['width'], plot_height=height, 
 			title=electrode,
 			tools=tools
 			)
@@ -458,6 +459,7 @@ class avgh1:
 		plot.title_text_font_size = str(props['font size'])+'pt'
 
 		# Axes
+		'''
 		plot.xaxis.axis_label_text_font_size = str(props['font size'])+'pt'		
 		#plot.outline_line_alpha = props['outline alpha']
 		#plot.grid.grid_line_alpha = props['grid alpha']
@@ -482,7 +484,7 @@ class avgh1:
 		plot.xaxis.minor_tick_line_color = None
 		plot.xaxis.major_tick_out = 0
 		plot.xaxis.major_tick_in = 2
-
+		'''
 		if tool_gen:
 			plot.add_tools(*[g() for g in tool_gen])
 
@@ -494,8 +496,9 @@ class avgh1:
 				leg = case
 			if mode == 'server':
 				#print(case)
-				plot.line( x='times', y=electrode+'_'+case, color=props['colors'][cs_ind],
-						line_width=1.5, line_alpha=0.85, name=case+'_line', legend=leg, source=source)
+				line= Line( x='times', y=electrode+'_'+case, line_color=props['colors'][cs_ind],
+						line_width=1.5, line_alpha=0.85, name=case+'_line')
+				plot.add_glyph(source,line)
 			else: #notebook for now
 				plot.line( x=props['times'], y=pot[case_ind,el_ind,:], color=props['colors'][cs_ind],
 						line_width=2, line_alpha=0.85, name=case, legend=leg)
@@ -516,11 +519,11 @@ class avgh1:
 			plot.legend.glyph_width = 15
 			plot.legend.glyph_height= 12
 
-		if bottom_label:
-			plot.xaxis.axis_label="Time (ms)"
-		else: 
-			plot.xaxis[0].ticker = FixedTicker(ticks=[0,400])
-			plot.grid.ticker = plot.xaxis[0].ticker
-		plot.axis.axis_line_alpha = props['axis alpha']
+		# if bottom_label:
+		# 	plot.xaxis.axis_label="Time (ms)"
+		# else: 
+		# 	plot.xaxis[0].ticker = FixedTicker(ticks=[0,400])
+		# 	plot.grid.ticker = plot.xaxis[0].ticker
+		# plot.axis.axis_line_alpha = props['axis alpha']
 
 		return plot
