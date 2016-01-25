@@ -149,9 +149,10 @@ class avgh1:
 
 		return times, potentials
 
-	def find_peak(s, case = 0, start_ms = 200, end_ms = 600,
+	def find_peak(s, case, start_ms = 200, end_ms = 600,
 		 chan_scope='all', chan=0, peak_polarity='p'):
 		# erps is cases x chans x pts
+		caseN = s.case_list.index(case)
 		lats,erps = s.prepare_plot_data()
 		
 		 # test case
@@ -164,9 +165,9 @@ class avgh1:
 		# get data
 		if chan_scope == 'one': # find peak for one chan
 			chan 	= 0 # test case
-			erpa 	= erps[case,chan,:]
+			erpa 	= erps[caseN,chan,:]
 		elif chan_scope == 'all': # find peak for all chans
-			erpa = erps[case,:,:]
+			erpa = erps[caseN,:,:]
 			erpa = erpa.swapaxes(0,1)
 		else:
 			return # error, the range is not correctly specified
@@ -259,7 +260,7 @@ class avgh1:
 		show(g)
 
 	def selected_cases_by_channel(s,cases='all', channels='all', props={}, 
-			mode='notebook', source=None, peak_source=None,
+			mode='notebook', source=None,
 			tools=[], tool_gen=[], style='grid'):
 
 		# Setup properties for plots 
@@ -381,21 +382,28 @@ class avgh1:
 			channels = s.electrodes
 	
 		#peaks
-		peak_source_dict = OrderedDict( case_peaks = []  )
-		for chan in channels:
-			peak_source_dict[ chan+'_pot'] = []
-			peak_source_dict[ chan+'_time'] = []
+		peak_sourcesD = {}
+		for case in s.case_list:
+			peak_source_dict = dict( peaks = []  )
+			for chan in channels:
+				peak_source_dict[ chan+'_pot'] = []
+				peak_source_dict[ chan+'_time'] = []
+			peak_sourcesD[ case ] = peak_source_dict
 		
 		if 'mt_data' in dir(s):
-			for c_pk in s.case_peaks:
-				peak_source_dict['case_peaks'].append(c_pk)
+			for case, peak in s.case_peaks:
+				c_pk = (case, peak)
+				case_name = s.case_list[int(case)-1]
+				peak_sourcesD[case_name]['peaks'].append(peak)
 				for chan in channels:
-					if chan != 'X' and chan != 'Y' and chan != 'BLANK':
-						peak_source_dict[ chan+'_pot'].append( float(s.mt_data[c_pk][chan][0]) )
-						peak_source_dict[ chan+'_time'].append( float(s.mt_data[c_pk][chan][1]) )
+					if chan not in ['X','Y','BLANK']:
+						peak_sourcesD[case_name][ chan+'_pot'].append( float(s.mt_data[c_pk][chan][0]) )
+						peak_sourcesD[case_name][ chan+'_time'].append( float(s.mt_data[c_pk][chan][1]) )
 					else:
-						peak_source_dict[ chan+'_pot'].append( np.nan )
-						peak_source_dict[ chan+'_time'].append( np.nan )
+						peak_sourcesD[case_name][ chan+'_pot'].append( np.nan )
+						peak_sourcesD[case_name][ chan+'_time'].append( np.nan )
+
+		peak_sources = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
 
 		# potentials
 		for chan in channels:
@@ -405,15 +413,14 @@ class avgh1:
 
 		pot_source = ColumnDataSource(
 			data = pot_source_dict )
-		peak_source = ColumnDataSource(
-			data = peak_source_dict )
 
-		return pot_source, peak_source
+
+		return pot_source, peak_sources
 
 	def update_peak_source(s, psD, case, peak, pot_vals, times ):
 		''' assumes all channels
 		'''
-		psD[ 'case_peaks' ].append( case +'_'+ peak)
+		psD[ 'peaks' ].append( peak )
 		for chan, val, tm in zip(s.electrodes,pot_vals,times):
 			psD[ chan+'_pot' ].append( val )
 			psD[ chan+'_time' ].append( tm )

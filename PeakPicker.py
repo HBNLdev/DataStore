@@ -1,8 +1,9 @@
-'''HBNL dashboard
+'''HBNL Peak Picker
 
 to start:
 	/usr/local/bin/bokeh serve PeakPicker.py
-	*add --ip 138.5.49.214 to make the page accessible across out LAN
+	*to make the page accessible across out LAN
+		add --address 138.5.49.214 --host 138.5.49.214:5006
 point browser to:
 	http://localhost:5006/PeakPicker/
 	*replace 'localhost' with url if on another computer
@@ -12,8 +13,8 @@ point browser to:
 # import logging
 # logging.basic.Config(level=logging.DEBUG)
 import sys
-#repo_path = '/export/home/mike/python/mort-collab'
-repo_path = '/export/home/mort/programs/dev'
+repo_path = '/export/home/mike/python/mort-collab'
+#repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
 import numpy as np
@@ -34,24 +35,26 @@ from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
 
-exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
-# exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
+# exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
+exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
 eeg_exp = EEGdata.avgh1( exp_path )
 eeg = eeg_exp
 
-data_source, peak_source = eeg.make_data_sources()
-print(peak_source.data)
-pick_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
-								 start=[], finish=[], bots=[], tops=[] ))
-
+data_source, peak_sources = eeg.make_data_sources()
 
 text = TextInput( title="file", name='file', value=exp_path)
 
-case_toggle = CheckboxGroup( labels=eeg.case_list, inline=True,
-				active=[n for n in range(len(eeg.case_list))] )
+case_choices = eeg.case_list
+case_toggle = CheckboxGroup( labels=case_choices, inline=True,
+				active=[n for n in range(len(case_choices))] )
 
-case_chooser = RadioButtonGroup( labels=eeg.case_list, active=0 )
-peak_chooser = RadioButtonGroup( labels=['P3','P4','N1','N2','N3','N4'], active=0)
+case_chooser = RadioButtonGroup( labels=case_choices, active=0 )
+
+pick_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
+								 start=[], finish=[], bots=[], tops=[] ))
+peak_choices = ['P1','P3','P4','N1','N2','N3','N4']
+peak_chooser = RadioButtonGroup( labels=peak_choices, active=0)
+pick_state = {'case':case_choices[0], 'peak':peak_choices[0]}
 
 apply_button = Button( label="Apply", type='default' )
 save_button = Button( label="Save" )
@@ -111,7 +114,7 @@ chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 gridplots = eeg.selected_cases_by_channel(cases='all',
 			channels=chans,
 			props=plot_props,  mode='server',
-			source=data_source, peak_source=peak_source,
+			source=data_source,
 			tool_gen=[box_generator,BoxZoomTool, WheelZoomTool, 
 					ResetTool, PanTool, ResizeTool],
 			style='layout'
@@ -122,9 +125,11 @@ gridplots = eeg.selected_cases_by_channel(cases='all',
 #print(rangecheck)
 
 pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
-				line_width=1,line_alpha=0.65,line_color='#FF6666')
+				line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+				line_dash='dashed')
 pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
-				line_width=1,line_alpha=0.65,line_color='#FF6666')
+				line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+				line_dash='dashdot')
 #gridplots[0][1].add_glyph(pick_source,pick_starts)
 #gridplots[0][1].add_glyph(pick_source,pick_finishes)
 
@@ -134,9 +139,11 @@ for g_row in gridplots:
 		if gp != None:
 			gcount +=1
 			chan = chans[gcount]
-			marker = Asterisk( x=chan+'_time',y=chan+'_pot',
-						size=4, fill_alpha=1, fill_color='black', name=chan+'_peak')
-			gp.add_glyph( peak_source, marker)
+			for case in case_choices:
+				marker = Asterisk( x=chan+'_time',y=chan+'_pot',
+						size=4, line_alpha=1,line_color='black',
+						name=case+'_peak')
+				gp.add_glyph( peak_sources[case], marker)
 			gp.add_glyph(pick_source,pick_starts)
 			gp.add_glyph(pick_source,pick_finishes)
 
@@ -148,22 +155,24 @@ def input_change(attr,old,new):
 
 def apply_handler():
 	print('Apply')
-	print( dir(peak_source) )
 	#print( peak_source.data )
 	limitsDF = pick_source.to_df()
 	start = limitsDF[ 'start' ].values[-1]
 	finish = limitsDF[ 'finish' ].values[-1]
 	
-	pval,pms = eeg.find_peak(start_ms=start,end_ms=finish)
-	eeg.update_peak_source( peak_source.data, eeg.case_list[0],'P1',pval, pms)
-	peak_source.set()
+	case = pick_state['case']	
+	pval,pms = eeg.find_peak(case,start_ms=start,end_ms=finish)
+	eeg.update_peak_source( peak_sources[case].data, 
+				case,pick_state['peak'],pval, pms)
+	peak_sources[case].set()
 
+	print( 'pick_state: ', pick_state)
 	print( 'Values:',pval, 'Times:',pms)
 	print( 'Values:',len(pval), 'Times:',len(pms) )
-	print( peak_source.to_df() )
-	print( dir(peak_source) )
+	#print( dir(peak_source) )
 	#push_session(curdoc())
-	peak_source.trigger('data', peak_source.data, peak_source.data)
+	peak_sources[case].trigger('data', peak_sources[case].data, 
+									peak_sources[case].data)
 
 	# cdoc = curdoc()
 	# print( cdoc, dir(cdoc) )
@@ -176,10 +185,12 @@ def save_handler():
 	print('Save')
 	
 	# get list of unique peaks
-	c_pks = peak_source.data['case_peaks']
 	peak_lst = []
-	for c_pk in c_pks:
-		peak_lst.append(c_pk[1])
+	for case in eeg.case_list:
+		pks = peak_sources[case].data['peaks']
+	
+		for pk in pks:
+			peak_lst.append(pk)
 	peaks = list(set(peak_lst))
 
 	# get amps and lats as ( peak, chan, case ) shaped arrays
@@ -188,13 +199,14 @@ def save_handler():
 	n_peaks = len(peaks)
 	amps = np.empty( (n_peaks, n_chans, n_cases) )
 	lats = np.empty( (n_peaks, n_chans, n_cases) )
-	for icase, case in enumerate(eeg.cases.keys()):
+	for icase, case in enumerate( eeg.cases.keys() ):
+		case_name = eeg.case_list[icase]
 		for ichan, chan in enumerate(eeg.electrodes_61): # only core 61 chans
 			for ipeak, peak in enumerate(peaks):
 				amps[ipeak, ichan, icase] = \
-						peak_source.data[chan+'_pot'][c_pks.index( (str(case),peak) )]
+						peak_sources[case_name].data[chan+'_pot'][peaks.index( peak )]
 				lats[ipeak, ichan, icase] =	\
-						peak_source.data[chan+'_time'][c_pks.index( (str(case),peak) )]
+						peak_sources[case_name].data[chan+'_time'][peaks.index( peak )]
 
 	# reshape into 1d arrays
 	amps1d = amps.ravel('F')
@@ -203,17 +215,40 @@ def save_handler():
 	eeg.build_mt(peaks, amps1d, lats1d)
 	print(eeg.mt)
 
+def case_toggle_handler(active):
+	chosen_case = case_choices[active]
+	pick_state['case'] = chosen_case
+	for case in case_choices:
+		width = 2.5 if case == chosen_case else 1.5
+		selections = grid.select(dict(name=case+'_line'))
+		for sel in selections:
+			sel.glyph.line_width = width
+
+def peak_toggle_handler(active):
+	pick_state['peak'] = peak_choices[active]
+
 def checkbox_handler(active):
-    for n,nm in enumerate(eeg.case_list):
+    for n,nm in enumerate(case_choices):
+    	alpha = 1 if n in active else 0
     	label = nm+'_line'
-    	selections=grid.select(dict(name=label))
+    	selections = grid.select(dict(name=label))
     	for sel in selections:
-    		sel.glyph.line_alpha= 1 if n in active else 0
+    		sel.glyph.line_alpha = alpha
+    	marker_label = nm+'_peak'
+    	selections = grid.select(dict(name=marker_label))
+    	for sel in selections:
+    		#sel.fill_alpha = alpha
+    		sel.line_alpha = alpha
 
 
 def input_change(attr, old, new):
 	s.update_data()
 	s.plot.title = s.text.value
+
+
+
+case_chooser.on_click(case_toggle_handler)
+peak_chooser.on_click(peak_toggle_handler)
 
 
 case_toggle.on_click(checkbox_handler)
@@ -231,7 +266,8 @@ page = VBox( children=[inputs])
 curdoc().add_root(inputs)
 grid = gridplot( gridplots ) # gridplot works properly outside of curdoc
 
-
+case_toggle_handler(0)
+peak_toggle_handler(0)
 #output_server("picker")
 #session = push_session( curdoc() )
 #session.loop_until_closed()
