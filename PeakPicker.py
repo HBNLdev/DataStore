@@ -12,9 +12,10 @@ point browser to:
 
 # import logging
 # logging.basic.Config(level=logging.DEBUG)
+import os
 import sys
-#repo_path = '/export/home/mike/python/mort-collab'
-repo_path = '/export/home/mort/programs/dev'
+repo_path = '/export/home/mike/python/mort-collab'
+#repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
 import numpy as np
@@ -174,6 +175,9 @@ def apply_handler():
 	#push_session(curdoc())
 	peak_sources[case].trigger('data', peak_sources[case].data, 
 									peak_sources[case].data)
+	print(peak_sources)
+	for c in peak_sources.keys():
+		print(peak_sources[c].data)
 
 	# cdoc = curdoc()
 	# print( cdoc, dir(cdoc) )
@@ -185,22 +189,28 @@ def apply_handler():
 def save_handler():
 	print('Save')
 	
-	# get list of unique peaks
+	# get list of cases which have picks and unique peaks
+	case_lst = []
 	peak_lst = []
 	for case in eeg.case_list:
-		pks = peak_sources[case].data['peaks']
-	
-		for pk in pks:
-			peak_lst.append(pk)
+		if peak_sources[case].data['peaks']: # if case contains picks
+			case_lst.append( eeg.case_num_map[case] ) #use numeric reference
+			pks = peak_sources[case].data['peaks']
+			for pk in pks:
+				peak_lst.append(pk)
+		else:
+			print('A case is missing picks.')
+			# return
+	cases = list(set(case_lst))
 	peaks = list(set(peak_lst))
 
 	# get amps and lats as ( peak, chan, case ) shaped arrays
-	n_cases = len(eeg.cases)
+	n_cases = len(cases)
 	n_chans = 61 # only core 61 chans
 	n_peaks = len(peaks)
 	amps = np.empty( (n_peaks, n_chans, n_cases) )
 	lats = np.empty( (n_peaks, n_chans, n_cases) )
-	for icase, case in enumerate(eeg.cases.keys()):
+	for icase, case in enumerate(cases):
 		case_name = eeg.case_list[icase]
 		for ichan, chan in enumerate(eeg.electrodes_61): # only core 61 chans
 			for ipeak, peak in enumerate(peaks):
@@ -213,8 +223,16 @@ def save_handler():
 	amps1d = amps.ravel('F')
 	lats1d = lats.ravel('F')
 
-	eeg.build_mt(peaks, amps1d, lats1d)
+	# build mt text (makes default output location)
+	eeg.build_mt(cases, peaks, amps1d, lats1d)
+
+	# write to a test location
 	print(eeg.mt)
+	test_dir = '/processed_data/mt-files/test'
+	fullpath = os.path.join( test_dir, eeg.mt_name )
+	of = open( fullpath, 'w' )
+	of.write( eeg.mt )
+	of.close()
 
 def case_toggle_handler(active):
 	chosen_case = case_choices[active]
