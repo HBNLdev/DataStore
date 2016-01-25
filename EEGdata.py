@@ -96,12 +96,12 @@ class avgh1:
 		peaks = ['N1','P3'] # for testing
 		n_peaks = len(peaks)
 		s.mt_header = ''
-		s.mt_header += '#nchans ' + str(len(chans)) + ';\n'
+		s.mt_header += '#nchans ' + str(len(chans)) + '; '
+		s.mt_header += 'filter ' + str(s.transforms['hi_pass_filter']) + '-' \
+			+ str(s.transforms['lo_pass_filter']) + '; '
+		s.mt_header += 'thresh ' + str(s.exp['threshold_value']) + ';\n'
 		for case in s.cases.keys():
 			s.mt_header += '#case ' + str(case) + ' (' + s.cases[case]['case_type'] + '); npeaks ' + str(n_peaks) + ';\n'
-		s.mt_header += '#hipass ' + str(s.transforms['hi_pass_filter']) + '\n'
-		s.mt_header += '#lopass ' + str(s.transforms['lo_pass_filter']) + '\n'
-		s.mt_header += '#thresh ' + str(s.exp['threshold_value']) + '\n'
 
 	def build_mt_body(s, peaks, amp, lat):
 		# indices
@@ -375,13 +375,13 @@ class avgh1:
 		s.extract_case_data()
 		s.extract_mt_data()
 
-		pot_source_dict = dict( times=times )
+		pot_source_dict = OrderedDict( times=times )
 
 		if channels == 'all':
 			channels = s.electrodes
 	
 		#peaks
-		peak_source_dict = dict( case_peaks = []  )
+		peak_source_dict = OrderedDict( case_peaks = []  )
 		for chan in channels:
 			peak_source_dict[ chan+'_pot'] = []
 			peak_source_dict[ chan+'_time'] = []
@@ -394,8 +394,8 @@ class avgh1:
 						peak_source_dict[ chan+'_pot'].append( float(s.mt_data[c_pk][chan][0]) )
 						peak_source_dict[ chan+'_time'].append( float(s.mt_data[c_pk][chan][1]) )
 					else:
-						peak_source_dict[ chan+'_pot'].append( None )
-						peak_source_dict[ chan+'_time'].append( None )
+						peak_source_dict[ chan+'_pot'].append( np.nan )
+						peak_source_dict[ chan+'_time'].append( np.nan )
 
 		# potentials
 		for chan in channels:
