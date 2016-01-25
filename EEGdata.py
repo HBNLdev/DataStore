@@ -82,35 +82,34 @@ class avgh1:
 		else:
 			return
 
-	def build_mt(s, peaks, amp, lat):
+	def build_mt(s, cases, peaks, amp, lat):
 		s.extract_subject_data()
 		s.extract_exp_data()
 		s.extract_transforms_data()
 		s.extract_case_data()
-		s.build_mt_header()
-		s.build_mt_body(peaks, amp, lat)
+		s.build_mt_header(cases, peaks)
+		s.build_mt_body(cases, peaks, amp, lat)
 		s.mt = s.mt_header + s.mt_body
 
-	def build_mt_header(s):
+	def build_mt_header(s, cases, peaks):
 		chans = s.electrodes[0:31]+s.electrodes[32:62]
-		peaks = ['N1','P3'] # for testing
 		n_peaks = len(peaks)
 		s.mt_header = ''
 		s.mt_header += '#nchans ' + str(len(chans)) + '; '
 		s.mt_header += 'filter ' + str(s.transforms['hi_pass_filter']) + '-' \
 			+ str(s.transforms['lo_pass_filter']) + '; '
 		s.mt_header += 'thresh ' + str(s.exp['threshold_value']) + ';\n'
-		for case in s.cases.keys():
+		for case in cases:
 			s.mt_header += '#case ' + str(case) + ' (' + s.cases[case]['case_type'] + '); npeaks ' + str(n_peaks) + ';\n'
 
-	def build_mt_body(s, peaks, amp, lat):
+	def build_mt_body(s, cases, peaks, amp, lat):
 		# indices
 		sid 	= s.subject['subject_id']
 		expname = s.exp['exp_name']
 		expver 	= s.exp['exp_version']
 		gender 	= s.subject['gender']
 		age 	= int(s.subject['age'])
-		cases 	= list(s.cases.keys())
+		# cases 	= list(s.cases.keys())
 		chans 	= s.electrodes_61 # only head chans
 		# peaks 	= ['N1','P3'] # test case
 		indices = [ [sid], [expname], [expver], [gender], [age],
@@ -123,7 +122,7 @@ class avgh1:
 		# amp 	= np.random.normal(10,5,n_lines) # test case
 		# lat 	= np.random.normal(300,100,n_lines) # test case
 		rt = []
-		for case in s.cases.keys():
+		for case in cases:
 		    rt.extend( [ s.cases[case]['mean_resp_time'] ] * len(peaks) * len(chans) )
 		data = {'amplitude':amp, 'latency':lat, 'mean_rt':rt}
 		
@@ -356,9 +355,12 @@ class avgh1:
 
 	def extract_mt_data(s):
 		if 'mt_data' not in dir(s):
-			mt_path = os.path.splitext(s.filepath)[0] + '.mt'
-			if os.path.isfile(mt_path):
-				mt = FH.mt_file( mt_path )
+			mt_dir = os.path.split(s.filepath)[0]
+			h1_name = os.path.split(s.filepath)[1]
+			s.mt_name = os.path.splitext(h1_name)[0] + '.mt'
+			s.mt_defaultpath = os.path.splitext(s.filepath)[0] + '.mt'
+			if os.path.isfile( s.mt_defaultpath ):
+				mt = FH.mt_file( s.mt_defaultpath )
 				mt.parse_file()
 				s.mt_data = mt.data
 				s.case_peaks = mt.data.keys()
@@ -389,7 +391,7 @@ class avgh1:
 				peak_source_dict[ chan+'_pot'] = []
 				peak_source_dict[ chan+'_time'] = []
 			peak_sourcesD[ case ] = peak_source_dict
-		
+
 		if 'mt_data' in dir(s):
 			for case, peak in s.case_peaks:
 				c_pk = (case, peak)
