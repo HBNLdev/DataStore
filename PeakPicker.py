@@ -25,10 +25,10 @@ import organization as O
 import EEGdata
 
 from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
-from bokeh.models import Plot, Panel, Tabs, ColumnDataSource, CustomJS, \
+from bokeh.models import Plot, Segment, ColumnDataSource, CustomJS, \
 					BoxSelectTool, TapTool, GridPlot, \
 				BoxZoomTool, ResetTool, PanTool, WheelZoomTool, ResizeTool, \
-				Asterisk, Segment
+				Asterisk
 
 from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, CheckboxGroup, \
 				RadioButtonGroup, Button
@@ -36,7 +36,7 @@ from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
 
-#exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
+# exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
 exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
 eeg_exp = EEGdata.avgh1( exp_path )
 eeg = eeg_exp
@@ -53,12 +53,13 @@ case_chooser = RadioButtonGroup( labels=case_choices, active=0 )
 
 pick_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
 								 start=[], finish=[], bots=[], tops=[] ))
-peak_choices = ['P1','P3','P4','N1','N2','N3','N4']
+peak_choices = ['P50', 'P2', 'P3', 'N1', 'N2', 'N4', 'ORN']
 peak_chooser = RadioButtonGroup( labels=peak_choices, active=0)
 pick_state = {'case':case_choices[0], 'peak':peak_choices[0]}
 
-apply_button = Button( label="Apply", type='default' )
-save_button = Button( label="Save" )
+apply_button 	= Button( label="Apply", type='default' )
+save_button 	= Button( label="Save" )
+# cancel_button 	= Button( label="Cancel", type='default' )
 
 		#toolset = ['crosshair','pan','reset','resize','save','wheel_zoom']
 
@@ -104,9 +105,6 @@ plot_props = {'width':180, 'height':110,
 				 'extra_bottom_height':40, # for bottom row
 				'min_border':4}
 
-#chans = ['FZ','CZ','PZ','F3','C3','P3']
-#chans = eeg.electrodes[:31]
-#chans.append(eeg.electrodes[63])
 chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'FC5', 'FC1', 'FC2', 'FC6', 'T7', 'C3', 'CZ',  'C4',  'T8', 'CP5',
 		 'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
@@ -120,11 +118,6 @@ gridplots = eeg.selected_cases_by_channel(cases='all',
 					ResetTool, PanTool, ResizeTool],
 			style='layout'
 			)
-print(type(gridplots[0][1]),dir(gridplots[0][1]))
-
-#print(out_inds)
-#print(gridplots)
-#print(rangecheck)
 
 pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
 				line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
@@ -199,8 +192,7 @@ def save_handler():
 			for pk in pks:
 				peak_lst.append(pk)
 		else:
-			print('A case is missing picks.')
-			# return
+			print('A case is missing picks.') # should handle this
 	cases = list(set(case_lst))
 	peaks = list(set(peak_lst))
 
@@ -215,18 +207,14 @@ def save_handler():
 		for ichan, chan in enumerate(eeg.electrodes_61): # only core 61 chans
 			for ipeak, peak in enumerate(peaks):
 				amps[ipeak, ichan, icase] = \
-						peak_sources[case_name].data[chan+'_pot'][peaks.index( peak )]
+				peak_sources[case_name].data[chan+'_pot'][peaks.index( peak )]
 				lats[ipeak, ichan, icase] =	\
-						peak_sources[case_name].data[chan+'_time'][peaks.index( peak )]
-
-	# reshape into 1d arrays
-	amps1d = amps.ravel('F')
+				peak_sources[case_name].data[chan+'_time'][peaks.index( peak )]
+	amps1d = amps.ravel('F') # reshape into 1d arrays
 	lats1d = lats.ravel('F')
 
-	# build mt text (makes default output location)
+	# build mt text (makes default output location), write to a test location
 	eeg.build_mt(cases, peaks, amps1d, lats1d)
-
-	# write to a test location
 	print(eeg.mt)
 	test_dir = '/processed_data/mt-files/test'
 	fullpath = os.path.join( test_dir, eeg.mt_name )
@@ -234,15 +222,19 @@ def save_handler():
 	of.write( eeg.mt )
 	of.close()
 
+# def cancel_handler():
+# 	print('Cancel')
+# 	gp.add_glyph(pick_source,pick_starts)
+# 	gp.add_glyph(pick_source,pick_finishes)
+
 def case_toggle_handler(active):
 	chosen_case = case_choices[active]
 	pick_state['case'] = chosen_case
 	for case in case_choices:
 		width = 2.5 if case == chosen_case else 1.5
 		selections = grid.select(dict(name=case+'_line'))
-		#print( dir(selections[0]))
 		for sel in selections:
-			sel.line_width = width
+			sel.glyph.line_width = width
 
 def peak_toggle_handler(active):
 	pick_state['peak'] = peak_choices[active]
@@ -253,7 +245,7 @@ def checkbox_handler(active):
     	label = nm+'_line'
     	selections = grid.select(dict(name=label))
     	for sel in selections:
-    		sel.line_alpha = alpha
+    		sel.glyph.line_alpha = alpha
     	marker_label = nm+'_peak'
     	selections = grid.select(dict(name=marker_label))
     	for sel in selections:
@@ -274,25 +266,18 @@ peak_chooser.on_click(peak_toggle_handler)
 case_toggle.on_click(checkbox_handler)
 apply_button.on_click(apply_handler)
 save_button.on_click(save_handler)
+# cancel_button.on_click(cancel_handler)
 
 text.on_change('value', input_change)
 
-file_chooser = TextInput( title="files", name='file_chooser',
-				 value='file1\nfile2\nfile3')
 
-# LAYOUT
-navigation = Panel( child=file_chooser, title='Navigate' )
 
 inputs= VBox( children=[ text, case_chooser, peak_chooser, 
  					apply_button, save_button, case_toggle ])
 
-grid = GridPlot( children=gridplots ) # gridplot works properly outside of curdoc
-page = VBox( children=[inputs, grid])
-picking = Panel( child=page, title='pick')
-
-tabs = Tabs( tabs=[navigation, picking])
-
-curdoc().add_root(tabs)
+page = VBox( children=[inputs])
+curdoc().add_root(inputs)
+grid = gridplot( gridplots ) # gridplot works properly outside of curdoc
 
 case_toggle_handler(0)
 peak_toggle_handler(0)

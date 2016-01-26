@@ -196,7 +196,7 @@ class avgh1:
 			
 
 	def get_yscale(s, potentials, channels):
-		# get full list of display channels
+		# get full list of display channel indices
 		ind_lst = []
 		for chan in channels:
 			ind_lst.append( s.electrodes.index(chan) )
