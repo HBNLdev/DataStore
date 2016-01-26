@@ -6,8 +6,9 @@ import pandas as pd
 import h5py, os
 import bokeh
 from bokeh.plotting import figure, gridplot
-from bokeh.models import FixedTicker, CustomJS, TapTool, Range1d, \
-				ColumnDataSource, Plot, Line
+from bokeh.models import ( FixedTicker, CustomJS, TapTool, Range1d, 
+				ColumnDataSource, Plot, Line, LinearAxis, 
+				ContinuousTicker, AdaptiveTicker, Grid )
 from bokeh.palettes import brewer
 from collections import OrderedDict
 
@@ -456,13 +457,47 @@ class avgh1:
 		plot.plot_width = props['width']
 		plot.plot_height = height
 		plot.y_range = Range1d(*props['yrange'])
-		plot.x_range = Range1d(*props['xrange'])
+		plot.x_range = Range1d(*props['xrange'])#, name='sharedX')
 		plot.title_text_font_size = str(props['font size'])+'pt'
 
+		plot.outline_line_alpha = props['outline alpha']
+		plot.outline_line_width = None
+		plot.outline_line_color = None
+
 		# Axes
+		xAxis = LinearAxis()#x_range_name='sharedX')
+		xTicker = AdaptiveTicker(base=100,mantissas=[0,2,4,6,8])
+		#xGrid = Grid(ticker=xTicker)
+		yAxis = LinearAxis()
+		yTicker = AdaptiveTicker() #ContinuousTicker()
+
+		#xAxis.desired_num_ticks = 3
+		xAxis.ticker = xTicker
+		xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
+		xAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
+		xAxis.major_label_text_align = 'right'
+		xAxis.major_label_standoff = 2
+		xAxis.minor_tick_line_color = None
+		xAxis.major_tick_out = 0
+		xAxis.major_tick_in = 2
+		plot.add_layout(xAxis,'below')
+		#xGrid.grid_line_alpha = props['grid alpha']
+		#plot.add_layout(xGrid)
+
+		#yTicker.desired_num_ticks = 2
+		#yTicker.num_minor_ticks = 0
+		yAxis.ticker = yTicker
+		yAxis.axis_label_text_font_size = str(props['font size'])+'pt'
+		yAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
+		#yAxis.major_label_text_align = 'right'
+		yAxis.major_label_standoff = 2
+		yAxis.minor_tick_line_color = None
+		yAxis.major_tick_out = 0
+		yAxis.major_tick_in = 4
+		plot.add_layout(yAxis,'left')
+		#yAxis = LinearAxis()
 		'''
-		plot.xaxis.axis_label_text_font_size = str(props['font size'])+'pt'		
-		#plot.outline_line_alpha = props['outline alpha']
+		plot.xaxis.axis_label_text_font_size = str(props['font size'])+'pt'
 		#plot.grid.grid_line_alpha = props['grid alpha']
 
 		plot.xaxis.major_label_text_font_size = str(props['font size']-2)+'pt'

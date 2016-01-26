@@ -14,8 +14,8 @@ point browser to:
 # logging.basic.Config(level=logging.DEBUG)
 import os
 import sys
-repo_path = '/export/home/mike/python/mort-collab'
-#repo_path = '/export/home/mort/programs/dev'
+#repo_path = '/export/home/mike/python/mort-collab'
+repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
 import numpy as np
@@ -120,7 +120,7 @@ gridplots = eeg.selected_cases_by_channel(cases='all',
 					ResetTool, PanTool, ResizeTool],
 			style='layout'
 			)
-print(type(gridplots[0][1]),dir(gridplots[0][1]))
+print(type(gridplots[0][1]),dir(gridplots[0][1]), dir(gridplots[0][1].x_mapper_type))
 
 #print(out_inds)
 #print(gridplots)
