@@ -8,7 +8,7 @@ import bokeh
 from bokeh.plotting import figure, gridplot
 from bokeh.models import ( FixedTicker, CustomJS, TapTool, Range1d, 
 				ColumnDataSource, Plot, Line, LinearAxis, 
-				ContinuousTicker, AdaptiveTicker, Grid )
+				CompositeTicker, AdaptiveTicker, SingleIntervalTicker, Grid )
 from bokeh.palettes import brewer
 from collections import OrderedDict
 
@@ -224,6 +224,7 @@ class avgh1:
 		# calculate min / max for y limits
 		min_val = int(np.floor(np.min(disp_pots)))
 		max_val = int(np.ceil(np.max(disp_pots)))
+		print('Yscale: ',min_val,max_val)
 		return min_val, max_val
 
 	def butterfly_channels_by_case(s,channel_list=['FZ','CZ','PZ'], offset=0):
@@ -466,13 +467,17 @@ class avgh1:
 
 		# Axes
 		xAxis = LinearAxis()#x_range_name='sharedX')
-		xTicker = AdaptiveTicker(base=100,mantissas=[0,2,4,6,8])
-		#xGrid = Grid(ticker=xTicker)
-		yAxis = LinearAxis()
-		yTicker = AdaptiveTicker() #ContinuousTicker()
-
-		#xAxis.desired_num_ticks = 3
+		#xTicker = AdaptiveTicker(base=10,mantissas=[0,4],min_interval=50)
+		xTicker_0 = AdaptiveTicker(base=100,mantissas=[0,4],min_interval=400)#SingleIntervalTicker(interval=400)
+		xTicker_1 = AdaptiveTicker(base=10,mantissas=[2,5],min_interval=20,max_interval=400)
+		xTicker = CompositeTicker(tickers=[xTicker_0,xTicker_1])
 		xAxis.ticker = xTicker
+		xGrid = Grid(dimension=0, ticker=xTicker)
+		
+		yAxis = LinearAxis()
+		yTicker = SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		yAxis.ticker = yTicker
+		
 		xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
 		xAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
 		xAxis.major_label_text_align = 'right'
@@ -481,12 +486,12 @@ class avgh1:
 		xAxis.major_tick_out = 0
 		xAxis.major_tick_in = 2
 		plot.add_layout(xAxis,'below')
-		#xGrid.grid_line_alpha = props['grid alpha']
-		#plot.add_layout(xGrid)
+		xGrid.grid_line_alpha = props['grid alpha']
+		plot.add_layout(xGrid)
 
 		#yTicker.desired_num_ticks = 2
 		#yTicker.num_minor_ticks = 0
-		yAxis.ticker = yTicker
+		
 		yAxis.axis_label_text_font_size = str(props['font size'])+'pt'
 		yAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
 		#yAxis.major_label_text_align = 'right'
