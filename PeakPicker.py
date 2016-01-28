@@ -296,6 +296,7 @@ curdoc().add_root(tabs)
 
 case_toggle_handler(0)
 peak_toggle_handler(0)
+checkbox_handler([ n for n in range(len(case_choices))])
 #output_server("picker")
 #session = push_session( curdoc() )
 #session.loop_until_closed()

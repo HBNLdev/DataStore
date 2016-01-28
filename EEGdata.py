@@ -475,7 +475,10 @@ class avgh1:
 		xGrid = Grid(dimension=0, ticker=xTicker)
 		
 		yAxis = LinearAxis()
-		yTicker = SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
+		yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
+		yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
 		yAxis.ticker = yTicker
 		
 		xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
