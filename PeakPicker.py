@@ -35,11 +35,12 @@ from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, Chec
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
-
+app_data = {}
 #exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
 exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
 eeg_exp = EEGdata.avgh1( exp_path )
 eeg = eeg_exp
+app_data['eeg'] = eeg
 
 data_source, peak_sources = eeg.make_data_sources()
 
@@ -59,6 +60,7 @@ pick_state = {'case':case_choices[0], 'peak':peak_choices[0]}
 
 apply_button = Button( label="Apply", type='default' )
 save_button = Button( label="Save" )
+next_button = Button( label="Next" )
 
 		#toolset = ['crosshair','pan','reset','resize','save','wheel_zoom']
 
@@ -157,6 +159,7 @@ def input_change(attr,old,new):
 
 def apply_handler():
 	print('Apply')
+	eeg = app_data['eeg']
 	#print( peak_source.data )
 	limitsDF = pick_source.to_df()
 	start = limitsDF[ 'start' ].values[-1]
@@ -234,6 +237,20 @@ def save_handler():
 	of.write( eeg.mt )
 	of.close()
 
+def next_handler():
+	print('Next')
+
+	exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_6_g1_40115011_avg.h1'
+	eeg_exp = EEGdata.avgh1( exp_path )
+	eeg = eeg_exp
+	app_data['eeg'] = eeg
+
+	eeg.make_data_sources(initialize=False,
+				peak_sources=peak_sources, pot_source=data_source)
+	
+	data_source.trigger('data',data_source.data,data_source.data)
+	text.value = exp_path
+
 def case_toggle_handler(active):
 	chosen_case = case_choices[active]
 	pick_state['case'] = chosen_case
@@ -262,9 +279,7 @@ def checkbox_handler(active):
 
 
 def input_change(attr, old, new):
-	s.update_data()
-	s.plot.title = s.text.value
-
+	update_data()
 
 
 case_chooser.on_click(case_toggle_handler)
@@ -274,8 +289,9 @@ peak_chooser.on_click(peak_toggle_handler)
 case_toggle.on_click(checkbox_handler)
 apply_button.on_click(apply_handler)
 save_button.on_click(save_handler)
+next_button.on_click(next_handler)
 
-text.on_change('value', input_change)
+#text.on_change('value', input_change)
 
 file_chooser = TextInput( title="files", name='file_chooser',
 				 value='file1\nfile2\nfile3')
@@ -284,7 +300,7 @@ file_chooser = TextInput( title="files", name='file_chooser',
 navigation = Panel( child=file_chooser, title='Navigate' )
 
 inputs= VBox( children=[ text, case_chooser, peak_chooser, 
- 					apply_button, save_button, case_toggle ])
+ 					apply_button, save_button, next_button, case_toggle ])
 
 grid = GridPlot( children=gridplots ) # gridplot works properly outside of curdoc
 page = VBox( children=[inputs, grid])

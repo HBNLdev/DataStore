@@ -376,7 +376,8 @@ class avgh1:
 		else:
 			return
 
-	def make_data_sources(s,channels='all'):
+	def make_data_sources(s,channels='all',initialize=True,
+					peak_sources=None,pot_source=None):
 		times, potentials = s.prepare_plot_data()
 		s.extract_case_data()
 		s.extract_mt_data()
@@ -408,19 +409,25 @@ class avgh1:
 						peak_sourcesD[case_name][ chan+'_pot'].append( np.nan )
 						peak_sourcesD[case_name][ chan+'_time'].append( np.nan )
 
-		peak_sources = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
-
+		if initialize:
+			peak_sources = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
+		else:
+			for case,D in peak_sourcesD.items():
+				peak_sources[case].data = D
+				peak_sources[case].set()
 		# potentials
 		for chan in channels:
 			ch_ind = s.electrodes.index(chan)
 			for cs_ind,cs in s.cases.items():
 				pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
 
-		pot_source = ColumnDataSource(
-			data = pot_source_dict )
-
-
-		return pot_source, peak_sources
+		if initialize:
+			pot_source = ColumnDataSource(
+				data = pot_source_dict )
+			return pot_source, peak_sources
+		else:
+			pot_source.data = pot_source_dict
+			pot_source.set()
 
 	def update_peak_source(s, psD, case, peak, pot_vals, times ):
 		''' assumes all channels
@@ -503,32 +510,7 @@ class avgh1:
 		yAxis.major_tick_out = 0
 		yAxis.major_tick_in = 4
 		plot.add_layout(yAxis,'left')
-		#yAxis = LinearAxis()
-		'''
-		plot.xaxis.axis_label_text_font_size = str(props['font size'])+'pt'
-		#plot.grid.grid_line_alpha = props['grid alpha']
 
-		plot.xaxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-		plot.xaxis.major_label_text_align = 'right'
-		plot.xaxis.major_label_standoff = 0
-
-		plot.yaxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-
-		plot.outline_line_color = None
-
-		plot.yaxis[0].ticker.desired_num_ticks=2
-		plot.yaxis.major_tick_line_width = 1 
-		plot.yaxis.minor_tick_line_color = None
-		plot.yaxis.major_tick_in = 4
-		plot.yaxis.major_tick_out = 0
-
-		plot.ygrid.grid_line_color = None
-		
-		plot.xgrid.grid_line_alpha = 0.35
-		plot.xaxis.minor_tick_line_color = None
-		plot.xaxis.major_tick_out = 0
-		plot.xaxis.major_tick_in = 2
-		'''
 		if tool_gen:
 			plot.add_tools(*[g() for g in tool_gen])
 
