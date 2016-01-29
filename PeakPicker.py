@@ -36,17 +36,51 @@ from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
 app_data = {}
-#exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
-exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
-eeg_exp = EEGdata.avgh1( exp_path )
-eeg = eeg_exp
-app_data['eeg'] = eeg
+#fields: file paths, file ind
 
-data_source, peak_sources = eeg.make_data_sources()
+file_chooser = TextInput( title="files", name='file_chooser',
+				 value='/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_6_g1_40115011_avg.h1 /processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1')
+start_button = Button( label="Start" )
 
-text = TextInput( title="file", name='file', value=exp_path)
+text = TextInput( title="file", name='file', value='')
 
-case_choices = eeg.case_list
+
+def next_file():
+	paths = app_data['file paths']
+	ind = app_data['file ind']
+	if ind < len(paths):
+		app_data['eeg'] = EEGdata.avgh1( paths[ind] )
+		if ind == 0:
+			data_source, peak_sources = app_data['eeg'].make_data_sources()
+			app_data['data source'] = data_source
+			app_data['peak sources'] = peak_sources
+		else:
+			app_data['eeg'].make_data_sources( initialize=False,
+				peak_sources=app_data['peak sources'], 
+				pot_source=app_data['data source'] )
+
+		app_data['file ind'] += 1
+		text.value = paths[ind]
+
+		app_data['data source'].trigger('data',app_data['data source'].data,
+										app_data['data source'].data)
+		
+	else:
+		print('already on last file')
+
+def start_handler():
+	#exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
+	#'/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
+	paths = file_chooser.value.split(' ')
+	app_data['file paths'] = paths
+	app_data['file ind'] = 0
+	next_file()
+
+# ***************************** Temporary setup **********************
+start_handler()
+
+
+case_choices = ['A','J','W','P'] #eeg.case_list
 case_toggle = CheckboxGroup( labels=case_choices, inline=True,
 				active=[n for n in range(len(case_choices))] )
 
@@ -97,7 +131,7 @@ def box_generator():
 	box = BoxSelectTool( callback=box_callback )
 	return box
 
-tap_callback = CustomJS( args=dict(source=data_source), code="""
+tap_callback = CustomJS( args=dict(source=app_data['data source']), code="""
  	alert('clicked');
  	""" )
 tap = TapTool( callback=tap_callback )
@@ -114,10 +148,10 @@ chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
 		 'O1',  'O2']
 
-gridplots = eeg.selected_cases_by_channel(cases='all',
+gridplots = app_data['eeg'].selected_cases_by_channel(cases='all',
 			channels=chans,
 			props=plot_props,  mode='server',
-			source=data_source,
+			source=app_data['data source'],
 			tool_gen=[box_generator,BoxZoomTool, WheelZoomTool, 
 					ResetTool, PanTool, ResizeTool],
 			style='layout'
@@ -147,12 +181,12 @@ for g_row in gridplots:
 				marker = Asterisk( x=chan+'_time',y=chan+'_pot',
 						size=4, line_alpha=1,line_color='black',
 						name=case+'_peak')
-				gp.add_glyph( peak_sources[case], marker)
+				gp.add_glyph( app_data['peak sources'][case], marker)
 			gp.add_glyph(pick_source,pick_starts)
 			gp.add_glyph(pick_source,pick_finishes)
 
 def update_data( peak_data ):
-	peak_source.data = peak_data
+	app_data['peak source'].data = peak_data
 
 def input_change(attr,old,new):
 	pass
@@ -167,20 +201,20 @@ def apply_handler():
 	
 	case = pick_state['case']	
 	pval,pms = eeg.find_peak(case,start_ms=start,end_ms=finish)
-	eeg.update_peak_source( peak_sources[case].data, 
+	eeg.update_peak_source( app_data['peak sources'][case].data, 
 				case,pick_state['peak'],pval, pms)
-	peak_sources[case].set()
+	app_data['peak sources'][case].set()
 
 	print( 'pick_state: ', pick_state)
 	print( 'Values:',pval, 'Times:',pms)
 	print( 'Values:',len(pval), 'Times:',len(pms) )
 	#print( dir(peak_source) )
 	#push_session(curdoc())
-	peak_sources[case].trigger('data', peak_sources[case].data, 
-									peak_sources[case].data)
-	print(peak_sources)
-	for c in peak_sources.keys():
-		print(peak_sources[c].data)
+	app_data['peak sources'][case].trigger('data', app_data['peak sources'][case].data, 
+									app_data['peak sources'][case].data)
+	print(app_data['peak sources'])
+	for c in app_data['peak sources'].keys():
+		print(app_data['peak sources'][c].data)
 
 	# cdoc = curdoc()
 	# print( cdoc, dir(cdoc) )
@@ -191,7 +225,7 @@ def apply_handler():
 
 def save_handler():
 	print('Save')
-	
+	eeg = app_data['eeg']
 	# get list of cases which have picks and unique peaks
 	case_lst = []
 	peak_lst = []
@@ -239,17 +273,7 @@ def save_handler():
 
 def next_handler():
 	print('Next')
-
-	exp_path = '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_6_g1_40115011_avg.h1'
-	eeg_exp = EEGdata.avgh1( exp_path )
-	eeg = eeg_exp
-	app_data['eeg'] = eeg
-
-	eeg.make_data_sources(initialize=False,
-				peak_sources=peak_sources, pot_source=data_source)
-	
-	data_source.trigger('data',data_source.data,data_source.data)
-	text.value = exp_path
+	next_file()	
 
 def case_toggle_handler(active):
 	chosen_case = case_choices[active]
@@ -281,10 +305,10 @@ def checkbox_handler(active):
 def input_change(attr, old, new):
 	update_data()
 
+start_button.on_click(start_handler)
 
 case_chooser.on_click(case_toggle_handler)
 peak_chooser.on_click(peak_toggle_handler)
-
 
 case_toggle.on_click(checkbox_handler)
 apply_button.on_click(apply_handler)
@@ -293,11 +317,10 @@ next_button.on_click(next_handler)
 
 #text.on_change('value', input_change)
 
-file_chooser = TextInput( title="files", name='file_chooser',
-				 value='file1\nfile2\nfile3')
 
+files_setup = VBox(children=[ file_chooser, start_button ])
 # LAYOUT
-navigation = Panel( child=file_chooser, title='Navigate' )
+navigation = Panel( child=files_setup, title='Navigate' )
 
 inputs= VBox( children=[ text, case_chooser, peak_chooser, 
  					apply_button, save_button, next_button, case_toggle ])
