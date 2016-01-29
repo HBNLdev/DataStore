@@ -409,17 +409,21 @@ class avgh1:
 						peak_sourcesD[case_name][ chan+'_pot'].append( np.nan )
 						peak_sourcesD[case_name][ chan+'_time'].append( np.nan )
 
+		# potentials
+		for chan in channels:
+			ch_ind = s.electrodes.index(chan)
+			for cs_ind,cs in s.cases.items():
+				pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
+
+
+		#return peak_sourcesD
+
 		if initialize:
 			peak_sources = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
 		else:
 			for case,D in peak_sourcesD.items():
 				peak_sources[case].data = D
 				peak_sources[case].set()
-		# potentials
-		for chan in channels:
-			ch_ind = s.electrodes.index(chan)
-			for cs_ind,cs in s.cases.items():
-				pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
 
 		if initialize:
 			pot_source = ColumnDataSource(

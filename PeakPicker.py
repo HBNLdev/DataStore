@@ -45,10 +45,11 @@ start_button = Button( label="Start" )
 text = TextInput( title="file", name='file', value='')
 
 
-def next_file():
+def load_file(next=False):
 	paths = app_data['file paths']
 	ind = app_data['file ind']
-	if ind < len(paths):
+	print('n paths, ind: ', len(paths), ind)
+	if ind < len(paths) or not next:
 		app_data['eeg'] = EEGdata.avgh1( paths[ind] )
 		if ind == 0:
 			data_source, peak_sources = app_data['eeg'].make_data_sources()
@@ -59,7 +60,8 @@ def next_file():
 				peak_sources=app_data['peak sources'], 
 				pot_source=app_data['data source'] )
 
-		app_data['file ind'] += 1
+		if next and ind < len(paths)-1:
+			app_data['file ind'] += 1
 		text.value = paths[ind]
 
 		app_data['data source'].trigger('data',app_data['data source'].data,
@@ -67,6 +69,9 @@ def next_file():
 		
 	else:
 		print('already on last file')
+
+def next_file():
+	load_file(next=True)
 
 def start_handler():
 	#exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
@@ -95,6 +100,7 @@ pick_state = {'case':case_choices[0], 'peak':peak_choices[0]}
 apply_button = Button( label="Apply", type='default' )
 save_button = Button( label="Save" )
 next_button = Button( label="Next" )
+reload_button = Button( label="Reload")
 
 		#toolset = ['crosshair','pan','reset','resize','save','wheel_zoom']
 
@@ -275,6 +281,10 @@ def next_handler():
 	print('Next')
 	next_file()	
 
+def reload_handler():
+	print('Reload')
+	load_file()
+
 def case_toggle_handler(active):
 	chosen_case = case_choices[active]
 	pick_state['case'] = chosen_case
@@ -314,6 +324,7 @@ case_toggle.on_click(checkbox_handler)
 apply_button.on_click(apply_handler)
 save_button.on_click(save_handler)
 next_button.on_click(next_handler)
+reload_button.on_click(reload_handler)
 
 #text.on_change('value', input_change)
 
@@ -323,7 +334,8 @@ files_setup = VBox(children=[ file_chooser, start_button ])
 navigation = Panel( child=files_setup, title='Navigate' )
 
 inputs= VBox( children=[ text, case_chooser, peak_chooser, 
- 					apply_button, save_button, next_button, case_toggle ])
+ 					apply_button, save_button, next_button, reload_button,
+ 					case_toggle ])
 
 grid = GridPlot( children=gridplots ) # gridplot works properly outside of curdoc
 page = VBox( children=[inputs, grid])
