@@ -52,14 +52,16 @@ def load_file(next=False):
 	print('n paths, ind: ', len(paths), ind)
 	if ind < len(paths) or not next:
 		app_data['eeg'] = EEGdata.avgh1( paths[ind] )
-		if ind == 0:
-			data_source, peak_sources = app_data['eeg'].make_data_sources()
-			app_data['data source'] = data_source
-			app_data['peak sources'] = peak_sources
+		data_sourceD, peak_sourcesD = app_data['eeg'].make_data_sources()
+		if ind == 0: # initialize
+			app_data['peak sources'] = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
+			app_data['data source'] = ColumnDataSource( data = data_sourceD )
+
 		else:
-			app_data['eeg'].make_data_sources( initialize=False,
-				peak_sources=app_data['peak sources'], 
-				pot_source=app_data['data source'] )
+			app_data['data source'].data = data_sourceD
+			for case,D in peak_sourcesD.items():
+				app_data['peak sources'][case].data = D
+				app_data['peak sources'][case].set()
 
 		if next and ind < len(paths)-1:
 			app_data['file ind'] += 1

@@ -4,7 +4,6 @@
 import numpy as np
 import pandas as pd
 import h5py, os
-from bokeh.models import ColumnDataSource
 from bokeh.palettes import brewer
 from collections import OrderedDict
 
@@ -372,8 +371,7 @@ class avgh1:
 		else:
 			return
 
-	def make_data_sources(s,channels='all',initialize=True,
-					peak_sources=None,pot_source=None):
+	def make_data_sources(s,channels='all'):
 		times, potentials = s.prepare_plot_data()
 		s.extract_case_data()
 		s.extract_mt_data()
@@ -413,21 +411,7 @@ class avgh1:
 
 
 		#return peak_sourcesD
-
-		if initialize:
-			peak_sources = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
-		else:
-			for case,D in peak_sourcesD.items():
-				peak_sources[case].data = D
-				peak_sources[case].set()
-
-		if initialize:
-			pot_source = ColumnDataSource(
-				data = pot_source_dict )
-			return pot_source, peak_sources
-		else:
-			pot_source.data = pot_source_dict
-			pot_source.set()
+		return pot_source_dict, peak_sourcesD
 
 	def update_peak_source(s, psD, case, peak, pot_vals, times ):
 		''' assumes all channels
@@ -453,102 +437,7 @@ class avgh1:
 		PS['electrode'] = s.electrodes[el_ind]
 		PS['adjusted height'] = height
 
-		# plot = Plot( 
-		# 	title=electrode,
-		# 	tools=tools
-		# 	)
-		# plot.title_standoff = 0
-		# plot.title_text_align='left'
-		# plot.title_text_baseline='top'
-
-		# plot.min_border_left = props['min_border']
-		# plot.min_border_right = props['min_border']
-		# plot.min_border_top = props['min_border']
-		# plot.min_border_bottom = props['min_border']
-		# plot.plot_width = props['width']
-		# plot.plot_height = height
-		# plot.y_range = Range1d(*props['yrange'])
-		# plot.x_range = Range1d(*props['xrange'])#, name='sharedX')
-		# plot.title_text_font_size = str(props['font size'])+'pt'
-
-		# plot.outline_line_alpha = props['outline alpha']
-		# plot.outline_line_width = None
-		# plot.outline_line_color = None
-
-		# # Axes
-		# xAxis = LinearAxis()#x_range_name='sharedX')
-		# #xTicker = AdaptiveTicker(base=10,mantissas=[0,4],min_interval=50)
-		# xTicker_0 = AdaptiveTicker(base=100,mantissas=[0,4],min_interval=400)#SingleIntervalTicker(interval=400)
-		# xTicker_1 = AdaptiveTicker(base=10,mantissas=[2,5],min_interval=20,max_interval=400)
-		# xTicker = CompositeTicker(tickers=[xTicker_0,xTicker_1])
-		# xAxis.ticker = xTicker
-		# xGrid = Grid(dimension=0, ticker=xTicker)
-		
-		# yAxis = LinearAxis()
-		# yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
-		# yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
-		# yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
-		# yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
-		# yAxis.ticker = yTicker
-		
-		# xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
-		# xAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-		# xAxis.major_label_text_align = 'right'
-		# xAxis.major_label_standoff = 2
-		# xAxis.minor_tick_line_color = None
-		# xAxis.major_tick_out = 0
-		# xAxis.major_tick_in = 2
-		# plot.add_layout(xAxis,'below')
-		# xGrid.grid_line_alpha = props['grid alpha']
-		# plot.add_layout(xGrid)
-		
-		# yAxis.axis_label_text_font_size = str(props['font size'])+'pt'
-		# yAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-		# yAxis.major_label_standoff = 2
-		# yAxis.minor_tick_line_color = None
-		# yAxis.major_tick_out = 0
-		# yAxis.major_tick_in = 4
-		# plot.add_layout(yAxis,'left')
 
 		PS['tool generators'] = tool_gen
-		# if tool_gen:
-		# 	plot.add_tools(*[g() for g in tool_gen])
-
-		# for cs_ind,case in enumerate(case_list):
-		# 	case_ind = s.case_num_map[case]-1
-		# 	leg = None
-		# 	if legend:
-		# 		leg = case
-		# 	if mode == 'server':
-		# 		#print(case)
-		# 		line= Line( x='times', y=electrode+'_'+case, line_color=props['colors'][cs_ind],
-		# 				line_width=1.5, line_alpha=0.85, name=case+'_line')
-		# 		plot.add_glyph(source,line)
-		# 	else: #notebook for now
-		# 		plot.line( x=props['times'], y=pot[case_ind,el_ind,:], color=props['colors'][cs_ind],
-		# 				line_width=2, line_alpha=0.85, name=case, legend=leg)
-
-		if legend:
-			plot.legend.location='top_left'
-			plot.legend.label_text_font_size = props['font size']
-			#plot.legend.background_fill_color = '#444' # fill not working
-			#plot.legend.background_fill_alpha = 0.2
-			plot.legend.label_text_align = 'left'
-			#plot.legend.label_text_baseline = 'top'
-			plot.legend.label_width = 20
-			plot.legend.label_height = 12
-			plot.legend.label_standoff = 10
-			plot.legend.legend_padding = 2
-			plot.legend.legend_spacing = 2
-			#plot.legend.glyph_height = 10
-			plot.legend.glyph_width = 15
-			plot.legend.glyph_height= 12
-
-		# if bottom_label:
-		# 	plot.xaxis.axis_label="Time (ms)"
-		# else: 
-		# 	plot.xaxis[0].ticker = FixedTicker(ticks=[0,400])
-		# 	plot.grid.ticker = plot.xaxis[0].ticker
-		# plot.axis.axis_line_alpha = props['axis alpha']
 
 		return PS
