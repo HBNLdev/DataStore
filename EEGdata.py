@@ -4,11 +4,7 @@
 import numpy as np
 import pandas as pd
 import h5py, os
-import bokeh
-from bokeh.plotting import figure, gridplot
-from bokeh.models import ( FixedTicker, CustomJS, TapTool, Range1d, 
-				ColumnDataSource, Plot, Line, LinearAxis, 
-				CompositeTicker, AdaptiveTicker, SingleIntervalTicker, Grid )
+from bokeh.models import ColumnDataSource
 from bokeh.palettes import brewer
 from collections import OrderedDict
 
@@ -320,7 +316,7 @@ class avgh1:
 				else:
 					leg_flag = False
 
-				splot = s.make_plot_for_channel(potentials,eind,props,cases,tools,
+				splot = s.prepare_plot_for_channel(potentials,eind,props,cases,tools,
 											bottom_label=bot_flag,legend=leg_flag, mode=mode,
 											source=source, tool_gen=tool_gen)
 				plots[-1].append(splot)
@@ -345,7 +341,7 @@ class avgh1:
 						plots[-1].append(None)
 					else:
 						eind= s.electrodes.index(cell)
-						splot = s.make_plot_for_channel(potentials,eind,props,
+						splot = s.prepare_plot_for_channel(potentials,eind,props,
 							cases,tools, mode=mode, source=source,
 							tool_gen=tool_gen)
 						plots[-1].append(splot)
@@ -441,97 +437,96 @@ class avgh1:
 			psD[ chan+'_pot' ].append( val )
 			psD[ chan+'_time' ].append( tm )
 
-	def make_plot_for_channel(s,pot,el_ind,props,case_list,tools,
+	def prepare_plot_for_channel(s,pot,el_ind,props,case_list,tools,
 						mode='notebook',bottom_label=False,legend=False,
 						source=None,tool_gen=None):
+		PS = {} #plot_setup
+		PS['props'] = props
+		PS['case list'] = case_list
+		PS['tools'] = tools
 
 		if bottom_label:
 			height = props['height']+props['extra_bottom_height']
 		else:
 			height = props['height'] 
 
-		electrode = s.electrodes[el_ind]
+		PS['electrode'] = s.electrodes[el_ind]
+		PS['adjusted height'] = height
 
-		plot = Plot(#plot_width=props['width'], plot_height=height, 
-			title=electrode,
-			tools=tools
-			)
-		plot.title_standoff = 0
-		plot.title_text_align='left'
-		plot.title_text_baseline='top'
-		#plot.border_fill='#888'
+		# plot = Plot( 
+		# 	title=electrode,
+		# 	tools=tools
+		# 	)
+		# plot.title_standoff = 0
+		# plot.title_text_align='left'
+		# plot.title_text_baseline='top'
 
-		#plot.min_border = props['min_border']
-		plot.min_border_left = props['min_border']
-		plot.min_border_right = props['min_border']
-		plot.min_border_top = props['min_border']
-		plot.min_border_bottom = props['min_border']
-		plot.plot_width = props['width']
-		plot.plot_height = height
-		plot.y_range = Range1d(*props['yrange'])
-		plot.x_range = Range1d(*props['xrange'])#, name='sharedX')
-		plot.title_text_font_size = str(props['font size'])+'pt'
+		# plot.min_border_left = props['min_border']
+		# plot.min_border_right = props['min_border']
+		# plot.min_border_top = props['min_border']
+		# plot.min_border_bottom = props['min_border']
+		# plot.plot_width = props['width']
+		# plot.plot_height = height
+		# plot.y_range = Range1d(*props['yrange'])
+		# plot.x_range = Range1d(*props['xrange'])#, name='sharedX')
+		# plot.title_text_font_size = str(props['font size'])+'pt'
 
-		plot.outline_line_alpha = props['outline alpha']
-		plot.outline_line_width = None
-		plot.outline_line_color = None
+		# plot.outline_line_alpha = props['outline alpha']
+		# plot.outline_line_width = None
+		# plot.outline_line_color = None
 
-		# Axes
-		xAxis = LinearAxis()#x_range_name='sharedX')
-		#xTicker = AdaptiveTicker(base=10,mantissas=[0,4],min_interval=50)
-		xTicker_0 = AdaptiveTicker(base=100,mantissas=[0,4],min_interval=400)#SingleIntervalTicker(interval=400)
-		xTicker_1 = AdaptiveTicker(base=10,mantissas=[2,5],min_interval=20,max_interval=400)
-		xTicker = CompositeTicker(tickers=[xTicker_0,xTicker_1])
-		xAxis.ticker = xTicker
-		xGrid = Grid(dimension=0, ticker=xTicker)
+		# # Axes
+		# xAxis = LinearAxis()#x_range_name='sharedX')
+		# #xTicker = AdaptiveTicker(base=10,mantissas=[0,4],min_interval=50)
+		# xTicker_0 = AdaptiveTicker(base=100,mantissas=[0,4],min_interval=400)#SingleIntervalTicker(interval=400)
+		# xTicker_1 = AdaptiveTicker(base=10,mantissas=[2,5],min_interval=20,max_interval=400)
+		# xTicker = CompositeTicker(tickers=[xTicker_0,xTicker_1])
+		# xAxis.ticker = xTicker
+		# xGrid = Grid(dimension=0, ticker=xTicker)
 		
-		yAxis = LinearAxis()
-		yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
-		yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
-		yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
-		yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
-		yAxis.ticker = yTicker
+		# yAxis = LinearAxis()
+		# yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		# yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
+		# yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
+		# yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
+		# yAxis.ticker = yTicker
 		
-		xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
-		xAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-		xAxis.major_label_text_align = 'right'
-		xAxis.major_label_standoff = 2
-		xAxis.minor_tick_line_color = None
-		xAxis.major_tick_out = 0
-		xAxis.major_tick_in = 2
-		plot.add_layout(xAxis,'below')
-		xGrid.grid_line_alpha = props['grid alpha']
-		plot.add_layout(xGrid)
-
-		#yTicker.desired_num_ticks = 2
-		#yTicker.num_minor_ticks = 0
+		# xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
+		# xAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
+		# xAxis.major_label_text_align = 'right'
+		# xAxis.major_label_standoff = 2
+		# xAxis.minor_tick_line_color = None
+		# xAxis.major_tick_out = 0
+		# xAxis.major_tick_in = 2
+		# plot.add_layout(xAxis,'below')
+		# xGrid.grid_line_alpha = props['grid alpha']
+		# plot.add_layout(xGrid)
 		
-		yAxis.axis_label_text_font_size = str(props['font size'])+'pt'
-		yAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-		#yAxis.major_label_text_align = 'right'
-		yAxis.major_label_standoff = 2
-		yAxis.minor_tick_line_color = None
-		yAxis.major_tick_out = 0
-		yAxis.major_tick_in = 4
-		plot.add_layout(yAxis,'left')
+		# yAxis.axis_label_text_font_size = str(props['font size'])+'pt'
+		# yAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
+		# yAxis.major_label_standoff = 2
+		# yAxis.minor_tick_line_color = None
+		# yAxis.major_tick_out = 0
+		# yAxis.major_tick_in = 4
+		# plot.add_layout(yAxis,'left')
 
-		if tool_gen:
-			plot.add_tools(*[g() for g in tool_gen])
+		PS['tool generators'] = tool_gen
+		# if tool_gen:
+		# 	plot.add_tools(*[g() for g in tool_gen])
 
-
-		for cs_ind,case in enumerate(case_list):
-			case_ind = s.case_num_map[case]-1
-			leg = None
-			if legend:
-				leg = case
-			if mode == 'server':
-				#print(case)
-				line= Line( x='times', y=electrode+'_'+case, line_color=props['colors'][cs_ind],
-						line_width=1.5, line_alpha=0.85, name=case+'_line')
-				plot.add_glyph(source,line)
-			else: #notebook for now
-				plot.line( x=props['times'], y=pot[case_ind,el_ind,:], color=props['colors'][cs_ind],
-						line_width=2, line_alpha=0.85, name=case, legend=leg)
+		# for cs_ind,case in enumerate(case_list):
+		# 	case_ind = s.case_num_map[case]-1
+		# 	leg = None
+		# 	if legend:
+		# 		leg = case
+		# 	if mode == 'server':
+		# 		#print(case)
+		# 		line= Line( x='times', y=electrode+'_'+case, line_color=props['colors'][cs_ind],
+		# 				line_width=1.5, line_alpha=0.85, name=case+'_line')
+		# 		plot.add_glyph(source,line)
+		# 	else: #notebook for now
+		# 		plot.line( x=props['times'], y=pot[case_ind,el_ind,:], color=props['colors'][cs_ind],
+		# 				line_width=2, line_alpha=0.85, name=case, legend=leg)
 
 		if legend:
 			plot.legend.location='top_left'
@@ -556,4 +551,4 @@ class avgh1:
 		# 	plot.grid.ticker = plot.xaxis[0].ticker
 		# plot.axis.axis_line_alpha = props['axis alpha']
 
-		return plot
+		return PS

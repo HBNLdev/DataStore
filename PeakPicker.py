@@ -25,10 +25,11 @@ import organization as O
 import EEGdata
 
 from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
-from bokeh.models import Plot, Panel, Tabs, ColumnDataSource, CustomJS, \
-					BoxSelectTool, TapTool, GridPlot, \
-				BoxZoomTool, ResetTool, PanTool, WheelZoomTool, ResizeTool, \
-				Asterisk, Segment
+from bokeh.models import ( Plot, Panel, Tabs, ColumnDataSource, CustomJS,
+					BoxSelectTool, TapTool, GridPlot,
+				BoxZoomTool, ResetTool, PanTool, WheelZoomTool, ResizeTool,
+				Asterisk, Segment, Line, Grid, 
+				LinearAxis, Range1d, AdaptiveTicker, CompositeTicker )
 
 from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, CheckboxGroup, \
 				RadioButtonGroup, Button
@@ -154,7 +155,75 @@ chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
 		 'O1',  'O2']
 
-gridplots = app_data['eeg'].selected_cases_by_channel(cases='all',
+def make_plot(plot_setup):
+	if plot_setup == None:
+		return None
+	PS = plot_setup
+	props = PS['props']
+
+	plot = Plot( title=PS['electrode'], tools=PS['tools'])
+	plot.title_standoff = 0
+	plot.title_text_align='left'
+	plot.title_text_baseline='top'
+	plot.min_border_left = props['min_border']
+	plot.min_border_right = props['min_border']
+	plot.min_border_top = props['min_border']
+	plot.min_border_bottom = props['min_border']
+	plot.plot_width = props['width']
+	plot.plot_height = PS['adjusted height']
+	plot.y_range = Range1d(*props['yrange'])
+	plot.x_range = Range1d(*props['xrange'])#, name='sharedX')
+	plot.title_text_font_size = str(props['font size'])+'pt'
+	plot.outline_line_alpha = props['outline alpha']
+	plot.outline_line_width = None
+	plot.outline_line_color = None
+
+	# Axes
+	xAxis = LinearAxis()#x_range_name='sharedX')
+	#xTicker = AdaptiveTicker(base=10,mantissas=[0,4],min_interval=50)
+	xTicker_0 = AdaptiveTicker(base=100,mantissas=[0,4],min_interval=400)#SingleIntervalTicker(interval=400)
+	xTicker_1 = AdaptiveTicker(base=10,mantissas=[2,5],min_interval=20,max_interval=400)
+	xTicker = CompositeTicker(tickers=[xTicker_0,xTicker_1])
+	xAxis.ticker = xTicker
+	xGrid = Grid(dimension=0, ticker=xTicker)
+	
+	yAxis = LinearAxis()
+	yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+	yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
+	yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
+	yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
+	yAxis.ticker = yTicker
+	
+	xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
+	xAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
+	xAxis.major_label_text_align = 'right'
+	xAxis.major_label_standoff = 2
+	xAxis.minor_tick_line_color = None
+	xAxis.major_tick_out = 0
+	xAxis.major_tick_in = 2
+	plot.add_layout(xAxis,'below')
+	xGrid.grid_line_alpha = props['grid alpha']
+	plot.add_layout(xGrid)
+
+	yAxis.axis_label_text_font_size = str(props['font size'])+'pt'
+	yAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
+	yAxis.major_label_standoff = 2
+	yAxis.minor_tick_line_color = None
+	yAxis.major_tick_out = 0
+	yAxis.major_tick_in = 4
+	plot.add_layout(yAxis,'left')
+
+	if PS['tool generators']:
+		plot.add_tools(*[ g() for g in PS['tool generators'] ])
+
+	for cs_ind,case in enumerate(PS['case list']):
+		line= Line( x='times', y=PS['electrode']+'_'+case, line_color=props['colors'][cs_ind],
+				line_width=1.5, line_alpha=0.85, name=case+'_line')
+		plot.add_glyph(app_data['data source'],line)
+
+	return plot
+
+gridplots_setup = app_data['eeg'].selected_cases_by_channel(cases='all',
 			channels=chans,
 			props=plot_props,  mode='server',
 			source=app_data['data source'],
@@ -162,6 +231,13 @@ gridplots = app_data['eeg'].selected_cases_by_channel(cases='all',
 					ResetTool, PanTool, ResizeTool],
 			style='layout'
 			)
+
+gridplots = []
+for growS in gridplots_setup:
+	gridplots.append([])
+	for plotS in growS:
+		gridplots[-1].append( make_plot( plotS ) )
+
 print(type(gridplots[0][1]),dir(gridplots[0][1]), dir(gridplots[0][1].x_mapper_type))
 
 #print(out_inds)
