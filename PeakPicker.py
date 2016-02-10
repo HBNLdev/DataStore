@@ -36,7 +36,7 @@ from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, Chec
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
-experiments = ['vp3','ant']#,'aod']
+experiments = ['ant','vp3']#,'aod']
 app_data = { expr:{} for expr in experiments }
 init_files = ['ant_0_a0_11111111_avg.h1', 'vp3_0_a0_11111111_avg.h1']
 app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in init_files ] 
@@ -228,14 +228,14 @@ def make_plot(plot_setup):
 ##		Callbacks
 #########################
 def update_data( peak_data ):
-	app_data[app_data['current expreiment']]['peak source'].data = peak_data
+	app_data[app_data['current experiment']]['peak source'].data = peak_data
 
 # def input_change(attr,old,new):
 # 	pass
 
 def apply_handler():
 	print('Apply')
-	exp = app_data[app_data['current expreiment']]
+	exp = app_data[app_data['current experiment']]
 	eeg = exp['eeg']
 	#print( peak_source.data )
 	limitsDF = exp['pick source'].to_df()
@@ -269,7 +269,7 @@ def apply_handler():
 
 def save_handler():
 	print('Save')
-	exp = app_data[app_data['current expreiment']]
+	exp = app_data[app_data['current experiment']]
 	eeg = exp['eeg']
 	# get list of cases which have picks and unique peaks
 	case_lst = []
@@ -325,30 +325,30 @@ def reload_handler():
 	load_file()
 
 def case_toggle_handler(active):
-	exp = app_data[app_data['current expreiment']]
+	exp = app_data[app_data['current experiment']]
 	chosen_case = exp['cases'][active]
 	exp['pick state']['case'] = chosen_case
-	for case in case_choices:
+	for case in exp['cases']:
 		width = 2.5 if case == chosen_case else 1.5
-		selections = grid.select(dict(name=case+'_line'))
+		selections = exp['grid'].select(dict(name=case+'_line'))
 		#print( dir(selections[0]))
 		for sel in selections:
 			sel.line_width = width
 
 def peak_toggle_handler(active):
-	exp = app_data[app_data['current expreiment']]
+	exp = app_data[app_data['current experiment']]
 	exp['pick state']['peak'] = exp['cases'][active]
 
 def checkbox_handler(active):
-	exp = app_data[app_data['current expreiment']]
+	exp = app_data[app_data['current experiment']]
 	for n,nm in enumerate(exp['cases']):
 		alpha = 1 if n in active else 0
 		label = nm+'_line'
-		selections = grid.select(dict(name=label))
+		selections = exp['grid'].select(dict(name=label))
 		for sel in selections:
 			sel.line_alpha = alpha
 		marker_label = nm+'_peak'
-		selections = grid.select(dict(name=marker_label))
+		selections = exp['grid'].select(dict(name=marker_label))
 		for sel in selections:
 			#sel.fill_alpha = alpha
 			sel.line_alpha = alpha
@@ -525,9 +525,10 @@ for expr in experiments:
 	components = build_experiment_tab(expr)
 	inputs = VBox( children=components['inputs'])
 	grid = GridPlot( children=components['plots'] )
+	app_data[expr]['grid'] = grid
 	page = VBox( children=[inputs, grid])
 
-	tab_setup.append( Panel( child=page, title='Pick '+expr ) )
+	tab_setup.append( Panel( child=page, title='pick '+expr ) )
 
 # start_button.on_click(start_handler)
 
