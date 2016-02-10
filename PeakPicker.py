@@ -156,7 +156,7 @@ chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
 		 'O1',  'O2']
 
-def make_plot(plot_setup):
+def make_plot(plot_setup, experiment):
 	if plot_setup == None:
 		return None
 	PS = plot_setup
@@ -220,7 +220,7 @@ def make_plot(plot_setup):
 	for cs_ind,case in enumerate(PS['case list']):
 		line= Line( x='times', y=PS['electrode']+'_'+case, line_color=props['colors'][cs_ind],
 				line_width=1.5, line_alpha=0.85, name=case+'_line')
-		plot.add_glyph(app_data[app_data['current experiment']]['data source'],line)
+		plot.add_glyph(app_data[experiment]['data source'],line)
 
 	return plot
 
@@ -275,9 +275,9 @@ def save_handler():
 	case_lst = []
 	peak_lst = []
 	for case in eeg.case_list:
-		if peak_sources[case].data['peaks']: # if case contains picks
+		if exp['peak sources'][case].data['peaks']: # if case contains picks
 			case_lst.append( eeg.case_num_map[case] ) #use numeric reference
-			pks = peak_sources[case].data['peaks']
+			pks = exp['peak sources'][case].data['peaks']
 			for pk in pks:
 				peak_lst.append(pk)
 		else:
@@ -297,9 +297,9 @@ def save_handler():
 		for ichan, chan in enumerate(eeg.electrodes_61): # only core 61 chans
 			for ipeak, peak in enumerate(peaks):
 				amps[ipeak, ichan, icase] = \
-						peak_sources[case_name].data[chan+'_pot'][peaks.index( peak )]
+						exp['peak sources'][case_name].data[chan+'_pot'][peaks.index( peak )]
 				lats[ipeak, ichan, icase] =	\
-						peak_sources[case_name].data[chan+'_time'][peaks.index( peak )]
+						exp['peak sources'][case_name].data[chan+'_time'][peaks.index( peak )]
 
 	# reshape into 1d arrays
 	amps1d = amps.ravel('F')
@@ -418,7 +418,7 @@ def build_experiment_tab(experiment):
 	for growS in gridplots_setup:
 		gridplots.append([])
 		for plotS in growS:
-			gridplots[-1].append( make_plot( plotS ) )
+			gridplots[-1].append( make_plot( plotS, experiment ) )
 
 	components['plots'] = gridplots
 
