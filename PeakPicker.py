@@ -43,24 +43,34 @@ app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in in
 #fields: file paths, file ind
 
 file_chooser = TextInput( title="files", name='file_chooser',
-				 value='/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_6_g1_40115011_avg.h1 /processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1')
+				 value='/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_e1_40143015_avg.h1 /processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_e1_40146034_avg.h1')
 start_button = Button( label="Start" )
 
 text = TextInput( title="file", name='file', value='')
 
 
-def load_file(next=False, initialize=False):
+def load_file(next=False, initialize=False, reload_flag=False):
+	
 	paths = app_data['file paths']
+
+	if not initialize and not reload_flag:
+		if next and app_data['file ind'] < len(paths)-1:
+			app_data['file ind'] += 1
+		else:
+			print('already on last file')
+			return
+
 	ind = app_data['file ind']
-	print('n paths, ind: ', len(paths), ind)
+	
 	if ind < len(paths) or not next:
 		eeg = EEGdata.avgh1( paths[ind] )
 		experiment = eeg.file_info['experiment']
+		print('Load  ', experiment,' n paths, ind: ', len(paths), ind, eeg.file_info)
 		app_data['current experiment'] = experiment
 		expD = app_data[experiment]
 		expD['eeg'] =  eeg
 		data_sourceD, peak_sourcesD = expD['eeg'].make_data_sources()
-		if ind == 0 or initialize: # initialize
+		if initialize: # initialize
 			expD['peak sources'] = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
 			expD['data source'] = ColumnDataSource( data = data_sourceD )
 			expD['cases'] = eeg.case_list
@@ -71,15 +81,13 @@ def load_file(next=False, initialize=False):
 				expD['peak sources'][case].data = D
 				expD['peak sources'][case].set()
 
-		if next and ind < len(paths)-1:
-			app_data['file ind'] += 1
+
 		text.value = paths[ind]
 
 		expD['data source'].trigger('data',expD['data source'].data,
 										expD['data source'].data)
 		
-	else:
-		print('already on last file')
+
 
 def next_file():
 	load_file(next=True)
@@ -87,9 +95,18 @@ def next_file():
 def start_handler():
 	#exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
 	#'/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
+	print('Start:  ', app_data['current experiment'])
+
 	paths = file_chooser.value.split(' ')
+	for expch in experiments:
+		if expch in paths[0]:
+			app_data['current experiment'] = expch
+			continue
+	######################  could validate other paths here
+
 	app_data['file paths'] = paths
-	app_data['file ind'] = 0
+	app_data['file ind'] = -1
+	print('Start done:  ', app_data['current experiment'])
 	next_file()
 
 # Initialize tabs
@@ -322,7 +339,7 @@ def next_handler():
 
 def reload_handler():
 	print('Reload')
-	load_file()
+	load_file(reload_flag=True)
 
 def case_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
