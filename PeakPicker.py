@@ -39,7 +39,8 @@ from bokeh.io import curdoc, curstate, set_curdoc
 experiments = ['ant','vp3']#,'aod']
 app_data = { expr:{} for expr in experiments }
 init_files = ['ant_0_a0_11111111_avg.h1', 'vp3_0_a0_11111111_avg.h1']
-app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in init_files ] 
+app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in init_files ]
+app_data['paths input'] = []
 #fields: file paths, file ind
 
 file_chooser = TextInput( title="files", name='file_chooser',
@@ -98,6 +99,10 @@ def start_handler():
 	print('Start:  ', app_data['current experiment'])
 
 	paths = file_chooser.value.split(' ')
+	if len(app_data['paths input']) > 0 and paths == app_data['paths input'][-1]:
+		return
+	app_data['paths input'].append(paths)
+
 	for expch in experiments:
 		if expch in paths[0]:
 			app_data['current experiment'] = expch
@@ -277,12 +282,6 @@ def apply_handler():
 	for c in exp['peak sources'].keys():
 		print(exp['peak sources'][c].data)
 
-	# cdoc = curdoc()
-	# print( cdoc, dir(cdoc) )
-	# cstate = curstate()
-	# print( cstate, dir(cstate) )
-	# set_curdoc( cdoc )
-	#update_data(peak_data = peak_source.data )
 
 def save_handler():
 	print('Save')
@@ -439,8 +438,6 @@ def build_experiment_tab(experiment):
 
 	components['plots'] = gridplots
 
-	#print(type(gridplots[0][1]),dir(gridplots[0][1]), dir(gridplots[0][1].x_mapper_type)
-
 	pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
 					line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
 					line_dash='dashed')
@@ -466,71 +463,6 @@ def build_experiment_tab(experiment):
 
 	return components
 
-#case_choices = ['A','J','W','P'] #eeg.case_list
-# case_toggle = CheckboxGroup( labels=case_choices, inline=True,
-# 				active=[n for n in range(len(case_choices))] )
-
-# case_chooser = RadioButtonGroup( labels=case_choices, active=0 )
-
-# pick_source = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
-# 								 start=[], finish=[], bots=[], tops=[] ))
-
-# peak_chooser = RadioButtonGroup( labels=peak_choices, active=0)
-# pick_state = {'case':case_choices[0], 'peak':peak_choices[0]}
-
-# apply_button = Button( label="Apply", type='default' )
-# save_button = Button( label="Save" )
-# next_button = Button( label="Next" )
-# reload_button = Button( label="Reload")
-
-		#toolset = ['crosshair','pan','reset','resize','save','wheel_zoom']
-
-
-
-# gridplots_setup = app_data['eeg'].selected_cases_by_channel(cases='all',
-# 			channels=chans,
-# 			props=plot_props,  mode='server',
-# 			source=app_data['data source'],
-# 			tool_gen=[box_generator,BoxZoomTool, WheelZoomTool, 
-# 					ResetTool, PanTool, ResizeTool],
-# 			style='layout'
-# 			)
-
-# gridplots = []
-# for growS in gridplots_setup:
-# 	gridplots.append([])
-# 	for plotS in growS:
-# 		gridplots[-1].append( make_plot( plotS ) )
-
-# print(type(gridplots[0][1]),dir(gridplots[0][1]), dir(gridplots[0][1].x_mapper_type))
-
-#print(out_inds)
-#print(gridplots)
-#print(rangecheck)
-
-# pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
-# 				line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
-# 				line_dash='dashed')
-# pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
-# 				line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
-# 				line_dash='dashdot')
-#gridplots[0][1].add_glyph(pick_source,pick_starts)
-#gridplots[0][1].add_glyph(pick_source,pick_finishes)
-
-# gcount = -1
-# for g_row in gridplots:
-# 	for gp in g_row:
-# 		if gp != None:
-# 			gcount +=1
-# 			chan = chans[gcount]
-# 			for case in case_choices:
-# 				marker = Asterisk( x=chan+'_time',y=chan+'_pot',
-# 						size=4, line_alpha=1,line_color='black',
-# 						name=case+'_peak')
-# 				gp.add_glyph( app_data['peak sources'][case], marker)
-# 			gp.add_glyph(pick_source,pick_starts)
-# 			gp.add_glyph(pick_source,pick_finishes)
-
 files_setup = VBox(children=[ file_chooser, start_button ])
 # LAYOUT
 navigation = Panel( child=files_setup, title='Navigate' )
@@ -547,18 +479,6 @@ for expr in experiments:
 
 	tab_setup.append( Panel( child=page, title='pick '+expr ) )
 
-# start_button.on_click(start_handler)
-
-# case_chooser.on_click(case_toggle_handler)
-# peak_chooser.on_click(peak_toggle_handler)
-
-# case_toggle.on_click(checkbox_handler)
-# apply_button.on_click(apply_handler)
-# save_button.on_click(save_handler)
-# next_button.on_click(next_handler)
-# reload_button.on_click(reload_handler)
-
-#text.on_change('value', input_change)
 
 tabs = Tabs( tabs=tab_setup )
 
@@ -567,7 +487,3 @@ curdoc().add_root(tabs)
 # case_toggle_handler(0)
 # peak_toggle_handler(0)
 # checkbox_handler([ n for n in range(len(case_choices))])
-
-#output_server("picker")
-#session = push_session( curdoc() )
-#session.loop_until_closed()
