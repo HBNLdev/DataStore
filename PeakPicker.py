@@ -127,7 +127,7 @@ load_file( initialize=True )
 
 
 def make_box_callback( experiment ):
-	pick_source = app_data[experiment]['pick source']
+	pick_source = app_data[experiment]['current pick source']
 	box_callback = CustomJS(args=dict(source=pick_source), code="""
 			        // get data source from Callback args
 			        console.dir(cb_data)
@@ -143,14 +143,14 @@ def make_box_callback( experiment ):
 			        var y = geometry['y0'] + height/2;
 
 			        /// update data source with new Rect attributes
-			        data['x'].push(x);
-			        data['y'].push(y);
-			        data['width'].push(width);
-			        data['height'].push(height);
-			        data['start'].push(geometry['x0'])
-			        data['finish'].push(geometry['x1'])
-			        data['bots'].push(-5)
-			        data['tops'].push(25)
+			        //data['x'].push(x);
+			        //data['y'].push(y);
+			        //data['width'].push(width);
+			        //data['height'].push(height);
+			        data['start'][0]=geometry['x0']
+			        data['finish'][0]=geometry['x1']
+			        data['bots'][0]=-5
+			        data['tops'][0]=25
 	 		        console.dir(data)
 			        // trigger update of data source
 			        source.trigger('change');
@@ -261,7 +261,7 @@ def apply_handler():
 	exp = app_data[app_data['current experiment']]
 	eeg = exp['eeg']
 	#print( peak_source.data )
-	limitsDF = exp['pick source'].to_df()
+	limitsDF = exp['current pick source'].to_df()
 	start = limitsDF[ 'start' ].values[-1]
 	finish = limitsDF[ 'finish' ].values[-1]
 	
@@ -356,19 +356,24 @@ def peak_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
 	exp['pick state']['peak'] = exp['cases'][active]
 
+def update_case_peak_selection_display():
+	for case_peak in app_data[app_data['current experiment']]['picked sources'].keys():
+		pass
+
 def checkbox_handler(active):
 	exp = app_data[app_data['current experiment']]
-	for n,nm in enumerate(exp['cases']):
+	for n,cs in enumerate(exp['cases']):
 		alpha = 1 if n in active else 0
-		label = nm+'_line'
+		label = cs+'_line'
 		selections = exp['grid'].select(dict(name=label))
 		for sel in selections:
 			sel.line_alpha = alpha
-		marker_label = nm+'_peak'
-		selections = exp['grid'].select(dict(name=marker_label))
-		for sel in selections:
-			#sel.fill_alpha = alpha
-			sel.line_alpha = alpha
+		for pk in peak_choices:
+			marker_label = cs+'_marker'
+			selections = exp['grid'].select(dict(name=marker_label))
+			for sel in selections:
+				#sel.fill_alpha = alpha
+				sel.line_alpha = alpha
 
 def input_change(attr, old, new):
 	update_data()
@@ -382,8 +387,14 @@ def build_experiment_tab(experiment):
 	print([k for k in app_data.keys()], app_data[experiment])
 	case_choices = expD['cases']
 
-	expD['pick source'] = ColumnDataSource( data= dict( x=[], y=[], width=[], height=[],
-								 start=[], finish=[], bots=[], tops=[] ))
+	expD['current pick source'] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
+
+	expD['picked sources'] = {}
+	for case in case_choices:
+		for peak in peak_choices:
+			expD['picked sources'][case+'_'+peak] = ColumnDataSource( 
+							data= dict( start=[], finish=[], bots=[], tops=[] ) )
+	
 	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0]}
 
 	case_pick_chooser = RadioButtonGroup( labels=case_choices, active=0 )
@@ -439,14 +450,17 @@ def build_experiment_tab(experiment):
 
 	components['plots'] = gridplots
 
-	pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
+
+
+	current_pick_start = Segment(x0='start',x1='start',y0='bots',y1='tops',
 					line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
 					line_dash='dashed')
-	pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
+	current_pick_finish = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
 					line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
 					line_dash='dashdot')
-	expD['pick starts'] = pick_starts
-	expD['pick finishes'] = pick_finishes
+	expD['pick start'] = current_pick_start
+	expD['pick finish'] = current_pick_finish
+
 
 	gcount = -1
 	for g_row in gridplots:
@@ -454,13 +468,18 @@ def build_experiment_tab(experiment):
 			if gp != None:
 				gcount +=1
 				chan = chans[gcount]
+
+				gp.add_glyph( expD['current pick source'],current_pick_start)
+				gp.add_glyph( expD['current pick source'],current_pick_finish)
 				for case in case_choices:
+					#for peak in peak_choices:
+						#cspk = case+'_'+peak
 					marker = Asterisk( x=chan+'_time',y=chan+'_pot',
-							size=4, line_alpha=1,line_color='black',
-							name=case+'_peak')
+						size=4, line_alpha=1,line_color='black',
+						name=case+'_marker')
 					gp.add_glyph( expD['peak sources'][case], marker)
-				gp.add_glyph(expD['pick source'],pick_starts)
-				gp.add_glyph(expD['pick source'],pick_finishes)
+						# gp.add_glyph( expD['picked sources'][cspk],picked_starts)
+						# gp.add_glyph( expD['picked sources'][cspk],picked_finishes)
 
 	return components
 
