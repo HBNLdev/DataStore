@@ -371,12 +371,15 @@ class avgh1:
 		else:
 			return
 
-	def make_data_sources(s,channels='all'):
+	def make_data_sources(s,channels='all',empty_flag=False):
 		times, potentials = s.prepare_plot_data()
 		s.extract_case_data()
 		s.extract_mt_data()
 
-		pot_source_dict = OrderedDict( times=times )
+		times_use = times
+		if empty_flag:
+			times_use = []
+		pot_source_dict = OrderedDict( times=times_use )
 
 		if channels == 'all':
 			channels = s.electrodes
@@ -407,7 +410,10 @@ class avgh1:
 		for chan in channels:
 			ch_ind = s.electrodes.index(chan)
 			for cs_ind,cs in s.cases.items():
-				pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
+				if empty_flag:
+					pot_source_dict[chan+'_'+cs['case_type'] ] = []
+				else:
+					pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
 
 
 		#return peak_sourcesD

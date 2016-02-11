@@ -36,9 +36,9 @@ from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, Chec
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
-experiments = ['ant','vp3']#,'aod']
+experiments = ['ant','vp3','aod']
 app_data = { expr:{} for expr in experiments }
-init_files = ['ant_0_a0_11111111_avg.h1', 'vp3_0_a0_11111111_avg.h1']
+init_files = ['ant_0_a0_11111111_avg.h1', 'vp3_0_a0_11111111_avg.h1', 'aod_1_a1_11111111_avg.h1']
 app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in init_files ]
 app_data['paths input'] = []
 #fields: file paths, file ind
@@ -70,7 +70,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 		app_data['current experiment'] = experiment
 		expD = app_data[experiment]
 		expD['eeg'] =  eeg
-		data_sourceD, peak_sourcesD = expD['eeg'].make_data_sources()
+		data_sourceD, peak_sourcesD = expD['eeg'].make_data_sources(empty_flag=initialize)
 		if initialize: # initialize
 			expD['peak sources'] = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
 			expD['data source'] = ColumnDataSource( data = data_sourceD )
@@ -119,7 +119,8 @@ app_data['file ind'] = 0
 load_file( initialize=True )
 app_data['file ind'] = 1
 load_file( initialize=True )
-
+app_data['file ind'] = 2
+load_file( initialize=True )
 
 # ***************************** Temporary setup **********************
 #start_handler()
