@@ -114,6 +114,10 @@ def start_handler():
 	print('Start done:  ', app_data['current experiment'])
 	next_file()
 
+	case_toggle_handler(0)
+	peak_toggle_handler(0)
+	checkbox_handler([ n for n in range(len(app_data[app_data['current experiment']]['peak sources']))])
+
 # Initialize tabs
 app_data['file ind'] = 0
 load_file( initialize=True )
@@ -503,7 +507,3 @@ for expr in experiments:
 tabs = Tabs( tabs=tab_setup )
 
 curdoc().add_root(tabs)
-
-# case_toggle_handler(0)
-# peak_toggle_handler(0)
-# checkbox_handler([ n for n in range(len(case_choices))])
