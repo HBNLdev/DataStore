@@ -1,11 +1,18 @@
 '''HBNL Peak Picker
 
 to start:
-	/usr/local/bin/bokeh serve PeakPicker.py
-	*to make the page accessible across out LAN
-		add --address 138.5.49.214 --host 138.5.49.214:5006
+	1) Start the bokeh server:
+		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006
+	2) Add the app:
+		python3 PeakPicker.py
+	3) Start the python webserver to receive requests:
+		python3 -m http.server 8000 --bind 138.5.49.214
+
+	** on updating code, only step 2 needs to be repeated
+
+
 point browser to:
-	http://localhost:5006/PeakPicker/
+	http://138.5.49.214:5006/PeakPicker.html
 	*replace 'localhost' with url if on another computer
 
 '''
@@ -24,6 +31,8 @@ import pandas as pd
 import organization as O
 import EEGdata
 
+from bokeh.embed import autoload_server
+from bokeh.document import Document
 from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
 from bokeh.models import ( Plot, Panel, Tabs, ColumnDataSource, CustomJS,
 					BoxSelectTool, TapTool, GridPlot,
@@ -31,8 +40,8 @@ from bokeh.models import ( Plot, Panel, Tabs, ColumnDataSource, CustomJS,
 				Asterisk, Segment, Line, Grid, 
 				LinearAxis, Range1d, AdaptiveTicker, CompositeTicker )
 
-from bokeh.models.widgets import VBox, Slider, TextInput, VBoxForm, Select, CheckboxGroup, \
-				RadioButtonGroup, Button
+from bokeh.models.widgets import ( VBox, Slider, TextInput, VBoxForm, Select, CheckboxGroup,
+				RadioButtonGroup, Button, HBox, Paragraph )
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
@@ -81,6 +90,9 @@ def load_file(next=False, initialize=False, reload_flag=False):
 			for case,D in peak_sourcesD.items():
 				expD['peak sources'][case].data = D
 				expD['peak sources'][case].set()
+
+			print('info plot', dir(expD['info']))
+			expD['info'].text = eeg.filename
 
 
 		text.value = paths[ind]
@@ -487,23 +499,79 @@ def build_experiment_tab(experiment):
 
 	return components
 
+def make_info_plot():
+	border = 0
+	plot = Plot( title='Info', tools=[])
+	plot.title_standoff = 0
+	plot.title_text_align='center'
+	plot.title_text_baseline='bottom'
+	plot.min_border_left = border
+	plot.min_border_right = border
+	plot.min_border_top = border
+	plot.min_border_bottom = border
+	plot.plot_width = 300
+	plot.plot_height = 80
+	plot.y_range = Range1d(0,100)
+	plot.x_range = Range1d(0,100)
+	plot.title_text_font_size = '11pt'
+	plot.outline_line_alpha = 0
+	plot.outline_line_width = None
+	plot.outline_line_color = None
+
+	return plot
+
+
 files_setup = VBox(children=[ file_chooser, start_button ])
 # LAYOUT
 navigation = Panel( child=files_setup, title='Navigate' )
 
 tab_setup = [ navigation ]
 
+
 for expr in experiments:
 
 	components = build_experiment_tab(expr)
 	inputs = VBox( children=components['inputs'])
+
+	info = Paragraph(height=80, width=300, text='Info')#make_info_plot()
+	app_data[expr]['info'] = info
+	inputsNinfo = HBox(children=[inputs, info])#GridPlot(children=[[info]])])
+	# need to add css: bk-hbox-spacer{ margin-right:0 }
+
 	grid = GridPlot( children=components['plots'] )
 	app_data[expr]['grid'] = grid
-	page = VBox( children=[inputs, grid])
+	page = VBox( children=[inputsNinfo, grid])
 
 	tab_setup.append( Panel( child=page, title='pick '+expr ) )
 
 
 tabs = Tabs( tabs=tab_setup )
+#print('custate: ',dir(curstate()))
 
-curdoc().add_root(tabs)
+document = Document()
+session = push_session(document,url='http://138.5.49.214:5006')
+
+
+html = """
+<html>
+    <head></head>
+    <body>
+    	<h3> HBNL Peak Picker </h3>
+        %s
+    </body>
+    <style>
+		.bk-hbox-spacer{ margin-right:0 !important }
+	</style>
+</html>
+
+
+""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5006')
+#curdoc().add_root(tabs)
+document.add_root(tabs)
+
+with open("PeakPicker.html", "w+") as f:
+    f.write(html)
+
+if __name__ == "__main__":
+    print("\npress ctrl-C to exit")
+    session.loop_until_closed()
