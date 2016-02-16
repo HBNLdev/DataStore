@@ -52,8 +52,11 @@ app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in in
 app_data['paths input'] = []
 #fields: file paths, file ind
 
+directory_chooser = TextInput( title="directory", name='directory_chooser',
+						value='/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/' )
 file_chooser = TextInput( title="files", name='file_chooser',
-				 value='/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_e1_40143015_avg.h1 /processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_e1_40146034_avg.h1')
+				 value='ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1')
+					#'ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1'
 start_button = Button( label="Start" )
 
 text = TextInput( title="file", name='file', value='')
@@ -92,7 +95,13 @@ def load_file(next=False, initialize=False, reload_flag=False):
 				expD['peak sources'][case].set()
 
 			print('info plot', dir(expD['info']))
-			expD['info'].text = eeg.filename
+			# eeg.extract_exp_data()
+			# print(eeg.exp)
+			eeg.extract_transforms_data()
+			print('transforms: ',eeg.transforms)
+			eeg.extract_case_data()
+			print('cases: ',eeg.cases)
+			expD['info'].text = eeg.filename #+ '<br>'.join([ str(k)+':'+str(v) for k,v in eeg.exp.items() ])
 
 
 		text.value = paths[ind]
@@ -110,7 +119,9 @@ def start_handler():
 	#'/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
 	print('Start:  ', app_data['current experiment'])
 
-	paths = file_chooser.value.split(' ')
+	directory = directory_chooser.value.strip()
+	files = file_chooser.value.split(' ')
+	paths = [ os.path.join(directory,f) for f in files ]
 	if len(app_data['paths input']) > 0 and paths == app_data['paths input'][-1]:
 		return
 	app_data['paths input'].append(paths)
@@ -411,7 +422,7 @@ def build_experiment_tab(experiment):
 			expD['picked sources'][case+'_'+peak] = ColumnDataSource( 
 							data= dict( start=[], finish=[], bots=[], tops=[] ) )
 	
-	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0]}
+	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0], 'picked':{} }
 
 	case_pick_chooser = RadioButtonGroup( labels=case_choices, active=0 )
 
@@ -521,7 +532,7 @@ def make_info_plot():
 	return plot
 
 
-files_setup = VBox(children=[ file_chooser, start_button ])
+files_setup = VBox(children=[ directory_chooser, file_chooser, start_button ])
 # LAYOUT
 navigation = Panel( child=files_setup, title='Navigate' )
 
@@ -560,7 +571,7 @@ html = """
         %s
     </body>
     <style>
-		.bk-hbox-spacer{ margin-right:0 !important }
+		.bk-hbox-spacer{ margin-right:5 !important }
 	</style>
 </html>
 
