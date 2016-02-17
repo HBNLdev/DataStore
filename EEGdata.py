@@ -191,8 +191,12 @@ class avgh1:
 		return peak_val, peak_ms
 			
 
-	def get_yscale(s, potentials, channels):
+	def get_yscale(s, potentials=None, channels=None):
+		if potentials == None:
+			dummy, potentials = s.prepare_plot_data()
 		# get full list of display channels
+		if channels == None:
+			channels = s.electrodes
 		ind_lst = []
 		for chan in channels:
 			ind_lst.append( s.electrodes.index(chan) )

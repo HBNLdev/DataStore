@@ -103,6 +103,17 @@ def load_file(next=False, initialize=False, reload_flag=False):
 			print('cases: ',eeg.cases)
 			expD['info'].text = eeg.filename #+ '<br>'.join([ str(k)+':'+str(v) for k,v in eeg.exp.items() ])
 
+			yscale = eeg.get_yscale(channels=chans)
+			print('updating yscale: ',yscale)
+			print('plot dir', dir(expD['components']['plots'][0][1].y_range))
+			for plt_row in expD['components']['plots']:
+				for plt in plt_row:
+					if 'y_range' in dir(plt):
+						print('updating for ',plt.title)
+						plt.y_range.start = yscale[0]
+						plt.y_range.end = yscale[1]
+						plt.y_range.trigger('start',yscale[0],yscale[0])
+						plt.y_range.trigger('end',yscale[1],yscale[1])
 
 		text.value = paths[ind]
 
@@ -510,28 +521,6 @@ def build_experiment_tab(experiment):
 
 	return components
 
-def make_info_plot():
-	border = 0
-	plot = Plot( title='Info', tools=[])
-	plot.title_standoff = 0
-	plot.title_text_align='center'
-	plot.title_text_baseline='bottom'
-	plot.min_border_left = border
-	plot.min_border_right = border
-	plot.min_border_top = border
-	plot.min_border_bottom = border
-	plot.plot_width = 300
-	plot.plot_height = 80
-	plot.y_range = Range1d(0,100)
-	plot.x_range = Range1d(0,100)
-	plot.title_text_font_size = '11pt'
-	plot.outline_line_alpha = 0
-	plot.outline_line_width = None
-	plot.outline_line_color = None
-
-	return plot
-
-
 files_setup = VBox(children=[ directory_chooser, file_chooser, start_button ])
 # LAYOUT
 navigation = Panel( child=files_setup, title='Navigate' )
@@ -542,9 +531,10 @@ tab_setup = [ navigation ]
 for expr in experiments:
 
 	components = build_experiment_tab(expr)
+	app_data[expr]['components'] = components 
 	inputs = VBox( children=components['inputs'])
 
-	info = Paragraph(height=80, width=300, text='Info')#make_info_plot()
+	info = Paragraph(height=40, width=300, text='Info')#make_info_plot()
 	app_data[expr]['info'] = info
 	inputsNinfo = HBox(children=[inputs, info])#GridPlot(children=[[info]])])
 	# need to add css: bk-hbox-spacer{ margin-right:0 }
