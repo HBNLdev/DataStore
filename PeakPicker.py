@@ -34,14 +34,15 @@ import EEGdata
 from bokeh.embed import autoload_server
 from bokeh.document import Document
 from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
-from bokeh.models import ( Plot, Panel, Tabs, ColumnDataSource, CustomJS,
-					BoxSelectTool, TapTool, GridPlot,
-				BoxZoomTool, ResetTool, PanTool, WheelZoomTool, ResizeTool,
-				Asterisk, Segment, Line, Grid, 
-				LinearAxis, Range1d, AdaptiveTicker, CompositeTicker )
-
-from bokeh.models.widgets import ( VBox, Slider, TextInput, VBoxForm, Select, CheckboxGroup,
-				RadioButtonGroup, Button, HBox, Paragraph )
+from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
+						   Plot, GridPlot, Grid,
+						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
+						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker,
+				 		   PanTool, WheelZoomTool, ResizeTool,
+						   Asterisk, Segment, Line,  
+						   VBox, HBox )
+from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
+				RadioButtonGroup, Button, Paragraph,TableWidget )
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
@@ -95,21 +96,20 @@ def load_file(next=False, initialize=False, reload_flag=False):
 				expD['peak sources'][case].set()
 
 			print('info plot', dir(expD['info']))
-			# eeg.extract_exp_data()
-			# print(eeg.exp)
-			eeg.extract_transforms_data()
-			print('transforms: ',eeg.transforms)
-			eeg.extract_case_data()
-			print('cases: ',eeg.cases)
-			expD['info'].text = eeg.filename #+ '<br>'.join([ str(k)+':'+str(v) for k,v in eeg.exp.items() ])
+
+			expD['info'][0].text = eeg.filename #+ '<br>'.join([ str(k)+':'+str(v) for k,v in eeg.exp.items() ])
+			details = gather_info(eeg)
+			expD['info'][1].text = details[0]
+			expD['info'][2].text = details[1]
+			expD['info'][3].text = details[2]
 
 			yscale = eeg.get_yscale(channels=chans)
-			print('updating yscale: ',yscale)
-			print('plot dir', dir(expD['components']['plots'][0][1].y_range))
+			#print('updating yscale: ',yscale)
+			#print('plot dir', dir(expD['components']['plots'][0][1].y_range))
 			for plt_row in expD['components']['plots']:
 				for plt in plt_row:
 					if 'y_range' in dir(plt):
-						print('updating for ',plt.title)
+						#print('updating for ',plt.title)
 						plt.y_range.start = yscale[0]
 						plt.y_range.end = yscale[1]
 						plt.y_range.trigger('start',yscale[0],yscale[0])
@@ -225,8 +225,8 @@ def make_plot(plot_setup, experiment):
 
 	plot = Plot( title=PS['electrode'], tools=PS['tools'])
 	plot.title_standoff = 0
-	plot.title_text_align='left'
-	plot.title_text_baseline='top'
+	plot.title_text_align='center'
+	plot.title_text_baseline='bottom'
 	plot.min_border_left = props['min_border']
 	plot.min_border_right = props['min_border']
 	plot.min_border_top = props['min_border']
@@ -321,6 +321,14 @@ def apply_handler():
 	for c in exp['peak sources'].keys():
 		print(exp['peak sources'][c].data)
 
+	for plt_row in exp['components']['plots']:
+		for plt in plt_row:
+			if plt:
+				chan = plt.title.split(' ')[0]
+				latency = exp['peak sources'][case].data[chan+'_time'][-1]
+				potential = exp['peak sources'][case].data[chan+'_pot'][-1]
+				plt.title = chan + ' - lat: '+'{:3.1f}'.format(latency)+' amp: '+'{:4.3f}'.format(potential)
+				plt.trigger('title',plt.title,plt.title)
 
 def save_handler():
 	print('Save')
@@ -528,19 +536,40 @@ navigation = Panel( child=files_setup, title='Navigate' )
 tab_setup = [ navigation ]
 
 
-for expr in experiments:
+def gather_info(exp):
+	exp.extract_transforms_data()
+	exp.extract_case_data()
+	filter_info = 'Filter band: '+'{:4.3f}'.format(exp.transforms['hi_pass_filter']) \
+					+ ' to '+'{:4.1f}'.format(exp.transforms['lo_pass_filter'])
+	case_info = ['cases: trials accepted/total']
+	trials_str =''
+	for caseN, caseD in exp.cases.items():
+		trials_str += caseD['case_type']+': '+str(caseD['n_trials_accepted'])+'/' \
+					+str(caseD['n_trials']) +',   '
+	trials_str = trials_str[:-4]
+	case_info.append( trials_str )
 
+	return [ filter_info ] + case_info
+
+for expr in experiments:
+	expD = app_data[expr]
 	components = build_experiment_tab(expr)
-	app_data[expr]['components'] = components 
+	expD['components'] = components 
 	inputs = VBox( children=components['inputs'])
 
-	info = Paragraph(height=40, width=300, text='Info')#make_info_plot()
-	app_data[expr]['info'] = info
+	info_el = Paragraph(height=12, width=300, text='Info')#make_info_plot()
+	#info2 = PreText(text='<tr><td><font color="red">Case1</font></td><td><font color="blue">Case2</font></td></tr>')
+	info_ch = [info_el]
+	proc_info = gather_info(expD['eeg'])
+	for text_line in proc_info:
+		info_ch.append( Paragraph( height=11, width=300, text='' ) )
+	expD['info'] = info_ch
+	info = VBox(children=info_ch)
 	inputsNinfo = HBox(children=[inputs, info])#GridPlot(children=[[info]])])
 	# need to add css: bk-hbox-spacer{ margin-right:0 }
 
 	grid = GridPlot( children=components['plots'] )
-	app_data[expr]['grid'] = grid
+	expD['grid'] = grid
 	page = VBox( children=[inputsNinfo, grid])
 
 	tab_setup.append( Panel( child=page, title='pick '+expr ) )
@@ -562,6 +591,13 @@ html = """
     </body>
     <style>
 		.bk-hbox-spacer{ margin-right:5 !important }
+		.bk-vbox > p{ margin:1 !important;
+					  font-size: 12px !important;
+					}
+		.bk-vbox > p:first-child{ font-size: 14px !important;
+							  font-weight: bold !important;
+							  margin-bottom: 3px !important;
+							}
 	</style>
 </html>
 
