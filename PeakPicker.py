@@ -2,14 +2,14 @@
 
 to start:
 	1) Start the bokeh server:
-		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006
+		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006 --port 5006 --allow-websocket-origin 138.5.49.214:8000
 	2) Add the app:
 		python3 PeakPicker.py
 	3) Start the python webserver to receive requests:
 		python3 -m http.server 8000 --bind 138.5.49.214
 
 	** on updating code, only step 2 needs to be repeated
-
+	** NOTE: for steps 2 and 3, must be in same directory as app
 
 point browser to:
 	http://138.5.49.214:5006/PeakPicker.html
@@ -21,8 +21,8 @@ point browser to:
 # logging.basic.Config(level=logging.DEBUG)
 import os
 import sys
-#repo_path = '/export/home/mike/python/mort-collab'
-repo_path = '/export/home/mort/programs/dev'
+repo_path = '/export/home/mike/python/mort-collab'
+#repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
 import numpy as np
@@ -204,14 +204,10 @@ def box_gen_gen( experiment ):
 		return BoxSelectTool( callback=box_callback )
 	return box_generator
 
-
 plot_props = {'width':180, 'height':110,
 				 'extra_bottom_height':40, # for bottom row
 				'min_border':4}
 
-#chans = ['FZ','CZ','PZ','F3','C3','P3']
-#chans = eeg.electrodes[:31]
-#chans.append(eeg.electrodes[63])
 chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'FC5', 'FC1', 'FC2', 'FC6', 'T7', 'C3', 'CZ',  'C4',  'T8', 'CP5',
 		 'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
@@ -299,6 +295,7 @@ def make_plot(plot_setup, experiment, tool_generators):
 #########################
 ##		Callbacks
 #########################
+
 def update_data( peak_data ):
 	app_data[app_data['current experiment']]['peak source'].data = peak_data
 
@@ -355,8 +352,7 @@ def save_handler():
 			for pk in pks:
 				peak_lst.append(pk)
 		else:
-			print('A case is missing picks.')
-			# return
+			print('A case is missing picks.') # should handle this
 	cases = list(set(case_lst))
 	peaks = list(set(peak_lst))
 
@@ -379,10 +375,8 @@ def save_handler():
 	amps1d = amps.ravel('F')
 	lats1d = lats.ravel('F')
 
-	# build mt text (makes default output location)
+	# build mt text (makes default output location), write to a test location
 	eeg.build_mt(cases, peaks, amps1d, lats1d)
-
-	# write to a test location
 	print(eeg.mt)
 	test_dir = '/processed_data/mt-files/test'
 	fullpath = os.path.join( test_dir, eeg.mt_name )
@@ -434,7 +428,6 @@ def checkbox_handler(active):
 
 def input_change(attr, old, new):
 	update_data()
-
 
 peak_choices = ['P1','P3','P4','N1','N2','N3','N4']
 def build_experiment_tab(experiment):
@@ -600,7 +593,7 @@ tabs = Tabs( tabs=tab_setup )
 #print('custate: ',dir(curstate()))
 
 document = Document()
-session = push_session(document,url='http://138.5.49.214:5006')
+session = push_session(document,url='http://138.5.49.214:5008')
 
 
 html = """
@@ -623,7 +616,7 @@ html = """
 </html>
 
 
-""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5006')
+""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5008')
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
