@@ -187,8 +187,8 @@ def make_box_callback( experiment ):
 			        //data['height'].push(height);
 			        data['start'][0]=geometry['x0']
 			        data['finish'][0]=geometry['x1']
-			        data['bots'][0]=-5
-			        data['tops'][0]=25
+			        data['bots'][0]=geometry['y0']
+			        data['tops'][0]=geometry['y1']
 	 		        console.dir(data)
 			        // trigger update of data source
 			        source.trigger('change');
@@ -217,16 +217,21 @@ chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
 		 'O1',  'O2']
 
-def make_plot(plot_setup, experiment):
-	if plot_setup == None:
-		return None
+def make_plot(plot_setup, experiment, tool_generators):
 	PS = plot_setup
 	props = PS['props']
+	if plot_setup['show'] == False:
+		dummy = True#return None#dummy_plot(tool_generators)
+		title = ''
+	else: 
+		dummy = False
+		title = PS['electrode']
+		# alpha = props['outline alpha']
 
-	plot = Plot( title=PS['electrode'], tools=PS['tools'])
+	plot = Plot( title=title, tools=PS['tools'])
 	plot.title_standoff = 0
 	plot.title_text_align='center'
-	plot.title_text_baseline='bottom'
+	plot.title_text_baseline='top'
 	plot.min_border_left = props['min_border']
 	plot.min_border_right = props['min_border']
 	plot.min_border_top = props['min_border']
@@ -240,49 +245,55 @@ def make_plot(plot_setup, experiment):
 	plot.outline_line_width = None
 	plot.outline_line_color = None
 
-	# Axes
-	xAxis = LinearAxis()#x_range_name='sharedX')
-	#xTicker = AdaptiveTicker(base=10,mantissas=[0,4],min_interval=50)
-	xTicker_0 = AdaptiveTicker(base=100,mantissas=[0,4],min_interval=400)#SingleIntervalTicker(interval=400)
-	xTicker_1 = AdaptiveTicker(base=10,mantissas=[2,5],min_interval=20,max_interval=400)
-	xTicker = CompositeTicker(tickers=[xTicker_0,xTicker_1])
-	xAxis.ticker = xTicker
-	xGrid = Grid(dimension=0, ticker=xTicker)
-	
-	yAxis = LinearAxis()
-	yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
-	yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
-	yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
-	yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
-	yAxis.ticker = yTicker
-	
-	xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
-	xAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-	xAxis.major_label_text_align = 'right'
-	xAxis.major_label_standoff = 2
-	xAxis.minor_tick_line_color = None
-	xAxis.major_tick_out = 0
-	xAxis.major_tick_in = 2
-	plot.add_layout(xAxis,'below')
-	xGrid.grid_line_alpha = props['grid alpha']
-	plot.add_layout(xGrid)
+	if not dummy:
+		# Axes
+		xAxis = LinearAxis()#x_range_name='sharedX')
+		#xTicker = AdaptiveTicker(base=10,mantissas=[0,4],min_interval=50)
+		xTicker_0 = AdaptiveTicker(base=100,mantissas=[0,4],min_interval=400)#SingleIntervalTicker(interval=400)
+		xTicker_1 = AdaptiveTicker(base=10,mantissas=[2,5],min_interval=20,max_interval=400)
+		xTicker = CompositeTicker(tickers=[xTicker_0,xTicker_1])
+		xAxis.ticker = xTicker
+		xGrid = Grid(dimension=0, ticker=xTicker)
+		
+		yAxis = LinearAxis()
+		yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
+		yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
+		yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
+		yAxis.ticker = yTicker
+		
+		xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
+		xAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
+		xAxis.major_label_text_align = 'right'
+		xAxis.major_label_standoff = 2
+		xAxis.minor_tick_line_color = None
+		xAxis.major_tick_out = 0
+		xAxis.major_tick_in = 2
+		plot.add_layout(xAxis,'below')
+		xGrid.grid_line_alpha = props['grid alpha']
+		plot.add_layout(xGrid)
 
-	yAxis.axis_label_text_font_size = str(props['font size'])+'pt'
-	yAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-	yAxis.major_label_standoff = 2
-	yAxis.minor_tick_line_color = None
-	yAxis.major_tick_out = 0
-	yAxis.major_tick_in = 4
-	plot.add_layout(yAxis,'left')
+		yAxis.axis_label_text_font_size = str(props['font size'])+'pt'
+		yAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
+		yAxis.major_label_standoff = 2
+		yAxis.minor_tick_line_color = None
+		yAxis.major_tick_out = 0
+		yAxis.major_tick_in = 4
+		plot.add_layout(yAxis,'left')
+
+		for cs_ind,case in enumerate(PS['case list']):
+
+			line= Line( x='times', y=PS['electrode']+'_'+case, line_color=props['colors'][cs_ind],
+					line_width=1.5, line_alpha=0.85, name=case+'_line')
+			plot.add_glyph(app_data[experiment]['data source'],line)
+
 
 	if PS['tool generators']:
 		plot.add_tools(*[ g() for g in PS['tool generators'] ])
 
-	for cs_ind,case in enumerate(PS['case list']):
-		line= Line( x='times', y=PS['electrode']+'_'+case, line_color=props['colors'][cs_ind],
-				line_width=1.5, line_alpha=0.85, name=case+'_line')
-		plot.add_glyph(app_data[experiment]['data source'],line)
 
+	# if dummy:
+	# 	return None
 	return plot
 
 #########################
@@ -477,26 +488,36 @@ def build_experiment_tab(experiment):
 	next_button.on_click(next_handler)
 	reload_button.on_click(reload_handler)
 
-	box_gen=box_gen_gen(experiment)
+	box_gen = box_gen_gen(experiment)
+
+	plot_tool_generators = [box_gen,BoxZoomTool, WheelZoomTool, 
+						ResetTool, PanTool, ResizeTool]
 
 	gridplots_setup = expD['eeg'].selected_cases_by_channel(cases='all',
 				channels=chans,
 				props=plot_props,  mode='server',
 				source=expD['data source'],
-				tool_gen=[box_gen,BoxZoomTool, WheelZoomTool, 
-						ResetTool, PanTool, ResizeTool],
+				tool_gen=plot_tool_generators,
 				style='layout'
 				)
 
 	gridplots = []
+	components['plots'] = []
 	for growS in gridplots_setup:
 		gridplots.append([])
+		components['plots'].append([])
 		for plotS in growS:
-			gridplots[-1].append( make_plot( plotS, experiment ) )
+			if plotS == None:
+				plotS = gridplots_setup[0][1].copy()
+				plotS['show'] = False
+			else:
+				plotS['show'] = True
 
-	components['plots'] = gridplots
-
-
+			this_plot = make_plot( plotS, experiment, plot_tool_generators )
+			gridplots[-1].append( this_plot )
+			if plotS['show']:
+				components['plots'][-1].append( this_plot )
+			else: components['plots'][-1].append( None )
 
 	current_pick_start = Segment(x0='start',x1='start',y0='bots',y1='tops',
 					line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
@@ -509,9 +530,9 @@ def build_experiment_tab(experiment):
 
 
 	gcount = -1
-	for g_row in gridplots:
-		for gp in g_row:
-			if gp != None:
+	for gr_ind,g_row in enumerate(gridplots):
+		for gc_ind,gp in enumerate(g_row):
+			if gridplots_setup[gr_ind][gc_ind] != None:
 				gcount +=1
 				chan = chans[gcount]
 
@@ -527,7 +548,7 @@ def build_experiment_tab(experiment):
 						# gp.add_glyph( expD['picked sources'][cspk],picked_starts)
 						# gp.add_glyph( expD['picked sources'][cspk],picked_finishes)
 
-	return components
+	return components, gridplots
 
 files_setup = VBox(children=[ directory_chooser, file_chooser, start_button ])
 # LAYOUT
@@ -540,7 +561,7 @@ def gather_info(exp):
 	exp.extract_transforms_data()
 	exp.extract_case_data()
 	filter_info = 'Filter band: '+'{:4.3f}'.format(exp.transforms['hi_pass_filter']) \
-					+ ' to '+'{:4.1f}'.format(exp.transforms['lo_pass_filter'])
+					+ ' Hz to '+'{:4.1f}'.format(exp.transforms['lo_pass_filter'])+' Hz'
 	case_info = ['cases: trials accepted/total']
 	trials_str =''
 	for caseN, caseD in exp.cases.items():
@@ -553,7 +574,7 @@ def gather_info(exp):
 
 for expr in experiments:
 	expD = app_data[expr]
-	components = build_experiment_tab(expr)
+	components, grid_display = build_experiment_tab(expr)
 	expD['components'] = components 
 	inputs = VBox( children=components['inputs'])
 
@@ -568,7 +589,7 @@ for expr in experiments:
 	inputsNinfo = HBox(children=[inputs, info])#GridPlot(children=[[info]])])
 	# need to add css: bk-hbox-spacer{ margin-right:0 }
 
-	grid = GridPlot( children=components['plots'] )
+	grid = GridPlot( children=grid_display )
 	expD['grid'] = grid
 	page = VBox( children=[inputsNinfo, grid])
 
