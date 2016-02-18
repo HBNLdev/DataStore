@@ -2,14 +2,14 @@
 
 to start:
 	1) Start the bokeh server:
-		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006
+		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006 --port 5006 --allow-websocket-origin 138.5.49.214:8000
 	2) Add the app:
 		python3 PeakPicker.py
 	3) Start the python webserver to receive requests:
 		python3 -m http.server 8000 --bind 138.5.49.214
 
 	** on updating code, only step 2 needs to be repeated
-
+	** NOTE: for steps 2 and 3, must be in same directory as app
 
 point browser to:
 	http://138.5.49.214:5006/PeakPicker.html
@@ -21,8 +21,8 @@ point browser to:
 # logging.basic.Config(level=logging.DEBUG)
 import os
 import sys
-#repo_path = '/export/home/mike/python/mort-collab'
-repo_path = '/export/home/mort/programs/dev'
+repo_path = '/export/home/mike/python/mort-collab'
+#repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
 import numpy as np
@@ -390,7 +390,7 @@ def case_toggle_handler(active):
 		selections = exp['grid'].select(dict(name=case+'_line'))
 		#print( dir(selections[0]))
 		for sel in selections:
-			sel.glyph.line_width = width
+			sel.line_width = width
 
 def peak_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
@@ -572,7 +572,7 @@ tabs = Tabs( tabs=tab_setup )
 #print('custate: ',dir(curstate()))
 
 document = Document()
-session = push_session(document,url='http://138.5.49.214:5006')
+session = push_session(document,url='http://138.5.49.214:5008')
 
 
 html = """
@@ -595,7 +595,7 @@ html = """
 </html>
 
 
-""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5006')
+""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5008')
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
