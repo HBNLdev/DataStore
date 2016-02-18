@@ -593,7 +593,7 @@ tabs = Tabs( tabs=tab_setup )
 #print('custate: ',dir(curstate()))
 
 document = Document()
-session = push_session(document,url='http://138.5.49.214:5008')
+session = push_session(document,url='http://138.5.49.214:5006')
 
 
 html = """
@@ -616,7 +616,7 @@ html = """
 </html>
 
 
-""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5008')
+""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5006')
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
