@@ -4,10 +4,6 @@
 import numpy as np
 import pandas as pd
 import h5py, os
-import bokeh
-from bokeh.plotting import figure, gridplot
-from bokeh.models import FixedTicker, CustomJS, TapTool, Range1d, \
-				ColumnDataSource, Plot, Line
 from bokeh.palettes import brewer
 from collections import OrderedDict
 
@@ -195,8 +191,12 @@ class avgh1:
 		return peak_val, peak_ms
 			
 
-	def get_yscale(s, potentials, channels):
-		# get full list of display channel indices
+	def get_yscale(s, potentials=None, channels=None):
+		if potentials == None:
+			dummy, potentials = s.prepare_plot_data()
+		# get full list of display channels
+		if channels == None:
+			channels = s.electrodes
 		ind_lst = []
 		for chan in channels:
 			ind_lst.append( s.electrodes.index(chan) )
@@ -223,6 +223,7 @@ class avgh1:
 		# calculate min / max for y limits
 		min_val = int(np.floor(np.min(disp_pots)))
 		max_val = int(np.ceil(np.max(disp_pots)))
+		print('Yscale: ',min_val,max_val)
 		return min_val, max_val
 
 	def butterfly_channels_by_case(s,channel_list=['FZ','CZ','PZ'], offset=0):
@@ -318,7 +319,7 @@ class avgh1:
 				else:
 					leg_flag = False
 
-				splot = s.make_plot_for_channel(potentials,eind,props,cases,tools,
+				splot = s.prepare_plot_for_channel(potentials,eind,props,cases,tools,
 											bottom_label=bot_flag,legend=leg_flag, mode=mode,
 											source=source, tool_gen=tool_gen)
 				plots[-1].append(splot)
@@ -343,7 +344,7 @@ class avgh1:
 						plots[-1].append(None)
 					else:
 						eind= s.electrodes.index(cell)
-						splot = s.make_plot_for_channel(potentials,eind,props,
+						splot = s.prepare_plot_for_channel(potentials,eind,props,
 							cases,tools, mode=mode, source=source,
 							tool_gen=tool_gen)
 						plots[-1].append(splot)
@@ -374,12 +375,15 @@ class avgh1:
 		else:
 			return
 
-	def make_data_sources(s,channels='all'):
+	def make_data_sources(s,channels='all',empty_flag=False):
 		times, potentials = s.prepare_plot_data()
 		s.extract_case_data()
 		s.extract_mt_data()
 
-		pot_source_dict = OrderedDict( times=times )
+		times_use = times
+		if empty_flag:
+			times_use = []
+		pot_source_dict = OrderedDict( times=times_use )
 
 		if channels == 'all':
 			channels = s.electrodes
@@ -406,19 +410,18 @@ class avgh1:
 						peak_sourcesD[case_name][ chan+'_pot'].append( np.nan )
 						peak_sourcesD[case_name][ chan+'_time'].append( np.nan )
 
-		peak_sources = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
-
 		# potentials
 		for chan in channels:
 			ch_ind = s.electrodes.index(chan)
 			for cs_ind,cs in s.cases.items():
-				pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
+				if empty_flag:
+					pot_source_dict[chan+'_'+cs['case_type'] ] = []
+				else:
+					pot_source_dict[chan+'_'+cs['case_type'] ] = potentials[cs_ind-1,ch_ind,:]
 
-		pot_source = ColumnDataSource(
-			data = pot_source_dict )
 
-
-		return pot_source, peak_sources
+		#return peak_sourcesD
+		return pot_source_dict, peak_sourcesD
 
 	def update_peak_source(s, psD, case, peak, pot_vals, times ):
 		''' assumes all channels
@@ -428,103 +431,23 @@ class avgh1:
 			psD[ chan+'_pot' ].append( val )
 			psD[ chan+'_time' ].append( tm )
 
-	def make_plot_for_channel(s,pot,el_ind,props,case_list,tools,
+	def prepare_plot_for_channel(s,pot,el_ind,props,case_list,tools,
 						mode='notebook',bottom_label=False,legend=False,
 						source=None,tool_gen=None):
+		PS = {} #plot_setup
+		PS['props'] = props
+		PS['case list'] = case_list
+		PS['tools'] = tools
 
 		if bottom_label:
 			height = props['height']+props['extra_bottom_height']
 		else:
 			height = props['height'] 
 
-		electrode = s.electrodes[el_ind]
-
-		plot = Plot(#plot_width=props['width'], plot_height=height, 
-			title=electrode,
-			tools=tools
-			)
-		plot.title_standoff = 0
-		plot.title_text_align='left'
-		plot.title_text_baseline='top'
-		#plot.border_fill='#888'
-
-		#plot.min_border = props['min_border']
-		plot.min_border_left = props['min_border']
-		plot.min_border_right = props['min_border']
-		plot.min_border_top = props['min_border']
-		plot.min_border_bottom = props['min_border']
-		plot.plot_width = props['width']
-		plot.plot_height = height
-		plot.y_range = Range1d(*props['yrange'])
-		plot.x_range = Range1d(*props['xrange'])
-		plot.title_text_font_size = str(props['font size'])+'pt'
-
-		# Axes
-		'''
-		plot.xaxis.axis_label_text_font_size = str(props['font size'])+'pt'		
-		#plot.outline_line_alpha = props['outline alpha']
-		#plot.grid.grid_line_alpha = props['grid alpha']
-
-		plot.xaxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-		plot.xaxis.major_label_text_align = 'right'
-		plot.xaxis.major_label_standoff = 0
-
-		plot.yaxis.major_label_text_font_size = str(props['font size']-2)+'pt'
-
-		plot.outline_line_color = None
-
-		plot.yaxis[0].ticker.desired_num_ticks=2
-		plot.yaxis.major_tick_line_width = 1 
-		plot.yaxis.minor_tick_line_color = None
-		plot.yaxis.major_tick_in = 4
-		plot.yaxis.major_tick_out = 0
-
-		plot.ygrid.grid_line_color = None
-		
-		plot.xgrid.grid_line_alpha = 0.35
-		plot.xaxis.minor_tick_line_color = None
-		plot.xaxis.major_tick_out = 0
-		plot.xaxis.major_tick_in = 2
-		'''
-		if tool_gen:
-			plot.add_tools(*[g() for g in tool_gen])
+		PS['electrode'] = s.electrodes[el_ind]
+		PS['adjusted height'] = height
 
 
-		for cs_ind,case in enumerate(case_list):
-			case_ind = s.case_num_map[case]-1
-			leg = None
-			if legend:
-				leg = case
-			if mode == 'server':
-				#print(case)
-				line= Line( x='times', y=electrode+'_'+case, line_color=props['colors'][cs_ind],
-						line_width=1.5, line_alpha=0.85, name=case+'_line')
-				plot.add_glyph(source,line)
-			else: #notebook for now
-				plot.line( x=props['times'], y=pot[case_ind,el_ind,:], color=props['colors'][cs_ind],
-						line_width=2, line_alpha=0.85, name=case, legend=leg)
+		PS['tool generators'] = tool_gen
 
-		if legend:
-			plot.legend.location='top_left'
-			plot.legend.label_text_font_size = props['font size']
-			#plot.legend.background_fill_color = '#444' # fill not working
-			#plot.legend.background_fill_alpha = 0.2
-			plot.legend.label_text_align = 'left'
-			#plot.legend.label_text_baseline = 'top'
-			plot.legend.label_width = 20
-			plot.legend.label_height = 12
-			plot.legend.label_standoff = 10
-			plot.legend.legend_padding = 2
-			plot.legend.legend_spacing = 2
-			#plot.legend.glyph_height = 10
-			plot.legend.glyph_width = 15
-			plot.legend.glyph_height= 12
-
-		# if bottom_label:
-		# 	plot.xaxis.axis_label="Time (ms)"
-		# else: 
-		# 	plot.xaxis[0].ticker = FixedTicker(ticks=[0,400])
-		# 	plot.grid.ticker = plot.xaxis[0].ticker
-		# plot.axis.axis_line_alpha = props['axis alpha']
-
-		return plot
+		return PS
