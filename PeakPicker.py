@@ -206,7 +206,8 @@ def box_gen_gen( experiment ):
 
 plot_props = {'width':180, 'height':110,
 				 'extra_bottom_height':40, # for bottom row
-				'min_border':4}
+				'min_border':4,
+				'line colors':['#DD2222','#66DD66','#2222DD','#DD22DD']}
 
 chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'FC5', 'FC1', 'FC2', 'FC6', 'T7', 'C3', 'CZ',  'C4',  'T8', 'CP5',
@@ -279,7 +280,7 @@ def make_plot(plot_setup, experiment, tool_generators):
 
 		for cs_ind,case in enumerate(PS['case list']):
 
-			line= Line( x='times', y=PS['electrode']+'_'+case, line_color=props['colors'][cs_ind],
+			line= Line( x='times', y=PS['electrode']+'_'+case, line_color=props['line colors'][cs_ind],
 					line_width=1.5, line_alpha=0.85, name=case+'_line')
 			plot.add_glyph(app_data[experiment]['data source'],line)
 
@@ -467,8 +468,16 @@ def build_experiment_tab(experiment):
 						 'case toggle' : case_display_toggle
 						}
 
-	components['inputs'] = [ case_pick_chooser, peak_chooser, apply_button, save_button,
-							 next_button, reload_button, case_display_toggle ]
+	pick_title = Paragraph(height=12, width=65, text='pick: case')
+	peak_title = Paragraph(height=12, width=28, text='peak')
+	components['pick controls'] = [ pick_title, case_pick_chooser, peak_title, peak_chooser, 
+							 apply_button, save_button, next_button, reload_button]
+	display_title = Paragraph(height=12, width=54, text='display:')
+	legend_title = Paragraph(height=12, width=44, text='legend:')
+	components['display elements'] = [ display_title, case_display_toggle, legend_title ]
+	for cc in case_choices:
+		components['display elements'].append( Paragraph(height=18, width=25, text=' '+cc ) )
+
 
 	start_button.on_click(start_handler)
 
@@ -569,7 +578,9 @@ for expr in experiments:
 	expD = app_data[expr]
 	components, grid_display = build_experiment_tab(expr)
 	expD['components'] = components 
-	inputs = VBox( children=components['inputs'])
+	pick_controls = HBox( children=components['pick controls'])
+	display = HBox( children=components['display elements'] )
+	inputs = VBox( children=[pick_controls, display])
 
 	info_el = Paragraph(height=12, width=300, text='Info')#make_info_plot()
 	#info2 = PreText(text='<tr><td><font color="red">Case1</font></td><td><font color="blue">Case2</font></td></tr>')
@@ -604,6 +615,7 @@ html = """
         %s
     </body>
     <style>
+    	p{ margin: 3px; }
 		.bk-hbox-spacer{ margin-right:5 !important }
 		.bk-vbox > p{ margin:1 !important;
 					  font-size: 12px !important;
@@ -612,7 +624,34 @@ html = """
 							  font-weight: bold !important;
 							  margin-bottom: 3px !important;
 							}
+		.bk-bs-checkbox-inline{ margin-top: 4px; }
+		.bk-bs-button{ padding-left: 6px !important;
+					   padding-right: 6px !important; 
+					  }
+		.bk-bs-btn-group:first-child{ background-color: blue !important;
+							  			font-color: white !important; 
+							  		}
 	</style>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+	<script>
+		setTimeout( function(){
+			$("p:contains('T')").css('background-color','#DD2222').css('color','white')
+									.css('text-align','center').css('padding','2px')
+			$("p:contains('NT')").css('background-color','#66DD66').css('color','white')
+									.css('text-align','center').css('padding','2px')
+			$("p:contains('NV')").css('background-color','#2222DD').css('color','white')
+									.css('text-align','center').css('padding','2px')
+			$("p:contains('A')").css('background-color','#DD2222').css('color','white')
+									.css('text-align','center').css('padding','2px')
+			$("p:contains('J')").css('background-color','#66DD66').css('color','white')
+									.css('text-align','center').css('padding','2px')
+			$("p:contains('W')").css('background-color','#2222DD').css('color','white')
+									.css('text-align','center').css('padding','2px')
+			$("p:contains('P')").css('background-color','#DD22DD').css('color','white')
+									.css('text-align','center').css('padding','2px')
+	
+		}, 8000 )
+	</script>
 </html>
 
 
