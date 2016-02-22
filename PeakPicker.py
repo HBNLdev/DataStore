@@ -51,13 +51,13 @@ app_data = { expr:{} for expr in experiments }
 init_files = ['ant_0_a0_11111111_avg.h1', 'vp3_0_a0_11111111_avg.h1', 'aod_1_a1_11111111_avg.h1']
 app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in init_files ]
 app_data['paths input'] = []
+	
 #fields: file paths, file ind
 
 directory_chooser = TextInput( title="directory", name='directory_chooser',
 						value='/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/' )
 file_chooser = TextInput( title="files", name='file_chooser',
 				 value='ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1')
-					#'ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1'
 start_button = Button( label="Start" )
 
 text = TextInput( title="file", name='file', value='')
@@ -308,12 +308,29 @@ def apply_handler():
 	exp = app_data[app_data['current experiment']]
 	eeg = exp['eeg']
 	#print( peak_source.data )
-	limitsDF = exp['current pick source'].to_df()
-	start = limitsDF[ 'start' ].values[-1]
-	finish = limitsDF[ 'finish' ].values[-1]
 	
+	limits_data = exp['current pick source'].data
+	start = limits_data[ 'start' ][-1]
+	finish = limits_data[ 'finish' ][-1]
+	# Empty current pick
+	exp['current pick source'].data = { k:[] for k in limits_data.keys() }
+	exp['current pick source'].set()
+	exp['current pick source'].trigger('data',exp['current pick source'].data,exp['current pick source'].data)
+
 	case = exp['pick state']['case']
-	peak = exp['pick state']['peak']	
+	peak = exp['pick state']['peak']
+
+	exp['applied'][case].add(peak)
+	picked_data = limits_data.copy()
+	picked_data['peak'] = [ peak ]
+	case_picks = exp['picked sources'][case].data
+	# # check for peak ************************
+	for key in case_picks.keys():
+		case_picks[key].append(picked_data[key][0])
+	exp['picked sources'][case].data = case_picks
+	exp['picked sources'][case].set()
+	exp['picked sources'][case].trigger('data', exp['picked sources'][case].data, exp['picked sources'][case].data)
+	print('picked source data: ',exp['picked sources'][case].data)
 	pval,pms = eeg.find_peak(case,start_ms=start,end_ms=finish)
 	eeg.update_peak_source( exp['peak sources'][case].data, 
 				case,peak,pval, pms)
@@ -404,6 +421,12 @@ def case_toggle_handler(active):
 		for sel in selections:
 			sel.line_width = width
 
+	for case in exp['cases']:
+		selections = exp['grid'].select(dict(name=case+'_limit'))
+		alpha= 1 if case == chosen_case else 0
+		for sel in selections:
+			sel.line_alpha = alpha
+
 def peak_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
 	exp['pick state']['peak'] = exp['cases'][active]
@@ -440,11 +463,12 @@ def build_experiment_tab(experiment):
 
 	expD['current pick source'] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
 
-	expD['picked sources'] = {}
+	expD['applied'] = {}; expD['picked sources'] = {}
 	for case in case_choices:
+		expD['applied'][case] = set()
 		for peak in peak_choices:
-			expD['picked sources'][case+'_'+peak] = ColumnDataSource( 
-							data= dict( start=[], finish=[], bots=[], tops=[] ) )
+			expD['picked sources'][case] = ColumnDataSource( 
+							data= dict( start=[], finish=[], bots=[], tops=[], peak=[] ) )
 	
 	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0], 'picked':{} }
 
@@ -530,7 +554,7 @@ def build_experiment_tab(experiment):
 	expD['pick start'] = current_pick_start
 	expD['pick finish'] = current_pick_finish
 
-
+	expD['case pick sources'] = {}
 	gcount = -1
 	for gr_ind,g_row in enumerate(gridplots):
 		for gc_ind,gp in enumerate(g_row):
@@ -541,6 +565,7 @@ def build_experiment_tab(experiment):
 				gp.add_glyph( expD['current pick source'],current_pick_start)
 				gp.add_glyph( expD['current pick source'],current_pick_finish)
 				for case in case_choices:
+
 					#for peak in peak_choices:
 						#cspk = case+'_'+peak
 					marker = Asterisk( x=chan+'_time',y=chan+'_pot',
@@ -549,6 +574,16 @@ def build_experiment_tab(experiment):
 					gp.add_glyph( expD['peak sources'][case], marker)
 						# gp.add_glyph( expD['picked sources'][cspk],picked_starts)
 						# gp.add_glyph( expD['picked sources'][cspk],picked_finishes)
+
+					expD['case pick sources'][case] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
+					case_pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
+					line_width=1.5,line_alpha=0.95,line_color='orange',
+					line_dash='dashed', name=case+'_limit' )
+					case_pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
+					line_width=1.5,line_alpha=0.95,line_color='orange',
+					line_dash='dashdot', name=case+'_limit')
+					gp.add_glyph( expD['picked sources'][case], case_pick_starts )
+					gp.add_glyph( expD['picked sources'][case], case_pick_finishes )
 
 	return components, gridplots
 
