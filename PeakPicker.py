@@ -500,7 +500,7 @@ def build_experiment_tab(experiment):
 	legend_title = Paragraph(height=12, width=44, text='legend:')
 	components['display elements'] = [ display_title, case_display_toggle, legend_title ]
 	for cc in case_choices:
-		components['display elements'].append( Paragraph(height=18, width=25, text=' '+cc ) )
+		components['display elements'].append( Paragraph(height=18, width=25, text=cc ) )
 
 
 	start_button.on_click(start_handler)
@@ -670,19 +670,19 @@ html = """
 	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
 	<script>
 		setTimeout( function(){
-			$("p:contains('T')").css('background-color','#DD2222').css('color','white')
+			$("p").filter( function(i){ return this.textContent=='T' } ).css('background-color','#DD2222').css('color','white')
 									.css('text-align','center').css('padding','2px')
-			$("p:contains('NT')").css('background-color','#66DD66').css('color','white')
+			$("p").filter( function(i){ return this.textContent=='NT'} ).css('background-color','#66DD66').css('color','white')
 									.css('text-align','center').css('padding','2px')
-			$("p:contains('NV')").css('background-color','#2222DD').css('color','white')
+			$("p").filter( function(i){ return this.textContent=='NV'} ).css('background-color','#2222DD').css('color','white')
 									.css('text-align','center').css('padding','2px')
-			$("p:contains('A')").css('background-color','#DD2222').css('color','white')
+			$("p").filter( function(i){ return this.textContent=='A' } ).css('background-color','#DD2222').css('color','white')
 									.css('text-align','center').css('padding','2px')
-			$("p:contains('J')").css('background-color','#66DD66').css('color','white')
+			$("p").filter( function(i){ return this.textContent=='J' } ).css('background-color','#66DD66').css('color','white')
 									.css('text-align','center').css('padding','2px')
-			$("p:contains('W')").css('background-color','#2222DD').css('color','white')
+			$("p").filter( function(i){ return this.textContent=='W' } ).css('background-color','#2222DD').css('color','white')
 									.css('text-align','center').css('padding','2px')
-			$("p:contains('P')").css('background-color','#DD22DD').css('color','white')
+			$("p").filter( function(i){ return this.textContent=='P' } ).css('background-color','#DD22DD').css('color','white')
 									.css('text-align','center').css('padding','2px')
 	
 		}, 8000 )
