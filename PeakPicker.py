@@ -169,6 +169,8 @@ def make_box_callback( experiment ):
 	box_callback = CustomJS(args=dict(source=pick_source), code="""
 			        // get data source from Callback args
 			        console.dir(cb_data)
+			        console.dir(cb_obj)
+			        // console.dir(cb_obj.get('selected')['1d'].indices)
 			        var data = source.get('data');
 
 			        /// get BoxSelectTool dimensions from cb_data parameter of Callback
@@ -321,6 +323,7 @@ def apply_handler():
 	peak = exp['pick state']['peak']
 
 	exp['applied'][case].add(peak)
+	exp['applied picks display'].text = picked_state_text( app_data['current experiment'] )
 	picked_data = limits_data.copy()
 	picked_data['peak'] = [ peak ]
 	case_picks = exp['picked sources'][case].data
@@ -429,7 +432,7 @@ def case_toggle_handler(active):
 
 def peak_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
-	exp['pick state']['peak'] = exp['cases'][active]
+	exp['pick state']['peak'] = peak_choices[active]
 
 def update_case_peak_selection_display():
 	for case_peak in app_data[app_data['current experiment']]['picked sources'].keys():
@@ -439,6 +442,7 @@ def checkbox_handler(active):
 	exp = app_data[app_data['current experiment']]
 	for n,cs in enumerate(exp['cases']):
 		alpha = 1 if n in active else 0
+#		visible = True if n in active else False
 		label = cs+'_line'
 		selections = exp['grid'].select(dict(name=label))
 		for sel in selections:
@@ -449,9 +453,17 @@ def checkbox_handler(active):
 			for sel in selections:
 				#sel.fill_alpha = alpha
 				sel.line_alpha = alpha
+#				sel.visible = visible 
 
 def input_change(attr, old, new):
 	update_data()
+
+def picked_state_text(experiment):
+	txt = 'Picked: '
+	for case in app_data[experiment]['cases']:
+		peak_set = app_data[experiment]['applied'][case]
+		txt += case.upper() + ':[' + ','.join(list(peak_set))+']  '
+	return txt
 
 peak_choices = ['P1','P3','P4','N1','N2','N3','N4']
 def build_experiment_tab(experiment):
@@ -497,11 +509,20 @@ def build_experiment_tab(experiment):
 	components['pick controls'] = [ pick_title, case_pick_chooser, peak_title, peak_chooser, 
 							 apply_button, save_button, next_button, reload_button]
 	display_title = Paragraph(height=12, width=54, text='display:')
+	# Legend
 	legend_title = Paragraph(height=12, width=44, text='legend:')
-	components['display elements'] = [ display_title, case_display_toggle, legend_title ]
+	display_elements = [ display_title, case_display_toggle, legend_title ]
 	for cc in case_choices:
-		components['display elements'].append( Paragraph(height=18, width=25, text=cc ) )
+		display_elements.append( Paragraph(height=18, width=25, text=cc ) )
 
+	spacer = Paragraph(height=12, width=25)
+	picked_status = Paragraph(height=12, width=250, text='No picks yet')
+	display_elements.append( spacer )
+	display_elements.append( picked_status )
+	expD['applied picks display'] = picked_status
+
+
+	components['display elements'] = display_elements
 
 	start_button.on_click(start_handler)
 
