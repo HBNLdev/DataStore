@@ -171,26 +171,34 @@ def make_box_callback( experiment ):
 			        console.dir(cb_data)
 			        console.dir(cb_obj)
 			        // console.dir(cb_obj.get('selected')['1d'].indices)
+
+			        chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
+		 					'FC5', 'FC1', 'FC2', 'FC6', 'T7', 'C3', 'CZ',  'C4',  'T8', 'CP5',
+		 					'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
+		 					'O1',  'O2']
 			        var data = source.get('data');
 
 			        /// get BoxSelectTool dimensions from cb_data parameter of Callback
 			        var geometry = cb_data['geometry'];
 
 			        /// calculate Rect attributes
-			        var width = geometry['x1'] - geometry['x0'];
-			        var height = geometry['y1'] - geometry['y0'];
-			        var x = geometry['x0'] + width/2;
-			        var y = geometry['y0'] + height/2;
+			        //var width = geometry['x1'] - geometry['x0'];
+			        //var height = geometry['y1'] - geometry['y0'];
+			        //var x = geometry['x0'] + width/2;
+			        //var y = geometry['y0'] + height/2;
 
 			        /// update data source with new Rect attributes
 			        //data['x'].push(x);
 			        //data['y'].push(y);
 			        //data['width'].push(width);
 			        //data['height'].push(height);
-			        data['start'][0]=geometry['x0']
-			        data['finish'][0]=geometry['x1']
-			        data['bots'][0]=geometry['y0']
-			        data['tops'][0]=geometry['y1']
+			        for( i=0, clen=chans.length; i<clen; i++ ){
+			        	ch = chans[i];
+			        	data['start_'+ch][0]=geometry['x0'];
+			        	data['finish_'+ch][0]=geometry['x1'];
+			        	data['bots_'+ch][0]=geometry['y0'];
+			        	data['tops_'+ch][0]=geometry['y1'];
+			        }
 	 		        console.dir(data)
 			        // trigger update of data source
 			        source.trigger('change');
@@ -312,8 +320,8 @@ def apply_handler():
 	#print( peak_source.data )
 	
 	limits_data = exp['current pick source'].data
-	start = limits_data[ 'start' ][-1]
-	finish = limits_data[ 'finish' ][-1]
+	start = limits_data[ 'start_'+chans[0] ][-1]
+	finish = limits_data[ 'finish_'+chans[0] ][-1]
 	# Empty current pick
 	exp['current pick source'].data = { k:[] for k in limits_data.keys() }
 	exp['current pick source'].set()
@@ -325,7 +333,8 @@ def apply_handler():
 	exp['applied'][case].add(peak)
 	exp['applied picks display'].text = picked_state_text( app_data['current experiment'] )
 	picked_data = limits_data.copy()
-	picked_data['peak'] = [ peak ]
+	for chan in chans:
+		picked_data['peak_'+chan] = [ peak ]
 	case_picks = exp['picked sources'][case].data
 	# # check for peak ************************
 	for key in case_picks.keys():
@@ -473,15 +482,18 @@ def build_experiment_tab(experiment):
 	print([k for k in app_data.keys()], app_data[experiment])
 	case_choices = expD['cases']
 
-	expD['current pick source'] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
+	#expD['current pick source'] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
 
 	expD['applied'] = {}; expD['picked sources'] = {}
 	for case in case_choices:
 		expD['applied'][case] = set()
 		for peak in peak_choices:
-			expD['picked sources'][case] = ColumnDataSource( 
-							data= dict( start=[], finish=[], bots=[], tops=[], peak=[] ) )
-	
+			peak_sourceD = {}
+			for chan in chans:
+				peak_sourceD.update( { fd+'_'+chan:[] for fd in ['start', 'finish', 'bots', 'tops', 'peak'] } )
+						#dict( start=[], finish=[], bots=[], tops=[], peak=[] ) )
+			expD['picked sources'][case] = ColumnDataSource( data=peak_sourceD )
+
 	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0], 'picked':{} }
 
 	case_pick_chooser = RadioButtonGroup( labels=case_choices, active=0 )
@@ -535,6 +547,11 @@ def build_experiment_tab(experiment):
 	next_button.on_click(next_handler)
 	reload_button.on_click(reload_handler)
 
+	current_pickD = {}
+	for chan in chans:
+		current_pickD.update( { fd+'_'+chan:[] for fd in ['start','finish','bots','tops'] } )
+	expD['current pick source'] = ColumnDataSource( data=current_pickD )
+
 	box_gen = box_gen_gen(experiment)
 
 	plot_tool_generators = [box_gen,BoxZoomTool, WheelZoomTool, 
@@ -566,15 +583,8 @@ def build_experiment_tab(experiment):
 				components['plots'][-1].append( this_plot )
 			else: components['plots'][-1].append( None )
 
-	current_pick_start = Segment(x0='start',x1='start',y0='bots',y1='tops',
-					line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
-					line_dash='dashed')
-	current_pick_finish = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
-					line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
-					line_dash='dashdot')
-	expD['pick start'] = current_pick_start
-	expD['pick finish'] = current_pick_finish
-
+	expD['pick starts'] = {}
+	expD['pick finishes'] = {}
 	expD['case pick sources'] = {}
 	gcount = -1
 	for gr_ind,g_row in enumerate(gridplots):
@@ -582,6 +592,14 @@ def build_experiment_tab(experiment):
 			if gridplots_setup[gr_ind][gc_ind] != None:
 				gcount +=1
 				chan = chans[gcount]
+				current_pick_start = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
+								line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+								line_dash='dashed')
+				current_pick_finish = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
+								line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+								line_dash='dashdot')
+				expD['pick starts'][chan] = current_pick_start
+				expD['pick finishes'][chan] = current_pick_finish
 
 				gp.add_glyph( expD['current pick source'],current_pick_start)
 				gp.add_glyph( expD['current pick source'],current_pick_finish)
@@ -597,10 +615,10 @@ def build_experiment_tab(experiment):
 						# gp.add_glyph( expD['picked sources'][cspk],picked_finishes)
 
 					expD['case pick sources'][case] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
-					case_pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
+					case_pick_starts = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
 					line_width=1.5,line_alpha=0.95,line_color='orange',
 					line_dash='dashed', name=case+'_limit' )
-					case_pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
+					case_pick_finishes = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
 					line_width=1.5,line_alpha=0.95,line_color='orange',
 					line_dash='dashdot', name=case+'_limit')
 					gp.add_glyph( expD['picked sources'][case], case_pick_starts )
