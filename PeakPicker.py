@@ -35,7 +35,7 @@ from bokeh.embed import autoload_server
 from bokeh.document import Document
 from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
 from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
-						   Plot, GridPlot, Grid,
+						   Plot, GridPlot, Grid, Renderer,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
 						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker,
 				 		   PanTool, WheelZoomTool, ResizeTool,
@@ -192,6 +192,14 @@ def make_box_callback( experiment ):
 			        //data['y'].push(y);
 			        //data['width'].push(width);
 			        //data['height'].push(height);
+			        console.log('Single mode: '+data['single'])
+			        if( data['single'][0] ){
+			        	console.log('running in single channel mode')
+			        	title = cb_obj['attributes']['plot']['attributes']['title']
+			        	channel = title.slice(0,3)
+			        	if( channel.slice(2,3) == ' ' ){ channel=channel.slice(0,2) }
+			        	chans = [ channel ]
+			        } 
 			        for( i=0, clen=chans.length; i<clen; i++ ){
 			        	ch = chans[i];
 			        	data['start_'+ch][0]=geometry['x0'];
@@ -211,7 +219,7 @@ def make_box_callback( experiment ):
 def box_gen_gen( experiment ):
 	box_callback = make_box_callback(experiment)
 	def box_generator():
-		return BoxSelectTool( callback=box_callback )
+		return BoxSelectTool( callback=box_callback)#, names=['dummy'] )
 	return box_generator
 
 plot_props = {'width':180, 'height':110,
@@ -294,6 +302,8 @@ def make_plot(plot_setup, experiment, tool_generators):
 					line_width=1.5, line_alpha=0.85, name=case+'_line')
 			plot.add_glyph(app_data[experiment]['data source'],line)
 
+		app_data['dummy_plot'] = Line( x='dummy', y='dummy', name='dummy')
+		plot.add_glyph(app_data[experiment]['data source'], app_data['dummy_plot'])
 
 	if PS['tool generators']:
 		plot.add_tools(*[ g() for g in PS['tool generators'] ])
@@ -468,6 +478,8 @@ def multi_single_toggle_handler(state):
 	print('multi-single toggle state:', state)
 	exp['controls']['multi-single toggle'].label='one' if state else 'all'
 	exp['pick state']['single'] = state
+	exp['current pick source'].data['single'] = [state]
+	exp['current pick source'].set()
 
 def input_change(attr, old, new):
 	update_data()
@@ -563,6 +575,7 @@ def build_experiment_tab(experiment):
 	current_pickD = {}
 	for chan in chans:
 		current_pickD.update( { fd+'_'+chan:[] for fd in ['start','finish','bots','tops'] } )
+	current_pickD['single'] = [ False ]
 	expD['current pick source'] = ColumnDataSource( data=current_pickD )
 
 	box_gen = box_gen_gen(experiment)
