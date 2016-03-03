@@ -42,7 +42,7 @@ from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
 						   Asterisk, Segment, Line,  
 						   VBox, HBox )
 from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
-				RadioButtonGroup, Button, Paragraph,TableWidget )
+				RadioButtonGroup, Button, Paragraph, Toggle )
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
@@ -463,6 +463,11 @@ def checkbox_handler(active):
 				#sel.fill_alpha = alpha
 				sel.line_alpha = alpha
 #				sel.visible = visible 
+def multi_single_toggle_handler(state):
+	exp = app_data[app_data['current experiment']]
+	print('multi-single toggle state:', state)
+	exp['controls']['multi-single toggle'].label='one' if state else 'all'
+	exp['pick state']['single'] = state
 
 def input_change(attr, old, new):
 	update_data()
@@ -494,7 +499,8 @@ def build_experiment_tab(experiment):
 						#dict( start=[], finish=[], bots=[], tops=[], peak=[] ) )
 			expD['picked sources'][case] = ColumnDataSource( data=peak_sourceD )
 
-	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0], 'picked':{} }
+	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0], 
+							'single':False, 'picked':{} }
 
 	case_pick_chooser = RadioButtonGroup( labels=case_choices, active=0 )
 
@@ -507,13 +513,16 @@ def build_experiment_tab(experiment):
 	save_button = Button( label="Save" )
 	next_button = Button( label="Next" )
 	reload_button = Button( label="Reload")
+	# toggle to be placed on display line
+	multi_single_pick_toggle = Toggle( label= 'all', type="success" )
 
 	expD['controls'] = { 'case' : case_pick_chooser,
 						 'peak' : peak_chooser,
 						 'apply' : apply_button,
 						 'save' : save_button,
 						 'reload' : reload_button,
-						 'case toggle' : case_display_toggle
+						 'case toggle' : case_display_toggle,
+						 'multi-single toggle': multi_single_pick_toggle
 						}
 
 	pick_title = Paragraph(height=12, width=65, text='pick: case')
@@ -527,12 +536,15 @@ def build_experiment_tab(experiment):
 	for cc in case_choices:
 		display_elements.append( Paragraph(height=18, width=25, text=cc ) )
 
-	spacer = Paragraph(height=12, width=25)
-	picked_status = Paragraph(height=12, width=250, text='No picks yet')
+	spacer = Paragraph(height=12, width=15)
+	picked_status = Paragraph(height=12, width=230, text='No picks yet')
 	display_elements.append( spacer )
 	display_elements.append( picked_status )
 	expD['applied picks display'] = picked_status
 
+	repick_title = Paragraph(height=15, width=35, text='repick')
+
+	display_elements.extend([repick_title, multi_single_pick_toggle])
 
 	components['display elements'] = display_elements
 
@@ -546,6 +558,7 @@ def build_experiment_tab(experiment):
 	save_button.on_click(save_handler)
 	next_button.on_click(next_handler)
 	reload_button.on_click(reload_handler)
+	multi_single_pick_toggle.on_click(multi_single_toggle_handler)
 
 	current_pickD = {}
 	for chan in chans:
@@ -705,6 +718,13 @@ html = """
 		.bk-bs-btn-group:first-child{ background-color: blue !important;
 							  			font-color: white !important; 
 							  		}
+		.bk-bs-btn-success{ background-color: #fff !important;
+							color: black !important;
+							border-color: #ccc !important;
+							height: 20 !important;
+							margin-top: 3 !important;
+							padding: 0 12 0 12 !important;
+						}
 	</style>
 	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
 	<script>
