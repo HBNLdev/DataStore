@@ -340,22 +340,49 @@ def apply_handler():
 	case = exp['pick state']['case']
 	peak = exp['pick state']['peak']
 
-	exp['applied'][case].add(peak)
+	repick = False
+	if peak in exp['applied'][case]:
+		repick = True
+		pk_ind = exp['applied'][case].index( peak )
+	else:
+		exp['applied'][case].append(peak)
+
 	exp['applied picks display'].text = picked_state_text( app_data['current experiment'] )
 	picked_data = limits_data.copy()
-	for chan in chans:
-		picked_data['peak_'+chan] = [ peak ]
+
+	picked_data['peaks'] = [ peak ]
+
 	case_picks = exp['picked sources'][case].data
-	# # check for peak ************************
-	for key in case_picks.keys():
-		case_picks[key].append(picked_data[key][0])
+	if not repick: 
+		for key in case_picks.keys():
+			case_picks[key].append(picked_data[key][0])
+	elif not exp['pick state']['single']:
+		for key in case_picks.keys():
+			case_picks[key][pk_ind] = picked_data[key][0]
+	else:
+		print('Need to implement single repick')
+
 	exp['picked sources'][case].data = case_picks
 	exp['picked sources'][case].set()
 	exp['picked sources'][case].trigger('data', exp['picked sources'][case].data, exp['picked sources'][case].data)
 	print('picked source data: ',exp['picked sources'][case].data)
-	pval,pms = eeg.find_peak(case,start_ms=start,end_ms=finish)
-	eeg.update_peak_source( exp['peak sources'][case].data, 
-				case,peak,pval, pms)
+	
+	if not exp['pick state']['single']:
+		pval,pms = eeg.find_peak(case,start_ms=start,end_ms=finish)
+	else:
+		print('Need to implement single repick')
+
+	psData = exp['peak sources'][case].data
+	if not repick:
+		psData[ 'peaks' ].append( peak )
+		for chan, val, tm in zip(eeg.electrodes, pval, pms):
+			psData[ chan+'_pot' ].append( val )
+			psData[ chan+'_time' ].append( tm )
+	else:
+		for chan, val, tm in zip(eeg.electrodes, pval, pms):
+			psData[ chan+'_pot' ][pk_ind] = val 
+			psData[ chan+'_time' ][pk_ind] = tm		
+
 	exp['peak sources'][case].set()
 
 	print( 'pick_state: ', exp['pick state'])
@@ -386,9 +413,9 @@ def save_handler():
 	case_lst = []
 	peak_lst = []
 	for case in eeg.case_list:
-		if exp['peak sources'][case].data['peaks']: # if case contains picks
+		if exp['peak sources'][case].data['peak_'+chans[0]]: # if case contains picks
 			case_lst.append( eeg.case_num_map[case] ) #use numeric reference
-			pks = exp['peak sources'][case].data['peaks']
+			pks = exp['peak sources'][case].data['peak_'+chans[0]]
 			for pk in pks:
 				peak_lst.append(pk)
 		else:
@@ -449,9 +476,30 @@ def case_toggle_handler(active):
 		for sel in selections:
 			sel.line_alpha = alpha
 
+	sync_current_selection()
+
 def peak_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
 	exp['pick state']['peak'] = peak_choices[active]
+	sync_current_selection()
+
+def sync_current_selection():
+	exp = app_data[app_data['current experiment']]
+	case, peak = exp['pick state']['case'], exp['pick state']['peak']
+	case_picks = exp['picked sources'][case]
+	cp_data = case_picks.data
+	print( 'Sync for: ', case, peak, cp_data['peaks'])
+	if peak in cp_data['peaks']:
+		pk_ind = cp_data['peaks'].index(peak)
+		update_data = {}
+		for fd in cp_data.keys():
+			if 'peak' not in fd:
+				update_data[fd] = [ cp_data[fd][pk_ind] ]
+		update_data['single'] = [ exp['pick state']['single'] ]
+
+		exp['current pick source'].data = update_data
+		exp['current pick source'].set()
+		exp['current pick source'].trigger('data',update_data,update_data)
 
 def update_case_peak_selection_display():
 	for case_peak in app_data[app_data['current experiment']]['picked sources'].keys():
@@ -481,6 +529,8 @@ def multi_single_toggle_handler(state):
 	exp['current pick source'].data['single'] = [state]
 	exp['current pick source'].set()
 
+	sync_current_selection()
+
 def input_change(attr, old, new):
 	update_data()
 
@@ -503,11 +553,11 @@ def build_experiment_tab(experiment):
 
 	expD['applied'] = {}; expD['picked sources'] = {}
 	for case in case_choices:
-		expD['applied'][case] = set()
+		expD['applied'][case] = []
 		for peak in peak_choices:
-			peak_sourceD = {}
+			peak_sourceD = {'peaks':[]}
 			for chan in chans:
-				peak_sourceD.update( { fd+'_'+chan:[] for fd in ['start', 'finish', 'bots', 'tops', 'peak'] } )
+				peak_sourceD.update( { fd+'_'+chan:[] for fd in ['start', 'finish', 'bots', 'tops'] } ) #, 'peak'
 						#dict( start=[], finish=[], bots=[], tops=[], peak=[] ) )
 			expD['picked sources'][case] = ColumnDataSource( data=peak_sourceD )
 

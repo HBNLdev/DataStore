@@ -423,13 +423,13 @@ class avgh1:
 		#return peak_sourcesD
 		return pot_source_dict, peak_sourcesD
 
-	def update_peak_source(s, psD, case, peak, pot_vals, times ):
-		''' assumes all channels
-		'''
-		psD[ 'peaks' ].append( peak )
-		for chan, val, tm in zip(s.electrodes,pot_vals,times):
-			psD[ chan+'_pot' ].append( val )
-			psD[ chan+'_time' ].append( tm )
+	# def update_peak_source(s, psD, case, peak, pot_vals, times ):
+	# 	''' assumes all channels
+	# 	'''
+	# 	psD[ 'peaks' ].append( peak )
+	# 	for chan, val, tm in zip(s.electrodes,pot_vals,times):
+	# 		psD[ chan+'_pot' ].append( val )
+	# 		psD[ chan+'_time' ].append( tm )
 
 	def prepare_plot_for_channel(s,pot,el_ind,props,case_list,tools,
 						mode='notebook',bottom_label=False,legend=False,
