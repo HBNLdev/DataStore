@@ -4,7 +4,7 @@ to start:
 	1) Start the bokeh server:
 		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006 --port 5006 --allow-websocket-origin 138.5.49.214:8000
 	2) Add the app:
-		python3 PeakPicker.py
+		python3 PeakPicker.py [username]
 	3) Start the python webserver to receive requests:
 		python3 -m http.server 8000 --bind 138.5.49.214
 
@@ -14,6 +14,7 @@ to start:
 point browser to:
 	http://138.5.49.214:5006/PeakPicker.html
 	*replace 'localhost' with url if on another computer
+	** if a username was provided in step 2, add the suffix: '_username' between 'PeakPicker' and '.html'
 
 '''
 
@@ -84,8 +85,6 @@ def load_file(next=False, initialize=False, reload_flag=False):
 		expD = app_data[experiment]
 		expD['eeg'] =  eeg
 		data_sourceD, peak_sourcesD = expD['eeg'].make_data_sources(empty_flag=initialize)
-
-
 
 		if initialize: # initialize
 			expD['peak sources'] = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
@@ -832,7 +831,10 @@ html = """
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
-with open("PeakPicker.html", "w+") as f:
+user = ''
+if len(sys.argv) > 1:
+	user = '_'+sys.argv[1]
+with open("PeakPicker"+user+".html", "w+") as f:
     f.write(html)
 
 if __name__ == "__main__":
