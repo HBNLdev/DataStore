@@ -84,6 +84,9 @@ def load_file(next=False, initialize=False, reload_flag=False):
 		expD = app_data[experiment]
 		expD['eeg'] =  eeg
 		data_sourceD, peak_sourcesD = expD['eeg'].make_data_sources(empty_flag=initialize)
+
+
+
 		if initialize: # initialize
 			expD['peak sources'] = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
 			expD['data source'] = ColumnDataSource( data = data_sourceD )
@@ -94,6 +97,19 @@ def load_file(next=False, initialize=False, reload_flag=False):
 			for case,D in peak_sourcesD.items():
 				expD['peak sources'][case].data = D
 				expD['peak sources'][case].set()
+
+				expD['applied'][case] = []
+
+				pickedD = expD['picked sources'][case].data
+				for fd in pickedD.keys():
+					pickedD[fd] = []
+				expD['picked sources'][case].set()
+			expD['applied picks display'].text = picked_state_text( app_data['current experiment'] )
+
+			cpsD = expD['current pick source'].data
+			for fd in cpsD:
+				cpsD[fd] = []
+			expD['current pick source'].set()
 
 			print('info plot', dir(expD['info']))
 
