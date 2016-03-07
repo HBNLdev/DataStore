@@ -4,7 +4,7 @@ to start:
 	1) Start the bokeh server:
 		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006 --port 5006 --allow-websocket-origin 138.5.49.214:8000
 	2) Add the app:
-		python3 PeakPicker.py [username]
+		python3 PeakPicker.py [username] [experiments (space delimited)]
 	3) Start the python webserver to receive requests:
 		python3 -m http.server 8000 --bind 138.5.49.214
 
@@ -12,9 +12,10 @@ to start:
 	** NOTE: for steps 2 and 3, must be in same directory as app
 
 point browser to:
-	http://138.5.49.214:5006/PeakPicker.html
+	http://138.5.49.214:8000/PeakPicker.html
 	*replace 'localhost' with url if on another computer
 	** if a username was provided in step 2, add the suffix: '_username' between 'PeakPicker' and '.html'
+	*** if experiments were specified add the additional suffix _exp1-exp2.html
 
 '''
 
@@ -47,9 +48,25 @@ from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
+init_files_by_exp = {'ant':'ant_0_a0_11111111_avg.h1', 
+					'vp3':'vp3_0_a0_11111111_avg.h1',
+					'aod':'aod_1_a1_11111111_avg.h1'}
+				
+# Process inputs
+user = ''
+if len(sys.argv) > 1:
+	user = '_'+sys.argv[1]
 experiments = ['ant','vp3','aod']
+if len(sys.argv) > 2:
+	experiments = []
+	for exp in sys.argv[2:]:
+		experiments.append(exp)
+	user+= '_'+'-'.join(experiments)
+init_files = [ init_files_by_exp[ ex ] for ex in experiments ]
+
+
 app_data = { expr:{} for expr in experiments }
-init_files = ['ant_0_a0_11111111_avg.h1', 'vp3_0_a0_11111111_avg.h1', 'aod_1_a1_11111111_avg.h1']
+
 app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in init_files ]
 app_data['paths input'] = []
 	
@@ -168,12 +185,10 @@ def start_handler():
 	checkbox_handler([ n for n in range(len(app_data[app_data['current experiment']]['peak sources']))])
 
 # Initialize tabs
-app_data['file ind'] = 0
-load_file( initialize=True )
-app_data['file ind'] = 1
-load_file( initialize=True )
-app_data['file ind'] = 2
-load_file( initialize=True )
+for f_ind, exp in enumerate(experiments):
+	app_data['file ind'] = f_ind
+	load_file( initialize=True )
+
 
 # ***************************** Temporary setup **********************
 #start_handler()
@@ -831,9 +846,7 @@ html = """
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
-user = ''
-if len(sys.argv) > 1:
-	user = '_'+sys.argv[1]
+
 with open("PeakPicker"+user+".html", "w+") as f:
     f.write(html)
 
