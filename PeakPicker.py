@@ -39,7 +39,7 @@ from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
 from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
 						   Plot, GridPlot, Grid, Renderer,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
-						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker,
+						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker, SingleIntervalTicker,
 				 		   PanTool, WheelZoomTool, ResizeTool,
 						   Asterisk, Segment, Line,  
 						   VBox, HBox )
@@ -71,11 +71,16 @@ app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in in
 app_data['paths input'] = []
 	
 #fields: file paths, file ind
+dir_paths_by_exp = { 'ant':['/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/',
+							'ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1'],
+					'vp3':['/processed_data/avg-h1-files/vp3/l16-h003-t75-b125/suny/ns32-64/',
+							'vp3_5_a1_40026204_avg.h1 vp3_5_a1_40021069_avg.h1']
+					}
 
 directory_chooser = TextInput( title="directory", name='directory_chooser',
-						value='/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/' )
+						value=dir_paths_by_exp[experiments[0]][0] )
 file_chooser = TextInput( title="files", name='file_chooser',
-				 value='ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1')
+				 value=dir_paths_by_exp[experiments[0]][1])
 start_button = Button( label="Start" )
 
 text = TextInput( title="file", name='file', value='')
@@ -301,9 +306,18 @@ def make_plot(plot_setup, experiment, tool_generators):
 		xGrid = Grid(dimension=0, ticker=xTicker)
 		
 		yAxis = LinearAxis()
-		yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
-		yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
-		yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
+		# yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		# yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
+		# yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=4, min_interval=2)
+		
+		yTicker_0 = AdaptiveTicker(base=5,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		yTicker_1 = AdaptiveTicker(base=40,mantissas=[1],max_interval=50,min_interval=10)#SingleIntervalTicker(interval=1, max_interval=10)
+		yTicker_2 = AdaptiveTicker(base=100,mantissas=[1],max_interval=200, min_interval=50)
+		
+		# yTicker_0 = SingleIntervalTicker(desired_num_ticks=1, interval=5, num_minor_ticks=0)
+		# yTicker_1 = SingleIntervalTicker(desired_num_ticks=1, interval=20, num_minor_ticks=0)
+		# yTicker_2 = SingleIntervalTicker(desired_num_ticks=1, interval=100, num_minor_ticks=0)		
+		
 		yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
 		yAxis.ticker = yTicker
 		
