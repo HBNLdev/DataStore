@@ -72,9 +72,11 @@ app_data['paths input'] = []
 	
 #fields: file paths, file ind
 dir_paths_by_exp = { 'ant':['/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/',
-							'ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1'],
+							'ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1 ant_5_a1_40026180_avg.h1'],
 					'vp3':['/processed_data/avg-h1-files/vp3/l16-h003-t75-b125/suny/ns32-64/',
-							'vp3_5_a1_40026204_avg.h1 vp3_5_a1_40021069_avg.h1']
+							'vp3_5_a1_40021069_avg.h1 vp3_5_a1_40017006_avg.h1 vp3_5_a1_40026204_avg.h1'],
+					'aod':['/processed_data/avg-h1-files/aod/l16-h003-t75-b125/suny/ns32-64/',
+							'aod_6_a1_40021070_avg.h1 aod_6_a1_40021017_avg.h1 aod_6_a1_40017007_avg.h1']
 					}
 
 directory_chooser = TextInput( title="directory", name='directory_chooser',
@@ -309,11 +311,9 @@ def make_plot(plot_setup, experiment, tool_generators):
 		# yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
 		# yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
 		# yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=4, min_interval=2)
-		
 		yTicker_0 = AdaptiveTicker(base=5,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
 		yTicker_1 = AdaptiveTicker(base=40,mantissas=[1],max_interval=50,min_interval=10)#SingleIntervalTicker(interval=1, max_interval=10)
 		yTicker_2 = AdaptiveTicker(base=100,mantissas=[1],max_interval=200, min_interval=50)
-		
 		# yTicker_0 = SingleIntervalTicker(desired_num_ticks=1, interval=5, num_minor_ticks=0)
 		# yTicker_1 = SingleIntervalTicker(desired_num_ticks=1, interval=20, num_minor_ticks=0)
 		# yTicker_2 = SingleIntervalTicker(desired_num_ticks=1, interval=100, num_minor_ticks=0)		
@@ -374,8 +374,9 @@ def apply_handler():
 	#print( peak_source.data )
 	
 	limits_data = exp['current pick source'].data
-	start = limits_data[ 'start_'+chans[0] ][-1]
-	finish = limits_data[ 'finish_'+chans[0] ][-1]
+	starts = [ limits_data['start_' + ch ] for ch in chans ]
+	fins = [ limits_data['finish_'+ch ] for ch in chans ]
+
 	# Empty current pick
 	exp['current pick source'].data = { k:[] for k in limits_data.keys() }
 	exp['current pick source'].set()
@@ -400,30 +401,34 @@ def apply_handler():
 	if not repick: 
 		for key in case_picks.keys():
 			case_picks[key].append(picked_data[key][0])
-	elif not exp['pick state']['single']:
+	else:
 		for key in case_picks.keys():
 			case_picks[key][pk_ind] = picked_data[key][0]
-	else:
-		print('Need to implement single repick')
 
 	exp['picked sources'][case].data = case_picks
-	exp['picked sources'][case].set()
+	exp['picked sources'][case].set() 
 	exp['picked sources'][case].trigger('data', exp['picked sources'][case].data, exp['picked sources'][case].data)
 	print('picked source data: ',exp['picked sources'][case].data)
 	
-	if not exp['pick state']['single']:
-		pval,pms = eeg.find_peak(case,start_ms=start,end_ms=finish)
-	else:
-		print('Need to implement single repick')
+	#if not exp['pick state']['single']:
+	pval,pms = eeg.find_peaks(case,chans,starts_ms=starts,ends_ms=fins)
+	#else:
+	#	print('Need to implement single repick')
 
+	# need to fill unused channels until all are implemented
+	extra_chans = set(eeg.electrodes).difference(chans)
+	print(extra_chans)
 	psData = exp['peak sources'][case].data
 	if not repick:
 		psData[ 'peaks' ].append( peak )
-		for chan, val, tm in zip(eeg.electrodes, pval, pms):
+		for chan, val, tm in zip(chans, pval, pms):
 			psData[ chan+'_pot' ].append( val )
 			psData[ chan+'_time' ].append( tm )
+		for chan in extra_chans:
+			psData[ chan+'_pot' ].append( 0 )
+			psData[ chan+'_time'].append( 0 )
 	else:
-		for chan, val, tm in zip(eeg.electrodes, pval, pms):
+		for chan, val, tm in zip(chans, pval, pms):
 			psData[ chan+'_pot' ][pk_ind] = val 
 			psData[ chan+'_time' ][pk_ind] = tm		
 
@@ -713,10 +718,10 @@ def build_experiment_tab(experiment):
 				gcount +=1
 				chan = chans[gcount]
 				current_pick_start = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-								line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+								line_width=1.5,line_alpha=0.95,line_color='#f2b41e',
 								line_dash='dashed')
 				current_pick_finish = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-								line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+								line_width=1.5,line_alpha=0.95,line_color='#f2b41e',
 								line_dash='dashdot')
 				expD['pick starts'][chan] = current_pick_start
 				expD['pick finishes'][chan] = current_pick_finish
@@ -736,10 +741,10 @@ def build_experiment_tab(experiment):
 
 					expD['case pick sources'][case] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
 					case_pick_starts = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-					line_width=1.5,line_alpha=0.95,line_color='orange',
+					line_width=1.5,line_alpha=0.95,line_color='#886308',
 					line_dash='dashed', name=case+'_limit' )
 					case_pick_finishes = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-					line_width=1.5,line_alpha=0.95,line_color='orange',
+					line_width=1.5,line_alpha=0.95,line_color='#886308',
 					line_dash='dashdot', name=case+'_limit')
 					gp.add_glyph( expD['picked sources'][case], case_pick_starts )
 					gp.add_glyph( expD['picked sources'][case], case_pick_finishes )

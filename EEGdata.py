@@ -145,6 +145,43 @@ class avgh1:
 
 		return times, potentials
 
+	def find_peaks(s, case, chan_list, starts_ms, ends_ms, polarity='p' ):
+
+		caseN = s.case_list.index(case)
+		lats,erps = s.prepare_plot_data()
+		n_tms = lats.shape[0]
+
+		ch_inds = [  s.electrodes.index(c) for c in chan_list ]
+		#erps_ch = np.squeeze(erps[ caseN, ch_inds, : ])
+
+		n_chans = len(chan_list)
+		latmat = np.matrix(lats).repeat(n_chans,axis=0)
+
+		startsmat = np.matrix(starts_ms).repeat(n_tms,axis=1)
+		endsmat = np.matrix(ends_ms).repeat(n_tms,axis=1)
+
+		start_pts = np.argmin( np.fabs( latmat - startsmat ), axis=1)
+		end_pts = np.argmin( np.fabs( latmat - endsmat ), axis=1 )
+
+		# find min/max in range
+		peak_vals = []
+		peak_pts = []
+		for ci,ch in enumerate(chan_list):
+			erpa = np.squeeze(erps[ caseN, ch_inds[ci], :])
+			start_pt = start_pts[ci]
+			end_pt = end_pts[ci]
+			erp = erpa[start_pt:end_pt+1]
+			if polarity == 'p': # find the max
+				peak_pt  = np.argmax(erp, axis=0)
+			elif polarity == 'n': # find the min
+				peak_pt  = np.argmin(erp, axis=0)
+			peak_vals.append(erp[peak_pt])
+			peak_pts.append( int(peak_pt+start_pt) )
+
+		peaks_ms = lats[ peak_pts ]
+
+		return peak_vals, peaks_ms
+
 	def find_peak(s, case, start_ms = 200, end_ms = 600,
 		 chan_scope='all', chan=0, peak_polarity='p'):
 		# erps is cases x chans x pts
@@ -422,14 +459,6 @@ class avgh1:
 
 		#return peak_sourcesD
 		return pot_source_dict, peak_sourcesD
-
-	# def update_peak_source(s, psD, case, peak, pot_vals, times ):
-	# 	''' assumes all channels
-	# 	'''
-	# 	psD[ 'peaks' ].append( peak )
-	# 	for chan, val, tm in zip(s.electrodes,pot_vals,times):
-	# 		psD[ chan+'_pot' ].append( val )
-	# 		psD[ chan+'_time' ].append( tm )
 
 	def prepare_plot_for_channel(s,pot,el_ind,props,case_list,tools,
 						mode='notebook',bottom_label=False,legend=False,
