@@ -256,7 +256,7 @@ def make_box_callback( experiment ):
 def box_gen_gen( experiment ):
 	box_callback = make_box_callback(experiment)
 	def box_generator():
-		return BoxSelectTool( callback=box_callback)#, names=['dummy'] )
+		return BoxSelectTool( callback=box_callback, renderers=[ app_data['dummy_plotR'] ] )
 	return box_generator
 
 plot_props = {'width':180, 'height':110,
@@ -296,6 +296,9 @@ def make_plot(plot_setup, experiment, tool_generators):
 	plot.outline_line_alpha = props['outline alpha']
 	plot.outline_line_width = None
 	plot.outline_line_color = None
+
+	app_data['dummy_plot'] = Line( x='dummy', y='dummy', name='dummy')
+	app_data['dummy_plotR'] = plot.add_glyph(app_data[experiment]['data source'], app_data['dummy_plot'])
 
 	if not dummy:
 		# Axes
@@ -346,8 +349,6 @@ def make_plot(plot_setup, experiment, tool_generators):
 					line_width=1.5, line_alpha=0.85, name=case+'_line')
 			plot.add_glyph(app_data[experiment]['data source'],line)
 
-		app_data['dummy_plot'] = Line( x='dummy', y='dummy', name='dummy')
-		plot.add_glyph(app_data[experiment]['data source'], app_data['dummy_plot'])
 
 	if PS['tool generators']:
 		plot.add_tools(*[ g() for g in PS['tool generators'] ])
