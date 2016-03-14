@@ -455,6 +455,8 @@ def apply_handler():
 				plt.title = chan + ' - lat: '+'{:3.1f}'.format(latency)+' amp: '+'{:4.3f}'.format(potential)
 				plt.trigger('title',plt.title,plt.title)
 
+	sync_current_selection()
+
 def save_handler():
 	print('Save')
 	exp = app_data[app_data['current experiment']]
