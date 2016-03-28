@@ -5,7 +5,7 @@ to start:
 		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006 --port 5006 --allow-websocket-origin 138.5.49.214:8000
 		* make sure that the first port (here, 5006) matches those found at the end of this script
 	2) Add the app:
-		python3 PeakPicker.py [username]
+		python3 PeakPicker.py [username] [experiments (space delimited)]
 	3) Start the python webserver to receive requests:
 		python3 -m http.server 8000 --bind 138.5.49.214
 
@@ -16,6 +16,7 @@ point browser to:
 	http://138.5.49.214:8000/PeakPicker.html
 	*replace 'localhost' with url if on another computer
 	** if a username was provided in step 2, add the suffix: '_username' between 'PeakPicker' and '.html'
+	*** if experiments were specified add the additional suffix _exp1-exp2.html
 
 '''
 
@@ -39,7 +40,7 @@ from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
 from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
 						   Plot, GridPlot, Grid, Renderer,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
-						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker,
+						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker, SingleIntervalTicker,
 				 		   PanTool, WheelZoomTool, ResizeTool,
 						   Asterisk, Segment, Line,  
 						   VBox, HBox )
@@ -48,18 +49,41 @@ from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
+init_files_by_exp = {'ant':'ant_0_a0_11111111_avg.h1', 
+					'vp3':'vp3_0_a0_11111111_avg.h1',
+					'aod':'aod_1_a1_11111111_avg.h1'}
+				
+# Process inputs
+user = ''
+if len(sys.argv) > 1:
+	user = '_'+sys.argv[1]
 experiments = ['ant','vp3','aod']
+if len(sys.argv) > 2:
+	experiments = []
+	for exp in sys.argv[2:]:
+		experiments.append(exp)
+	user+= '_'+'-'.join(experiments)
+init_files = [ init_files_by_exp[ ex ] for ex in experiments ]
+
+
 app_data = { expr:{} for expr in experiments }
-init_files = ['ant_0_a0_11111111_avg.h1', 'vp3_0_a0_11111111_avg.h1', 'aod_1_a1_11111111_avg.h1']
+
 app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in init_files ]
 app_data['paths input'] = []
 	
 #fields: file paths, file ind
+dir_paths_by_exp = { 'ant':['/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/',
+							'ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1 ant_5_a1_40026180_avg.h1'],
+					'vp3':['/processed_data/avg-h1-files/vp3/l16-h003-t75-b125/suny/ns32-64/',
+							'vp3_5_a1_40021069_avg.h1 vp3_5_a1_40017006_avg.h1 vp3_5_a1_40026204_avg.h1'],
+					'aod':['/processed_data/avg-h1-files/aod/l16-h003-t75-b125/suny/ns32-64/',
+							'aod_6_a1_40021070_avg.h1 aod_6_a1_40021017_avg.h1 aod_6_a1_40017007_avg.h1']
+					}
 
 directory_chooser = TextInput( title="directory", name='directory_chooser',
-						value='/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/' )
+						value=dir_paths_by_exp[experiments[0]][0] )
 file_chooser = TextInput( title="files", name='file_chooser',
-				 value='ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1')
+				 value=dir_paths_by_exp[experiments[0]][1])
 start_button = Button( label="Start" )
 
 text = TextInput( title="file", name='file', value='')
@@ -169,12 +193,10 @@ def start_handler():
 	checkbox_handler([ n for n in range(len(app_data[app_data['current experiment']]['peak sources']))])
 
 # Initialize tabs
-app_data['file ind'] = 0
-load_file( initialize=True )
-app_data['file ind'] = 1
-load_file( initialize=True )
-app_data['file ind'] = 2
-load_file( initialize=True )
+for f_ind, exp in enumerate(experiments):
+	app_data['file ind'] = f_ind
+	load_file( initialize=True )
+
 
 # ***************************** Temporary setup **********************
 #start_handler()
@@ -235,7 +257,7 @@ def make_box_callback( experiment ):
 def box_gen_gen( experiment ):
 	box_callback = make_box_callback(experiment)
 	def box_generator():
-		return BoxSelectTool( callback=box_callback)#, names=['dummy'] )
+		return BoxSelectTool( callback=box_callback, renderers=[ app_data['dummy_plotR'] ] )
 	return box_generator
 
 plot_props = {'width':180, 'height':110,
@@ -276,6 +298,9 @@ def make_plot(plot_setup, experiment, tool_generators):
 	plot.outline_line_width = None
 	plot.outline_line_color = None
 
+	app_data['dummy_plot'] = Line( x='dummy', y='dummy', name='dummy')
+	app_data['dummy_plotR'] = plot.add_glyph(app_data[experiment]['data source'], app_data['dummy_plot'])
+
 	if not dummy:
 		# Axes
 		xAxis = LinearAxis()#x_range_name='sharedX')
@@ -287,9 +312,16 @@ def make_plot(plot_setup, experiment, tool_generators):
 		xGrid = Grid(dimension=0, ticker=xTicker)
 		
 		yAxis = LinearAxis()
-		yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
-		yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
-		yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
+		# yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		# yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
+		# yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=4, min_interval=2)
+		yTicker_0 = AdaptiveTicker(base=5,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		yTicker_1 = AdaptiveTicker(base=40,mantissas=[1],max_interval=50,min_interval=10)#SingleIntervalTicker(interval=1, max_interval=10)
+		yTicker_2 = AdaptiveTicker(base=100,mantissas=[1],max_interval=200, min_interval=50)
+		# yTicker_0 = SingleIntervalTicker(desired_num_ticks=1, interval=5, num_minor_ticks=0)
+		# yTicker_1 = SingleIntervalTicker(desired_num_ticks=1, interval=20, num_minor_ticks=0)
+		# yTicker_2 = SingleIntervalTicker(desired_num_ticks=1, interval=100, num_minor_ticks=0)		
+		
 		yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
 		yAxis.ticker = yTicker
 		
@@ -318,8 +350,6 @@ def make_plot(plot_setup, experiment, tool_generators):
 					line_width=1.5, line_alpha=0.85, name=case+'_line')
 			plot.add_glyph(app_data[experiment]['data source'],line)
 
-		app_data['dummy_plot'] = Line( x='dummy', y='dummy', name='dummy')
-		plot.add_glyph(app_data[experiment]['data source'], app_data['dummy_plot'])
 
 	if PS['tool generators']:
 		plot.add_tools(*[ g() for g in PS['tool generators'] ])
@@ -346,8 +376,9 @@ def apply_handler():
 	#print( peak_source.data )
 	
 	limits_data = exp['current pick source'].data
-	start = limits_data[ 'start_'+chans[0] ][-1]
-	finish = limits_data[ 'finish_'+chans[0] ][-1]
+	starts = [ limits_data['start_' + ch ] for ch in chans ]
+	fins = [ limits_data['finish_'+ch ] for ch in chans ]
+
 	# Empty current pick
 	exp['current pick source'].data = { k:[] for k in limits_data.keys() }
 	exp['current pick source'].set()
@@ -372,30 +403,34 @@ def apply_handler():
 	if not repick: 
 		for key in case_picks.keys():
 			case_picks[key].append(picked_data[key][0])
-	elif not exp['pick state']['single']:
+	else:
 		for key in case_picks.keys():
 			case_picks[key][pk_ind] = picked_data[key][0]
-	else:
-		print('Need to implement single repick')
 
 	exp['picked sources'][case].data = case_picks
-	exp['picked sources'][case].set()
+	exp['picked sources'][case].set() 
 	exp['picked sources'][case].trigger('data', exp['picked sources'][case].data, exp['picked sources'][case].data)
 	print('picked source data: ',exp['picked sources'][case].data)
 	
-	if not exp['pick state']['single']:
-		pval,pms = eeg.find_peak(case,start_ms=start,end_ms=finish)
-	else:
-		print('Need to implement single repick')
+	#if not exp['pick state']['single']:
+	pval,pms = eeg.find_peaks(case,chans,starts_ms=starts,ends_ms=fins)
+	#else:
+	#	print('Need to implement single repick')
 
+	# need to fill unused channels until all are implemented
+	extra_chans = set(eeg.electrodes).difference(chans)
+	print(extra_chans)
 	psData = exp['peak sources'][case].data
 	if not repick:
 		psData[ 'peaks' ].append( peak )
-		for chan, val, tm in zip(eeg.electrodes, pval, pms):
+		for chan, val, tm in zip(chans, pval, pms):
 			psData[ chan+'_pot' ].append( val )
 			psData[ chan+'_time' ].append( tm )
+		for chan in extra_chans:
+			psData[ chan+'_pot' ].append( 0 )
+			psData[ chan+'_time'].append( 0 )
 	else:
-		for chan, val, tm in zip(eeg.electrodes, pval, pms):
+		for chan, val, tm in zip(chans, pval, pms):
 			psData[ chan+'_pot' ][pk_ind] = val 
 			psData[ chan+'_time' ][pk_ind] = tm		
 
@@ -420,6 +455,8 @@ def apply_handler():
 				potential = exp['peak sources'][case].data[chan+'_pot'][-1]
 				plt.title = chan + ' - lat: '+'{:3.1f}'.format(latency)+' amp: '+'{:4.3f}'.format(potential)
 				plt.trigger('title',plt.title,plt.title)
+
+	sync_current_selection()
 
 def save_handler():
 	print('Save')
@@ -685,10 +722,10 @@ def build_experiment_tab(experiment):
 				gcount +=1
 				chan = chans[gcount]
 				current_pick_start = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-								line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+								line_width=1.5,line_alpha=0.95,line_color='#f2b41e',
 								line_dash='dashed')
 				current_pick_finish = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-								line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
+								line_width=1.5,line_alpha=0.95,line_color='#f2b41e',
 								line_dash='dashdot')
 				expD['pick starts'][chan] = current_pick_start
 				expD['pick finishes'][chan] = current_pick_finish
@@ -708,10 +745,10 @@ def build_experiment_tab(experiment):
 
 					expD['case pick sources'][case] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
 					case_pick_starts = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-					line_width=1.5,line_alpha=0.95,line_color='orange',
+					line_width=1.5,line_alpha=0.95,line_color='#886308',
 					line_dash='dashed', name=case+'_limit' )
 					case_pick_finishes = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-					line_width=1.5,line_alpha=0.95,line_color='orange',
+					line_width=1.5,line_alpha=0.95,line_color='#886308',
 					line_dash='dashdot', name=case+'_limit')
 					gp.add_glyph( expD['picked sources'][case], case_pick_starts )
 					gp.add_glyph( expD['picked sources'][case], case_pick_finishes )
@@ -832,9 +869,7 @@ html = """
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
-user = ''
-if len(sys.argv) > 1:
-	user = '_'+sys.argv[1]
+
 with open("PeakPicker"+user+".html", "w+") as f:
     f.write(html)
 
