@@ -3,6 +3,7 @@
 to start:
 	1) Start the bokeh server:
 		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006 --port 5006 --allow-websocket-origin 138.5.49.214:8000
+		* make sure that the first port (here, 5006) matches those found at the end of this script
 	2) Add the app:
 		python3 PeakPicker.py [username]
 	3) Start the python webserver to receive requests:
@@ -12,7 +13,7 @@ to start:
 	** NOTE: for steps 2 and 3, must be in same directory as app
 
 point browser to:
-	http://138.5.49.214:5006/PeakPicker.html
+	http://138.5.49.214:8000/PeakPicker.html
 	*replace 'localhost' with url if on another computer
 	** if a username was provided in step 2, add the suffix: '_username' between 'PeakPicker' and '.html'
 
@@ -769,7 +770,7 @@ tabs = Tabs( tabs=tab_setup )
 #print('custate: ',dir(curstate()))
 
 document = Document()
-session = push_session(document,url='http://138.5.49.214:5006')
+session = push_session(document,url='http://138.5.49.214:5007')
 
 
 html = """
@@ -827,7 +828,7 @@ html = """
 </html>
 
 
-""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5006')
+""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5007')
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 

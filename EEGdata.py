@@ -151,7 +151,7 @@ class avgh1:
 		caseN = s.case_list.index(case)
 		lats,erps = s.prepare_plot_data()
 		
-		 # test case
+		# test case
 		peak_polarity = 'p' # test case
 		chan_scope = 'all' # test case
 
