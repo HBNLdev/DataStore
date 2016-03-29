@@ -536,11 +536,18 @@ def case_toggle_handler(active):
 		for sel in selections:
 			sel.line_alpha = alpha
 
+	if exp['pick state']['peak'] not in exp['applied'][ exp['pick state']['case'] ]:
+		exp['controls']['multi-single toggle'].active = False
+
 	sync_current_selection()
 
 def peak_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
 	exp['pick state']['peak'] = peak_choices[active]
+
+	if exp['pick state']['peak'] not in exp['applied'][ exp['pick state']['case'] ]:
+		exp['controls']['multi-single toggle'].active = False
+	
 	sync_current_selection()
 
 def sync_current_selection():
