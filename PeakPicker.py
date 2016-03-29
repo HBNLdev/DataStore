@@ -865,7 +865,7 @@ html = """
 </html>
 
 
-""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5007')
+""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5006')
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
