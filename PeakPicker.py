@@ -213,7 +213,10 @@ def make_box_callback( experiment ):
 			        chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 					'FC5', 'FC1', 'FC2', 'FC6', 'T7', 'C3', 'CZ',  'C4',  'T8', 'CP5',
 		 					'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
-		 					'O1',  'O2']
+		 					'O1',  'O2',
+		 					'AF7','FPZ','AFZ','AF8','F5','F1','F2','F6','FT7','FC3','FCZ','FC4','FT8',
+		 					'C5','C1','C2','C6','TP7','CP3','CPZ','CP4','TP8','P5','P1','POZ',
+		 					'P2','P6','PO7','OZ','PO8']
 			        var data = source.get('data');
 
 			        /// get BoxSelectTool dimensions from cb_data parameter of Callback
@@ -268,7 +271,11 @@ plot_props = {'width':180, 'height':110,
 chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'FC5', 'FC1', 'FC2', 'FC6', 'T7', 'C3', 'CZ',  'C4',  'T8', 'CP5',
 		 'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
-		 'O1',  'O2']
+		 'O1',  'O2',
+		 'AF7','FPZ','AFZ','AF8','F5','F1','F2','F6','FT7','FC3','FCZ','FC4','FT8',
+		 'C5','C1','C2','C6','TP7','CP3','CPZ','CP4','TP8','P5','P1','POZ',
+		 'P2','P6','PO7','OZ','PO8'
+		 ]
 
 def make_plot(plot_setup, experiment, tool_generators):
 	PS = plot_setup
@@ -841,6 +848,7 @@ html = """
 							margin-top: 3 !important;
 							padding: 0 12 0 12 !important;
 						}
+		.bk-sidebar{ vertical-align: top !important; }
 	</style>
 	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
 	<script>

@@ -363,6 +363,7 @@ class avgh1:
 
 		elif style == 'layout':
 			layout = []
+			#if 'FP1' in chans:
 			layout.append( [None, 'FP1', 'Y',  'FP2', 'X']  )
 			layout.append( ['F7', 'AF1', None, 'AF2', 'F8']  )
 			layout.append( [None, 'F3', 'FZ',  'F4',  None]  )
@@ -372,6 +373,16 @@ class avgh1:
 			layout.append( [None, 'P3', 'PZ',  'P4',  None]  )
 			layout.append( ['P7', 'PO1', None, 'PO2', 'P8']  )
 			layout.append( [None, 'O1',  None, 'O2',  None]  )
+			# elif 'FPZ' in chans:
+			#layout.append( [None, 'FPZ', None,  None, None]  )
+			layout.append( ['AF7', 'FPZ', 'AFZ', None, 'AF8']  )
+			layout.append( ['F5', 'F1', None,  'F2',  'F6']  )
+			layout.append( ['FT7','FC3', 'FCZ', 'FC4', 'FT8'] )
+			layout.append( ['C5', 'C1', None,  'C2',  'C6']  )
+			layout.append( [None,'CP3', 'CPZ', 'CP4', None] )
+			layout.append( ['TP7', None, None, None, 'TP8']  )
+			layout.append( ['P5', 'P1', 'POZ', 'P2', 'P6']  )
+			layout.append( [None, 'PO7', 'OZ', 'PO8',  None]  )				
 
 			plots = []
 			for row in layout:
