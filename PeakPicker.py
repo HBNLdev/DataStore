@@ -155,6 +155,14 @@ def load_file(next=False, initialize=False, reload_flag=False):
 						plt.y_range.trigger('start',yscale[0],yscale[0])
 						plt.y_range.trigger('end',yscale[1],yscale[1])
 
+			if reload_flag:
+				for plt_row in expD['components']['plots']:
+					for plt in plt_row:
+						if plt:
+							chan = plt.title.split(' ')[0]
+							plt.title = chan
+							plt.trigger('title',plt.title,plt.title)
+
 		text.value = paths[ind]
 
 		expD['data source'].trigger('data',expD['data source'].data,
@@ -420,7 +428,7 @@ def apply_handler():
 	print('picked source data: ',exp['picked sources'][case].data)
 	
 	#if not exp['pick state']['single']:
-	pval,pms = eeg.find_peaks(case,chans,starts_ms=starts,ends_ms=fins)
+	pval,pms = eeg.find_peaks(case,chans,starts_ms=starts,ends_ms=fins,polarity=peak[0].lower())
 	#else:
 	#	print('Need to implement single repick')
 
