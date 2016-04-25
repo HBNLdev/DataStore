@@ -5,6 +5,8 @@ import os, shutil, subprocess
 import utils
 from collections import OrderedDict
 
+import organization as O
+
 site_hash = {'a':'uconn',
 			 'b':'indiana',
 			 'c':'iowa',
@@ -273,6 +275,40 @@ class mt_file:
 							  }
 	data_structure = '{(case#,peak):{electrodes:(amplitude,latency),reaction_time:time} }' # string for reference
 	
+	ant_cases_types_lk = [((1, '"A"', '"Antonym"'),
+						  (2, '"J"', '"Jumble"'),
+						  (3, '"W"', '"Word"'),
+						  (4, '"P"', '"Prime"')),
+						 ((1, '"T"', '"jumble"'),
+						  (2, '"T"', '"prime"'),
+						  (3, '"T"', '"antonym"'),
+						  (4, '"T"', '"other"')),
+						 ((1, '"T"', '"jumble"'),
+						  (2, '"T"', '" prime"'),
+						  (3, '"T"', '" antonym"'),
+						  (4, '"T"', '" other"')),
+						 ((1, '"T"', '"jumble"'),
+						  (2, '"T"', '"prime"'),
+						  (3, '"T"', '"antonym"'),
+						  (4, '"T"', '"word"'))]
+
+
+	case_fields = ['case_num','case_type','descriptor']
+
+	ant_case_convD = {0:{1:1,2:2,3:3,4:4}, # Translates case0 to each case
+	              1:{1:3,2:1,3:4,4:2},  
+	              2:{1:3,2:1,3:4,4:2},	
+	              3:{1:3,2:1,3:4,4:2} }
+	              #4:{1:1,2:2,3:3,4:4} }
+
+	def normAntCase(sub_ses):
+	    exp_doc = list(O.Mdb.EEG.find({'subject.subject_id':{'$regex':'.'+sub_ses[0]+'.'},
+	                                    'subject.session_code':{'$regex':'.'+sub_ses[1]+'.'},
+	                                    'experiment.exp_name':{'$regex':'.ant.'}} ))[0]
+	    case_tup = tuple( sorted([ tuple([ csD[fd] for fd in mt_file.case_fields] ) for cnum,csD in exp_doc['case'].items() ]) )
+	    case_type = mt_file.ant_cases_types_lk.index(case_tup)
+	    return mt_file.ant_case_convD[ case_type ]
+
 	def __init__(s,filepath):
 		s.fullpath = filepath
 		s.filename = os.path.split(filepath)[1]
@@ -310,6 +346,14 @@ class mt_file:
 					
 		of.close()
 	
+	def normed_cases_calc(s):
+		try:
+			norm_dict = mt_file.normAntCase( (s.file_info['id'], s.file_info['session']) )
+			s.normed_cases = norm_dict
+		except:
+			s.normed_cases = mt_file.ant_case_convD[0]
+			s.norm_fail = True
+
 	def parse_file(s):
 		of = open(s.fullpath,'r')
 		data_lines = of.readlines()[s.header_lines:]

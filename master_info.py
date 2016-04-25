@@ -1,7 +1,7 @@
 '''EEGmaster
 '''
 
-master_path = '/export/home/mort/projects/EEG-master-file/EEG-master-file-12.csv' #'/processed_data/master-file/EEG-master-file-08.csv'
+master_path = '/export/home/mort/projects/EEG-master-file/EEG-master-file-14.csv' #'/processed_data/master-file/EEG-master-file-08.csv'
 master= None
 
 import datetime, os
