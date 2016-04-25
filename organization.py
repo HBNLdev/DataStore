@@ -11,6 +11,7 @@ Mdb = MongoConn['COGAa']
 class MongoBacked:
 	
 	def store(s):
+		s.data['insert_time']=datetime.datetime.now()
 		Mdb[s.collection].insert(s.data)
 
 class Acquisition(MongoBacked):
