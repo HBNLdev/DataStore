@@ -1,7 +1,7 @@
 '''EEGmaster
 '''
 
-master_path = '/export/home/mike/projects/EEG-master-file-14-row3.csv'
+master_path = '/export/home/mike/projects/mongo/EEG-master-file-14-row3.csv'
 master= None
 
 import datetime, os

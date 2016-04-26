@@ -3,7 +3,6 @@
 
 import datetime
 import pymongo
-from bson.objectid import ObjectId
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 Mdb = MongoConn['COGAm']
