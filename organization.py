@@ -8,6 +8,18 @@ from bson.objectid import ObjectId
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 Mdb = MongoConn['COGAa']
 
+def flatten_dict(D,prefix=''):
+    if len(prefix) > 0:
+        prefix+='_'
+    flat = {}
+    for k,v in D.items():
+        if type(v) == dict:
+            F = flatten_dict(v,prefix+k)
+            flat.update(F)
+        else:
+            flat[prefix+k] = v
+    return flat
+
 class MongoBacked:
 	
 	def store(s):
