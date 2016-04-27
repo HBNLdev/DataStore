@@ -5,6 +5,7 @@ import datetime
 import pymongo
 from bson.objectid import ObjectId
 
+
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 Mdb = MongoConn['COGAa']
 
@@ -24,6 +25,11 @@ class MongoBacked:
 	
 	def store(s):
 		s.data['insert_time']=datetime.datetime.now()
+		#this needs to be recursive
+		for k,v in s.data.items():
+			typ = type(v)
+			if typ != dict and typ == pd.tslib.NaTType:
+				s.data[k] = None
 		Mdb[s.collection].insert(s.data)
 
 class Acquisition(MongoBacked):
