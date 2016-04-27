@@ -3,8 +3,9 @@
 to start:
 	1) Start the bokeh server:
 		/usr/local/bin/bokeh serve --address 138.5.49.214 --host 138.5.49.214:5006 --port 5006 --allow-websocket-origin 138.5.49.214:8000
+		* make sure that the first port (here, 5006) matches those found at the end of this script in push_session and autoload_server
 	2) Add the app:
-		python3 PeakPicker.py
+		python3 PeakPicker.py [username] [experiments (space delimited)]
 	3) Start the python webserver to receive requests:
 		python3 -m http.server 8000 --bind 138.5.49.214
 
@@ -12,8 +13,10 @@ to start:
 	** NOTE: for steps 2 and 3, must be in same directory as app
 
 point browser to:
-	http://138.5.49.214:5006/PeakPicker.html
+	http://138.5.49.214:8000/PeakPicker.html
 	*replace 'localhost' with url if on another computer
+	** if a username was provided in step 2, add the suffix: '_username' between 'PeakPicker' and '.html'
+	*** if experiments were specified add the additional suffix _exp1-exp2.html
 
 '''
 
@@ -35,29 +38,52 @@ from bokeh.embed import autoload_server
 from bokeh.document import Document
 from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
 from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
-						   Plot, GridPlot, Grid,
+						   Plot, GridPlot, Grid, Renderer,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
-						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker,
+						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker, SingleIntervalTicker,
 				 		   PanTool, WheelZoomTool, ResizeTool,
 						   Asterisk, Segment, Line,  
 						   VBox, HBox )
 from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
-				RadioButtonGroup, Button, Paragraph,TableWidget )
+				RadioButtonGroup, Button, Paragraph, Toggle )
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
+init_files_by_exp = {'ant':'ant_0_a0_11111111_avg.h1', 
+					'vp3':'vp3_0_a0_11111111_avg.h1',
+					'aod':'aod_1_a1_11111111_avg.h1'}
+				
+# Process inputs
+user = ''
+if len(sys.argv) > 1:
+	user = '_'+sys.argv[1]
 experiments = ['ant','vp3','aod']
+if len(sys.argv) > 2:
+	experiments = []
+	for exp in sys.argv[2:]:
+		experiments.append(exp)
+	user+= '_'+'-'.join(experiments)
+init_files = [ init_files_by_exp[ ex ] for ex in experiments ]
+
+
 app_data = { expr:{} for expr in experiments }
-init_files = ['ant_0_a0_11111111_avg.h1', 'vp3_0_a0_11111111_avg.h1', 'aod_1_a1_11111111_avg.h1']
+
 app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in init_files ]
 app_data['paths input'] = []
 	
 #fields: file paths, file ind
+dir_paths_by_exp = { 'ant':['/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/',
+							'ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1 ant_5_a1_40026180_avg.h1'],
+					'vp3':['/processed_data/avg-h1-files/vp3/l16-h003-t75-b125/suny/ns32-64/',
+							'vp3_5_a1_40021069_avg.h1 vp3_5_a1_40017006_avg.h1 vp3_5_a1_40026204_avg.h1'],
+					'aod':['/processed_data/avg-h1-files/aod/l16-h003-t75-b125/suny/ns32-64/',
+							'aod_6_a1_40021070_avg.h1 aod_6_a1_40021017_avg.h1 aod_6_a1_40017007_avg.h1']
+					}
 
 directory_chooser = TextInput( title="directory", name='directory_chooser',
-						value='/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/' )
+						value=dir_paths_by_exp[experiments[0]][0] )
 file_chooser = TextInput( title="files", name='file_chooser',
-				 value='ant_5_e1_40143015_avg.h1 ant_5_e1_40146034_avg.h1')
+				 value=dir_paths_by_exp[experiments[0]][1])
 start_button = Button( label="Start" )
 
 text = TextInput( title="file", name='file', value='')
@@ -84,6 +110,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 		expD = app_data[experiment]
 		expD['eeg'] =  eeg
 		data_sourceD, peak_sourcesD = expD['eeg'].make_data_sources(empty_flag=initialize)
+
 		if initialize: # initialize
 			expD['peak sources'] = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
 			expD['data source'] = ColumnDataSource( data = data_sourceD )
@@ -94,6 +121,19 @@ def load_file(next=False, initialize=False, reload_flag=False):
 			for case,D in peak_sourcesD.items():
 				expD['peak sources'][case].data = D
 				expD['peak sources'][case].set()
+
+				expD['applied'][case] = []
+
+				pickedD = expD['picked sources'][case].data
+				for fd in pickedD.keys():
+					pickedD[fd] = []
+				expD['picked sources'][case].set()
+			expD['applied picks display'].text = picked_state_text( app_data['current experiment'] )
+
+			cpsD = expD['current pick source'].data
+			for fd in cpsD:
+				cpsD[fd] = []
+			expD['current pick source'].set()
 
 			print('info plot', dir(expD['info']))
 
@@ -114,6 +154,14 @@ def load_file(next=False, initialize=False, reload_flag=False):
 						plt.y_range.end = yscale[1]
 						plt.y_range.trigger('start',yscale[0],yscale[0])
 						plt.y_range.trigger('end',yscale[1],yscale[1])
+
+			if reload_flag:
+				for plt_row in expD['components']['plots']:
+					for plt in plt_row:
+						if plt:
+							chan = plt.title.split(' ')[0]
+							plt.title = chan
+							plt.trigger('title',plt.title,plt.title)
 
 		text.value = paths[ind]
 
@@ -153,12 +201,10 @@ def start_handler():
 	checkbox_handler([ n for n in range(len(app_data[app_data['current experiment']]['peak sources']))])
 
 # Initialize tabs
-app_data['file ind'] = 0
-load_file( initialize=True )
-app_data['file ind'] = 1
-load_file( initialize=True )
-app_data['file ind'] = 2
-load_file( initialize=True )
+for f_ind, exp in enumerate(experiments):
+	app_data['file ind'] = f_ind
+	load_file( initialize=True )
+
 
 # ***************************** Temporary setup **********************
 #start_handler()
@@ -169,26 +215,47 @@ def make_box_callback( experiment ):
 	box_callback = CustomJS(args=dict(source=pick_source), code="""
 			        // get data source from Callback args
 			        console.dir(cb_data)
+			        console.dir(cb_obj)
+			        // console.dir(cb_obj.get('selected')['1d'].indices)
+
+			        chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
+		 					'FC5', 'FC1', 'FC2', 'FC6', 'T7', 'C3', 'CZ',  'C4',  'T8', 'CP5',
+		 					'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
+		 					'O1',  'O2',
+		 					'AF7','FPZ','AFZ','AF8','F5','F1','F2','F6','FT7','FC3','FCZ','FC4','FT8',
+		 					'C5','C1','C2','C6','TP7','CP3','CPZ','CP4','TP8','P5','P1','POZ',
+		 					'P2','P6','PO7','OZ','PO8']
 			        var data = source.get('data');
 
 			        /// get BoxSelectTool dimensions from cb_data parameter of Callback
 			        var geometry = cb_data['geometry'];
 
 			        /// calculate Rect attributes
-			        var width = geometry['x1'] - geometry['x0'];
-			        var height = geometry['y1'] - geometry['y0'];
-			        var x = geometry['x0'] + width/2;
-			        var y = geometry['y0'] + height/2;
+			        //var width = geometry['x1'] - geometry['x0'];
+			        //var height = geometry['y1'] - geometry['y0'];
+			        //var x = geometry['x0'] + width/2;
+			        //var y = geometry['y0'] + height/2;
 
 			        /// update data source with new Rect attributes
 			        //data['x'].push(x);
 			        //data['y'].push(y);
 			        //data['width'].push(width);
 			        //data['height'].push(height);
-			        data['start'][0]=geometry['x0']
-			        data['finish'][0]=geometry['x1']
-			        data['bots'][0]=geometry['y0']
-			        data['tops'][0]=geometry['y1']
+			        console.log('Single mode: '+data['single'])
+			        if( data['single'][0] ){
+			        	console.log('running in single channel mode')
+			        	title = cb_obj['attributes']['plot']['attributes']['title']
+			        	channel = title.slice(0,3)
+			        	if( channel.slice(2,3) == ' ' ){ channel=channel.slice(0,2) }
+			        	chans = [ channel ]
+			        } 
+			        for( i=0, clen=chans.length; i<clen; i++ ){
+			        	ch = chans[i];
+			        	data['start_'+ch][0]=geometry['x0'];
+			        	data['finish_'+ch][0]=geometry['x1'];
+			        	data['bots_'+ch][0]=geometry['y0'];
+			        	data['tops_'+ch][0]=geometry['y1'];
+			        }
 	 		        console.dir(data)
 			        // trigger update of data source
 			        source.trigger('change');
@@ -201,7 +268,7 @@ def make_box_callback( experiment ):
 def box_gen_gen( experiment ):
 	box_callback = make_box_callback(experiment)
 	def box_generator():
-		return BoxSelectTool( callback=box_callback )
+		return BoxSelectTool( callback=box_callback, renderers=[ app_data['dummy_plotR'] ] )
 	return box_generator
 
 plot_props = {'width':180, 'height':110,
@@ -212,7 +279,11 @@ plot_props = {'width':180, 'height':110,
 chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'FC5', 'FC1', 'FC2', 'FC6', 'T7', 'C3', 'CZ',  'C4',  'T8', 'CP5',
 		 'CP1', 'CP2', 'CP6', 'P3', 'PZ',  'P4', 'P7', 'PO1', 'PO2', 'P8',
-		 'O1',  'O2']
+		 'O1',  'O2',
+		 'AF7','FPZ','AFZ','AF8','F5','F1','F2','F6','FT7','FC3','FCZ','FC4','FT8',
+		 'C5','C1','C2','C6','TP7','CP3','CPZ','CP4','TP8','P5','P1','POZ',
+		 'P2','P6','PO7','OZ','PO8'
+		 ]
 
 def make_plot(plot_setup, experiment, tool_generators):
 	PS = plot_setup
@@ -242,6 +313,9 @@ def make_plot(plot_setup, experiment, tool_generators):
 	plot.outline_line_width = None
 	plot.outline_line_color = None
 
+	app_data['dummy_plot'] = Line( x='dummy', y='dummy', name='dummy')
+	app_data['dummy_plotR'] = plot.add_glyph(app_data[experiment]['data source'], app_data['dummy_plot'])
+
 	if not dummy:
 		# Axes
 		xAxis = LinearAxis()#x_range_name='sharedX')
@@ -253,9 +327,16 @@ def make_plot(plot_setup, experiment, tool_generators):
 		xGrid = Grid(dimension=0, ticker=xTicker)
 		
 		yAxis = LinearAxis()
-		yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
-		yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
-		yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=2)
+		# yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		# yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
+		# yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=4, min_interval=2)
+		yTicker_0 = AdaptiveTicker(base=5,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		yTicker_1 = AdaptiveTicker(base=40,mantissas=[1],max_interval=50,min_interval=10)#SingleIntervalTicker(interval=1, max_interval=10)
+		yTicker_2 = AdaptiveTicker(base=100,mantissas=[1],max_interval=200, min_interval=50)
+		# yTicker_0 = SingleIntervalTicker(desired_num_ticks=1, interval=5, num_minor_ticks=0)
+		# yTicker_1 = SingleIntervalTicker(desired_num_ticks=1, interval=20, num_minor_ticks=0)
+		# yTicker_2 = SingleIntervalTicker(desired_num_ticks=1, interval=100, num_minor_ticks=0)		
+		
 		yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
 		yAxis.ticker = yTicker
 		
@@ -310,8 +391,9 @@ def apply_handler():
 	#print( peak_source.data )
 	
 	limits_data = exp['current pick source'].data
-	start = limits_data[ 'start' ][-1]
-	finish = limits_data[ 'finish' ][-1]
+	starts = [ limits_data['start_' + ch ] for ch in chans ]
+	fins = [ limits_data['finish_'+ch ] for ch in chans ]
+
 	# Empty current pick
 	exp['current pick source'].data = { k:[] for k in limits_data.keys() }
 	exp['current pick source'].set()
@@ -320,20 +402,53 @@ def apply_handler():
 	case = exp['pick state']['case']
 	peak = exp['pick state']['peak']
 
-	exp['applied'][case].add(peak)
+	repick = False
+	if peak in exp['applied'][case]:
+		repick = True
+		pk_ind = exp['applied'][case].index( peak )
+	else:
+		exp['applied'][case].append(peak)
+
+	exp['applied picks display'].text = picked_state_text( app_data['current experiment'] )
 	picked_data = limits_data.copy()
-	picked_data['peak'] = [ peak ]
+
+	picked_data['peaks'] = [ peak ]
+
 	case_picks = exp['picked sources'][case].data
-	# # check for peak ************************
-	for key in case_picks.keys():
-		case_picks[key].append(picked_data[key][0])
+	if not repick: 
+		for key in case_picks.keys():
+			case_picks[key].append(picked_data[key][0])
+	else:
+		for key in case_picks.keys():
+			case_picks[key][pk_ind] = picked_data[key][0]
+
 	exp['picked sources'][case].data = case_picks
-	exp['picked sources'][case].set()
+	exp['picked sources'][case].set() 
 	exp['picked sources'][case].trigger('data', exp['picked sources'][case].data, exp['picked sources'][case].data)
 	print('picked source data: ',exp['picked sources'][case].data)
-	pval,pms = eeg.find_peak(case,start_ms=start,end_ms=finish)
-	eeg.update_peak_source( exp['peak sources'][case].data, 
-				case,peak,pval, pms)
+	
+	#if not exp['pick state']['single']:
+	pval,pms = eeg.find_peaks(case,chans,starts_ms=starts,ends_ms=fins,polarity=peak[0].lower())
+	#else:
+	#	print('Need to implement single repick')
+
+	# need to fill unused channels until all are implemented
+	extra_chans = set(eeg.electrodes).difference(chans)
+	print(extra_chans)
+	psData = exp['peak sources'][case].data
+	if not repick:
+		psData[ 'peaks' ].append( peak )
+		for chan, val, tm in zip(chans, pval, pms):
+			psData[ chan+'_pot' ].append( val )
+			psData[ chan+'_time' ].append( tm )
+		for chan in extra_chans:
+			psData[ chan+'_pot' ].append( 0 )
+			psData[ chan+'_time'].append( 0 )
+	else:
+		for chan, val, tm in zip(chans, pval, pms):
+			psData[ chan+'_pot' ][pk_ind] = val 
+			psData[ chan+'_time' ][pk_ind] = tm		
+
 	exp['peak sources'][case].set()
 
 	print( 'pick_state: ', exp['pick state'])
@@ -356,6 +471,8 @@ def apply_handler():
 				plt.title = chan + ' - lat: '+'{:3.1f}'.format(latency)+' amp: '+'{:4.3f}'.format(potential)
 				plt.trigger('title',plt.title,plt.title)
 
+	sync_current_selection()
+
 def save_handler():
 	print('Save')
 	exp = app_data[app_data['current experiment']]
@@ -364,9 +481,9 @@ def save_handler():
 	case_lst = []
 	peak_lst = []
 	for case in eeg.case_list:
-		if exp['peak sources'][case].data['peaks']: # if case contains picks
+		if exp['peak sources'][case].data['peak_'+chans[0]]: # if case contains picks
 			case_lst.append( eeg.case_num_map[case] ) #use numeric reference
-			pks = exp['peak sources'][case].data['peaks']
+			pks = exp['peak sources'][case].data['peak_'+chans[0]]
 			for pk in pks:
 				peak_lst.append(pk)
 		else:
@@ -427,9 +544,37 @@ def case_toggle_handler(active):
 		for sel in selections:
 			sel.line_alpha = alpha
 
+	if exp['pick state']['peak'] not in exp['applied'][ exp['pick state']['case'] ]:
+		exp['controls']['multi-single toggle'].active = False
+
+	sync_current_selection()
+
 def peak_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
-	exp['pick state']['peak'] = exp['cases'][active]
+	exp['pick state']['peak'] = peak_choices[active]
+
+	if exp['pick state']['peak'] not in exp['applied'][ exp['pick state']['case'] ]:
+		exp['controls']['multi-single toggle'].active = False
+	
+	sync_current_selection()
+
+def sync_current_selection():
+	exp = app_data[app_data['current experiment']]
+	case, peak = exp['pick state']['case'], exp['pick state']['peak']
+	case_picks = exp['picked sources'][case]
+	cp_data = case_picks.data
+	print( 'Sync for: ', case, peak, cp_data['peaks'])
+	if peak in cp_data['peaks']:
+		pk_ind = cp_data['peaks'].index(peak)
+		update_data = {}
+		for fd in cp_data.keys():
+			if 'peak' not in fd:
+				update_data[fd] = [ cp_data[fd][pk_ind] ]
+		update_data['single'] = [ exp['pick state']['single'] ]
+
+		exp['current pick source'].data = update_data
+		exp['current pick source'].set()
+		exp['current pick source'].trigger('data',update_data,update_data)
 
 def update_case_peak_selection_display():
 	for case_peak in app_data[app_data['current experiment']]['picked sources'].keys():
@@ -439,6 +584,7 @@ def checkbox_handler(active):
 	exp = app_data[app_data['current experiment']]
 	for n,cs in enumerate(exp['cases']):
 		alpha = 1 if n in active else 0
+#		visible = True if n in active else False
 		label = cs+'_line'
 		selections = exp['grid'].select(dict(name=label))
 		for sel in selections:
@@ -449,9 +595,26 @@ def checkbox_handler(active):
 			for sel in selections:
 				#sel.fill_alpha = alpha
 				sel.line_alpha = alpha
+#				sel.visible = visible 
+def multi_single_toggle_handler(state):
+	exp = app_data[app_data['current experiment']]
+	print('multi-single toggle state:', state)
+	exp['controls']['multi-single toggle'].label='one' if state else 'all'
+	exp['pick state']['single'] = state
+	exp['current pick source'].data['single'] = [state]
+	exp['current pick source'].set()
+
+	sync_current_selection()
 
 def input_change(attr, old, new):
 	update_data()
+
+def picked_state_text(experiment):
+	txt = 'Picked: '
+	for case in app_data[experiment]['cases']:
+		peak_set = app_data[experiment]['applied'][case]
+		txt += case.upper() + ':[' + ','.join(list(peak_set))+']  '
+	return txt
 
 peak_choices = ['P1','P3','P4','N1','N2','N3','N4']
 def build_experiment_tab(experiment):
@@ -461,16 +624,20 @@ def build_experiment_tab(experiment):
 	print([k for k in app_data.keys()], app_data[experiment])
 	case_choices = expD['cases']
 
-	expD['current pick source'] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
+	#expD['current pick source'] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
 
 	expD['applied'] = {}; expD['picked sources'] = {}
 	for case in case_choices:
-		expD['applied'][case] = set()
+		expD['applied'][case] = []
 		for peak in peak_choices:
-			expD['picked sources'][case] = ColumnDataSource( 
-							data= dict( start=[], finish=[], bots=[], tops=[], peak=[] ) )
-	
-	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0], 'picked':{} }
+			peak_sourceD = {'peaks':[]}
+			for chan in chans:
+				peak_sourceD.update( { fd+'_'+chan:[] for fd in ['start', 'finish', 'bots', 'tops'] } ) #, 'peak'
+						#dict( start=[], finish=[], bots=[], tops=[], peak=[] ) )
+			expD['picked sources'][case] = ColumnDataSource( data=peak_sourceD )
+
+	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0], 
+							'single':False, 'picked':{} }
 
 	case_pick_chooser = RadioButtonGroup( labels=case_choices, active=0 )
 
@@ -483,13 +650,16 @@ def build_experiment_tab(experiment):
 	save_button = Button( label="Save" )
 	next_button = Button( label="Next" )
 	reload_button = Button( label="Reload")
+	# toggle to be placed on display line
+	multi_single_pick_toggle = Toggle( label= 'all', type="success" )
 
 	expD['controls'] = { 'case' : case_pick_chooser,
 						 'peak' : peak_chooser,
 						 'apply' : apply_button,
 						 'save' : save_button,
 						 'reload' : reload_button,
-						 'case toggle' : case_display_toggle
+						 'case toggle' : case_display_toggle,
+						 'multi-single toggle': multi_single_pick_toggle
 						}
 
 	pick_title = Paragraph(height=12, width=65, text='pick: case')
@@ -497,11 +667,23 @@ def build_experiment_tab(experiment):
 	components['pick controls'] = [ pick_title, case_pick_chooser, peak_title, peak_chooser, 
 							 apply_button, save_button, next_button, reload_button]
 	display_title = Paragraph(height=12, width=54, text='display:')
+	# Legend
 	legend_title = Paragraph(height=12, width=44, text='legend:')
-	components['display elements'] = [ display_title, case_display_toggle, legend_title ]
+	display_elements = [ display_title, case_display_toggle, legend_title ]
 	for cc in case_choices:
-		components['display elements'].append( Paragraph(height=18, width=25, text=cc ) )
+		display_elements.append( Paragraph(height=18, width=25, text=cc ) )
 
+	spacer = Paragraph(height=12, width=15)
+	picked_status = Paragraph(height=12, width=230, text='No picks yet')
+	display_elements.append( spacer )
+	display_elements.append( picked_status )
+	expD['applied picks display'] = picked_status
+
+	repick_title = Paragraph(height=15, width=35, text='repick')
+
+	display_elements.extend([repick_title, multi_single_pick_toggle])
+
+	components['display elements'] = display_elements
 
 	start_button.on_click(start_handler)
 
@@ -513,6 +695,13 @@ def build_experiment_tab(experiment):
 	save_button.on_click(save_handler)
 	next_button.on_click(next_handler)
 	reload_button.on_click(reload_handler)
+	multi_single_pick_toggle.on_click(multi_single_toggle_handler)
+
+	current_pickD = {}
+	for chan in chans:
+		current_pickD.update( { fd+'_'+chan:[] for fd in ['start','finish','bots','tops'] } )
+	current_pickD['single'] = [ False ]
+	expD['current pick source'] = ColumnDataSource( data=current_pickD )
 
 	box_gen = box_gen_gen(experiment)
 
@@ -545,15 +734,8 @@ def build_experiment_tab(experiment):
 				components['plots'][-1].append( this_plot )
 			else: components['plots'][-1].append( None )
 
-	current_pick_start = Segment(x0='start',x1='start',y0='bots',y1='tops',
-					line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
-					line_dash='dashed')
-	current_pick_finish = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
-					line_width=1.5,line_alpha=0.95,line_color='darkgoldenrod',
-					line_dash='dashdot')
-	expD['pick start'] = current_pick_start
-	expD['pick finish'] = current_pick_finish
-
+	expD['pick starts'] = {}
+	expD['pick finishes'] = {}
 	expD['case pick sources'] = {}
 	gcount = -1
 	for gr_ind,g_row in enumerate(gridplots):
@@ -561,6 +743,14 @@ def build_experiment_tab(experiment):
 			if gridplots_setup[gr_ind][gc_ind] != None:
 				gcount +=1
 				chan = chans[gcount]
+				current_pick_start = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
+								line_width=1.5,line_alpha=0.95,line_color='#f2b41e',
+								line_dash='dashed')
+				current_pick_finish = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
+								line_width=1.5,line_alpha=0.95,line_color='#f2b41e',
+								line_dash='dashdot')
+				expD['pick starts'][chan] = current_pick_start
+				expD['pick finishes'][chan] = current_pick_finish
 
 				gp.add_glyph( expD['current pick source'],current_pick_start)
 				gp.add_glyph( expD['current pick source'],current_pick_finish)
@@ -576,11 +766,11 @@ def build_experiment_tab(experiment):
 						# gp.add_glyph( expD['picked sources'][cspk],picked_finishes)
 
 					expD['case pick sources'][case] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
-					case_pick_starts = Segment(x0='start',x1='start',y0='bots',y1='tops',
-					line_width=1.5,line_alpha=0.95,line_color='orange',
+					case_pick_starts = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
+					line_width=1.5,line_alpha=0.95,line_color='#886308',
 					line_dash='dashed', name=case+'_limit' )
-					case_pick_finishes = Segment(x0='finish',x1='finish',y0='bots',y1='tops',
-					line_width=1.5,line_alpha=0.95,line_color='orange',
+					case_pick_finishes = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
+					line_width=1.5,line_alpha=0.95,line_color='#886308',
 					line_dash='dashdot', name=case+'_limit')
 					gp.add_glyph( expD['picked sources'][case], case_pick_starts )
 					gp.add_glyph( expD['picked sources'][case], case_pick_finishes )
@@ -666,6 +856,14 @@ html = """
 		.bk-bs-btn-group:first-child{ background-color: blue !important;
 							  			font-color: white !important; 
 							  		}
+		.bk-bs-btn-success{ background-color: #fff !important;
+							color: black !important;
+							border-color: #ccc !important;
+							height: 20 !important;
+							margin-top: 3 !important;
+							padding: 0 12 0 12 !important;
+						}
+		.bk-sidebar{ vertical-align: top !important; }
 	</style>
 	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
 	<script>
@@ -694,7 +892,8 @@ html = """
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
-with open("PeakPicker.html", "w+") as f:
+
+with open("PeakPicker"+user+".html", "w+") as f:
     f.write(html)
 
 if __name__ == "__main__":

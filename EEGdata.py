@@ -145,14 +145,51 @@ class avgh1:
 
 		return times, potentials
 
+	def find_peaks(s, case, chan_list, starts_ms, ends_ms, polarity='p' ):
+
+		caseN = s.case_list.index(case)
+		lats,erps = s.prepare_plot_data()
+		n_tms = lats.shape[0]
+
+		ch_inds = [  s.electrodes.index(c) for c in chan_list ]
+		#erps_ch = np.squeeze(erps[ caseN, ch_inds, : ])
+
+		n_chans = len(chan_list)
+		latmat = np.matrix(lats).repeat(n_chans,axis=0)
+
+		startsmat = np.matrix(starts_ms).repeat(n_tms,axis=1)
+		endsmat = np.matrix(ends_ms).repeat(n_tms,axis=1)
+
+		start_pts = np.argmin( np.fabs( latmat - startsmat ), axis=1)
+		end_pts = np.argmin( np.fabs( latmat - endsmat ), axis=1 )
+
+		# find min/max in range
+		peak_vals = []
+		peak_pts = []
+		for ci,ch in enumerate(chan_list):
+			erpa = np.squeeze(erps[ caseN, ch_inds[ci], :])
+			start_pt = start_pts[ci]
+			end_pt = end_pts[ci]
+			erp = erpa[start_pt:end_pt+1]
+			if polarity == 'p': # find the max
+				peak_pt  = np.argmax(erp, axis=0)
+			elif polarity == 'n': # find the min
+				peak_pt  = np.argmin(erp, axis=0)
+			peak_vals.append(erp[peak_pt])
+			peak_pts.append( int(peak_pt+start_pt) )
+
+		peaks_ms = lats[ peak_pts ]
+
+		return peak_vals, peaks_ms
+
 	def find_peak(s, case, start_ms = 200, end_ms = 600,
 		 chan_scope='all', chan=0, peak_polarity='p'):
 		# erps is cases x chans x pts
 		caseN = s.case_list.index(case)
 		lats,erps = s.prepare_plot_data()
 		
-		 # test case
-		peak_polarity = 'p' # test case
+		# test case
+		#peak_polarity = 'p' # test case
 		chan_scope = 'all' # test case
 
 		start_pt = np.argmin(np.fabs( lats-start_ms ))
@@ -326,6 +363,7 @@ class avgh1:
 
 		elif style == 'layout':
 			layout = []
+			#if 'FP1' in chans:
 			layout.append( [None, 'FP1', 'Y',  'FP2', 'X']  )
 			layout.append( ['F7', 'AF1', None, 'AF2', 'F8']  )
 			layout.append( [None, 'F3', 'FZ',  'F4',  None]  )
@@ -335,6 +373,16 @@ class avgh1:
 			layout.append( [None, 'P3', 'PZ',  'P4',  None]  )
 			layout.append( ['P7', 'PO1', None, 'PO2', 'P8']  )
 			layout.append( [None, 'O1',  None, 'O2',  None]  )
+			# elif 'FPZ' in chans:
+			#layout.append( [None, 'FPZ', None,  None, None]  )
+			layout.append( ['AF7', 'FPZ', 'AFZ', None, 'AF8']  )
+			layout.append( ['F5', 'F1', None,  'F2',  'F6']  )
+			layout.append( ['FT7','FC3', 'FCZ', 'FC4', 'FT8'] )
+			layout.append( ['C5', 'C1', None,  'C2',  'C6']  )
+			#layout.append( [None,'CP3', 'CPZ', 'CP4', None] )
+			layout.append( ['TP7', 'CP3', 'CPZ', 'CP4', 'TP8']  )
+			layout.append( ['P5', 'P1', 'POZ', 'P2', 'P6']  )
+			layout.append( [None, 'PO7', 'OZ', 'PO8',  None]  )				
 
 			plots = []
 			for row in layout:
@@ -422,14 +470,6 @@ class avgh1:
 
 		#return peak_sourcesD
 		return pot_source_dict, peak_sourcesD
-
-	def update_peak_source(s, psD, case, peak, pot_vals, times ):
-		''' assumes all channels
-		'''
-		psD[ 'peaks' ].append( peak )
-		for chan, val, tm in zip(s.electrodes,pot_vals,times):
-			psD[ chan+'_pot' ].append( val )
-			psD[ chan+'_time' ].append( tm )
 
 	def prepare_plot_for_channel(s,pot,el_ind,props,case_list,tools,
 						mode='notebook',bottom_label=False,legend=False,

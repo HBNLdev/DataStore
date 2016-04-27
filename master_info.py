@@ -1,7 +1,7 @@
 '''EEGmaster
 '''
 
-master_path = '/export/home/mort/projects/EEG-master-file/EEG-master-file-14.csv' #'/processed_data/master-file/EEG-master-file-08.csv'
+master_path = '/export/home/mike/projects/mongo/EEG-master-file-14.csv'
 master= None
 
 import datetime, os
@@ -45,7 +45,7 @@ def load_master( preloaded= None, force_reload=False, custom_path=None):
 	
 		master.set_index('ID',drop=False,inplace=True)#verify_integrity=True)
 		for dcol in ['DOB'] + [col for col in master.columns if '-date' in col]:
-			master[dcol] = master[dcol].map(calc_date_w_Qs).apply( pd.to_datetime )
+			master[dcol] = master[dcol].apply(calc_date_w_Qs)
 	
 	return
 

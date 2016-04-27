@@ -3,11 +3,12 @@
 
 import datetime
 import pymongo
-from bson.objectid import ObjectId
+import pandas as pd
+import numpy as np
 
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
-Mdb = MongoConn['COGAa']
+Mdb = MongoConn['COGAm']
 
 def flatten_dict(D,prefix=''):
     if len(prefix) > 0:
@@ -21,16 +22,22 @@ def flatten_dict(D,prefix=''):
             flat[prefix+k] = v
     return flat
 
+def remove_NaTs(rec):
+	for k,v in rec.items():
+		typ = type(v)
+		if typ != dict and typ == pd.tslib.NaTType:
+			rec[k] = None
+
 class MongoBacked:
 	
 	def store(s):
 		s.data['insert_time']=datetime.datetime.now()
-		#this needs to be recursive
-		for k,v in s.data.items():
-			typ = type(v)
-			if typ != dict and typ == pd.tslib.NaTType:
-				s.data[k] = None
 		Mdb[s.collection].insert(s.data)
+
+	def storeNaTsafe(s):
+		s.data['insert_time']=datetime.datetime.now()
+		remove_NaTs(s.data)
+		Mdb[s.collection].insert(s.data)		
 
 class Acquisition(MongoBacked):
 	
