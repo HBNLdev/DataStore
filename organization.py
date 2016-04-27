@@ -116,6 +116,20 @@ class SSAGA(Acquisition):
 		I.update(info)
 		Acquisition.__init__(s,I)
 
+class Questionnaire(Acquisition):
+
+	def_info = {'technique':'questionnaire'}
+	collection = 'questionnaires'
+
+	part_name = 'question'
+	repeat_name = 'followup'
+
+	def __init__(s,test_type,info={}):
+
+		I = s.def_info.copy()
+		I.update( {'test_type':test_type} )
+		I.update(info)
+		Acquisition.__init__(s,I)
 
 class Subject(MongoBacked):
 	

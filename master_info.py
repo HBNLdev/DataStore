@@ -6,13 +6,14 @@ master= None
 
 import datetime, os
 import pandas as pd
+import numpy as np
 
 def calc_date_w_Qs(dstr):
 	''' assumes date of form mm/dd/yyyy
 	'''
 	dstr = str(dstr)
 	if dstr == 'nan':
-		return None
+		return np.nan
 	if '?' in dstr:
 		if dstr[:2] == '??':
 			if dstr[3:5] == '??':
@@ -27,7 +28,7 @@ def calc_date_w_Qs(dstr):
 		return datetime.datetime.strptime(dstr,'%m/%d/%Y')
 	except:
 		print('problem with date: '+dstr)
-		return None 
+		return np.nan 
 
 def load_master( preloaded= None, force_reload=False, custom_path=None):
 	global master
@@ -45,7 +46,7 @@ def load_master( preloaded= None, force_reload=False, custom_path=None):
 	
 		master.set_index('ID',drop=False,inplace=True)#verify_integrity=True)
 		for dcol in ['DOB'] + [col for col in master.columns if '-date' in col]:
-			master[dcol] = master[dcol].apply(calc_date_w_Qs)
+			master[dcol] = master[dcol].map(calc_date_w_Qs)
 	
 	return
 
