@@ -3,6 +3,8 @@
 
 import datetime
 import pymongo
+import pandas as pd
+import numpy as np
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 Mdb = MongoConn['COGAm']
@@ -19,10 +21,17 @@ def flatten_dict(D,prefix=''):
             flat[prefix+k] = v
     return flat
 
+def remove_NaTs(rec):
+	if pd.NaT in rec.values():
+		for k, v in rec.items():
+			if type(v) == pd.tslib.NaTType:
+				rec[k] = np.nan
+
 class MongoBacked:
 	
 	def store(s):
 		s.data['insert_time']=datetime.datetime.now()
+		s.data = remove_NaTs(s.data)
 		Mdb[s.collection].insert(s.data)
 
 class Acquisition(MongoBacked):
