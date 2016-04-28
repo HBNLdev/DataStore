@@ -480,12 +480,16 @@ def save_handler():
 	# get list of cases which have picks and unique peaks
 	case_lst = []
 	peak_lst = []
+	peaks_by_case = {}
 	for case in eeg.case_list:
-		if exp['peak sources'][case].data['peak_'+chans[0]]: # if case contains picks
+		peaks_by_case[case] = []
+		pks = exp['peak sources'][case].data['peaks']
+		print(case, 'peaks: ', pks )
+		if pks:#exp['peak sources'][case].data[chans[0]+'_pot']: # if case contains picks
 			case_lst.append( eeg.case_num_map[case] ) #use numeric reference
-			pks = exp['peak sources'][case].data['peak_'+chans[0]]
 			for pk in pks:
 				peak_lst.append(pk)
+				peaks_by_case[case] .append(pk)
 		else:
 			print('A case is missing picks.') # should handle this
 	cases = list(set(case_lst))
@@ -500,11 +504,14 @@ def save_handler():
 	for icase, case in enumerate(cases):
 		case_name = eeg.case_list[icase]
 		for ichan, chan in enumerate(eeg.electrodes_61): # only core 61 chans
-			for ipeak, peak in enumerate(peaks):
+			for peak in peaks_by_case[case_name]:
+				ipeak = peaks.index(peak)
 				amps[ipeak, ichan, icase] = \
-						exp['peak sources'][case_name].data[chan+'_pot'][peaks.index( peak )]
+						exp['peak sources'][case_name]\
+						.data[chan+'_pot'][peaks_by_case[case_name].index( peak )]
 				lats[ipeak, ichan, icase] =	\
-						exp['peak sources'][case_name].data[chan+'_time'][peaks.index( peak )]
+						exp['peak sources'][case_name]\
+						.data[chan+'_time'][peaks_by_case[case_name].index( peak )]
 
 	# reshape into 1d arrays
 	amps1d = amps.ravel('F')
