@@ -520,7 +520,7 @@ def save_handler():
 	# build mt text (makes default output location), write to a test location
 	eeg.build_mt(cases, peaks, amps1d, lats1d)
 	print(eeg.mt)
-	test_dir = '/processed_data/mt-files/test'
+	test_dir = '/active_projects/test'
 	fullpath = os.path.join( test_dir, eeg.mt_name )
 	of = open( fullpath, 'w' )
 	of.write( eeg.mt )
