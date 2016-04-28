@@ -22,6 +22,23 @@ def flatten_dict(D,prefix=''):
             flat[prefix+k] = v
     return flat
 
+def unflatten_dict(dictionary,delimiter='_',skipkeys=['_id','test_type']):
+	# use with caution, specify keys to skip
+    resultDict = dict()
+    for key, value in dictionary.items():
+        if key in skipkeys:
+            d = resultDict
+            d[key] = value
+        else:
+            parts = key.split(delimiter)
+            d = resultDict
+            for part in parts[:-1]:
+                if part not in d:
+                    d[part] = dict()
+                d = d[part]
+            d[parts[-1]] = value
+    return resultDict
+
 def remove_NaTs(rec):
 	for k,v in rec.items():
 		typ = type(v)
