@@ -4,8 +4,6 @@
 import datetime
 import pymongo
 import pandas as pd
-import numpy as np
-
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 Mdb = MongoConn['COGAm']
@@ -22,22 +20,24 @@ def flatten_dict(D,prefix=''):
             flat[prefix+k] = v
     return flat
 
-def unflatten_dict(dictionary,delimiter='_',skipkeys=['_id','test_type']):
+def unflatten_dict(D,delimiter='_',skipkeys=set()):
 	# use with caution, specify keys to skip
-    resultDict = dict()
-    for key, value in dictionary.items():
-        if key in skipkeys:
-            d = resultDict
-            d[key] = value
-        else:
-            parts = key.split(delimiter)
-            d = resultDict
-            for part in parts[:-1]:
-                if part not in d:
-                    d[part] = dict()
-                d = d[part]
-            d[parts[-1]] = value
-    return resultDict
+	default_skipkeys = {'_id','test_type','ind_id','insert_time','form_id'}
+	skipkeys.update(default_skipkeys)
+	resultDict = dict()
+	for key, value in D.items():
+	    if key in skipkeys:
+	        d = resultDict
+	        d[key] = value
+	    else:
+	        parts = key.split(delimiter)
+	        d = resultDict
+	        for part in parts[:-1]:
+	            if part not in d:
+	                d[part] = dict()
+	            d = d[part]
+	        d[parts[-1]] = value
+	return resultDict
 
 def remove_NaTs(rec):
 	for k,v in rec.items():
@@ -141,10 +141,11 @@ class Questionnaire(Acquisition):
 	part_name = 'question'
 	repeat_name = 'followup'
 
-	def __init__(s,test_type,info={}):
+	def __init__(s,questname,followup,info={}):
 
 		I = s.def_info.copy()
-		I.update( {'test_type':test_type} )
+		I.update( {'questname':questname} )
+		I.update( {'followup':followup} )
 		I.update(info)
 		Acquisition.__init__(s,I)
 
