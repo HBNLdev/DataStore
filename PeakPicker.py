@@ -616,7 +616,7 @@ def picked_state_text(experiment):
 		txt += case.upper() + ':[' + ','.join(list(peak_set))+']  '
 	return txt
 
-peak_choices = ['P1','P3','P4','N1','N2','N3','N4']
+peak_choices = ['P1','P2','P3','P4','N1','N2','N3','N4']
 def build_experiment_tab(experiment):
 	print('Building tab for', experiment)
 	components = {}
