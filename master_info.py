@@ -8,6 +8,23 @@ import datetime, os
 import pandas as pd
 import numpy as np
 
+sparser_sub = ['famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP', 
+				'DOB', 'twin', 'EEG', 'System', 'Wave12', 'Wave12-fam', 
+				'fMRI subject', 'Wave3', 'Phase4-session', 'Phase4-testdate', 
+				'Phase4-age', '4500', 'ccGWAS', 'AAfamGWAS', 'ExomeSeq', 
+				'EAfamGWAS', 'EAfamGWAS-fam', 'wave12-race', '4500-race', 
+				'ccGWAS-race', 'core-race', 'COGA11k-fam', 'COGA11k-race',
+				'COGA11k-fam-race', 'ruID', 'genoID', 'SmS', 'CA/CO', 
+				'a-session', 'b-session', 'c-session', 'd-session', 
+				'e-session', 'f-session', 'g-session', 'h-session', 
+				'i-session', 'j-session', 'k-session',
+				'a-raw', 'b-raw', 'c-raw', 'd-raw', 'e-raw', 'f-raw', 'g-raw', 
+				'h-raw', 'i-raw', 'j-raw', 'k-raw', 'missing-EEG' 'remarks']
+
+sparser_add = ['ID', 'sex', 'handedness', 'Self-reported-race', 'alc_dep_dx', 
+			   'alc_dep_ons', 'a-age', 'b-age', 'c-age', 'd-age', 'e-age', 
+			   'f-age', 'g-age', 'h-age', 'i-age', 'j-age', 'k-age']
+
 def calc_date_w_Qs(dstr):
 	''' assumes date of form mm/dd/yyyy
 	'''
