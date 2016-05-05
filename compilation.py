@@ -49,18 +49,26 @@ def get_subjectdocs(sample):
         docs = O.Mdb['subjects'].find(subjects_queries[sample])
         return docs
 
-def check_collinputs(coll, subcoll=None):
+def check_collinputs(coll, subcoll=None, mode='program'):
+    result = True
     if coll not in subcoll_dict.keys():
-        print('collection incorrectly specified, the below are valid')
-        print(', '.join(subcoll_dict.keys()))
-        raise 
+        result = False
+        if mode == 'interactive':
+            print('collection incorrectly specified, the below are valid')
+            print(', '.join(subcoll_dict.keys()))
+
     if subcoll is not None and subcoll not in subcoll_dict[coll]:
-        print('{0} not found in {1}, below are valid'.format(subcoll, coll))
-        print(', '.join(subcoll_dict[coll]))
-        raise
+        result = False
+        if mode == 'interactive':
+            print('{0} not found in {1}, below are valid'.format(subcoll, coll))
+            print(', '.join(subcoll_dict[coll]))
+
+    return result
 
 def display_collcontents(coll, subcoll=None):
-    check_collinputs(coll, subcoll)
+    ck_res = check_collinputs(coll, subcoll)
+    if not ck_res:
+        return
     if subcoll is None:
         doc = O.Mdb[coll].find_one()
     else:
@@ -68,7 +76,9 @@ def display_collcontents(coll, subcoll=None):
     pp.pprint(sorted(list(doc.keys())))
 
 def get_colldocs(coll, subcoll=None, addquery={}):
-    check_collinputs(coll, subcoll)
+    ck_res = check_collinputs(coll, subcoll)
+    if not ck_res:
+        return
     query = {}
     if subcoll is not None:
         query.update({subcoll_fnames[coll]:subcoll})
