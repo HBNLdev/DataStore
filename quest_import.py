@@ -28,6 +28,14 @@ def parse_date(dstr, dateform):
     dstr = str(dstr)
     return datetime.strptime(dstr,dateform) if dstr != 'nan' else None
 
+def df_fromcsv( fullpath, id_lbl='ind_id', na_val='' ):
+    # read csv in as dataframe
+    df = pd.read_csv( fullpath, na_values=na_val)
+    # convert id to str and save as new column
+    df[id_lbl] = df[id_lbl].apply(int).apply(str)
+    df['ID'] = df[id_lbl]
+    return df
+
 def import_questfolder(qname, path, file_pfixes, id_lbl, date_lbl, na_val = '',
     dateform = '%Y-%m-%d', file_ext='.sas7bdat.csv', max_fups = 5):
     # get dict of filepaths and the followup number
@@ -37,10 +45,7 @@ def import_questfolder(qname, path, file_pfixes, id_lbl, date_lbl, na_val = '',
     # for each file
     for f, followup_num in file_dict.items():
         # read csv in as dataframe
-        df = pd.read_csv( os.path.join(path,f), na_values=na_val)
-        # convert id to str and save as new column
-        df[id_lbl] = df[id_lbl].apply(int).apply(str)
-        df['ID'] = df[id_lbl]
+        df = df_fromcsv( os.path.join(path,f), id_lbl, na_val)
         # if date_lbl is a list, replace columns with one strjoined column
         if type(date_lbl) == list:
             new_col = pd.Series(['']*df.shape[0], index=df.index)

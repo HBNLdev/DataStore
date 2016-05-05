@@ -79,13 +79,15 @@ class Acquisition(MongoBacked):
 class Neuropsych(Acquisition):
 	
 	def_info = { 'technique':'cognitive test' }
-	
+	collection = 'neuropsych'
+
 	part_name = 'experiment'
 	repeat_name = 'session'
 	
-	def __init__(s,test_type,info = {}):
-		s.collection = test_type
-		I = Neuropsych.def_info.copy()
+	def __init__(s,testname,info = {}):
+		
+		I = s.def_info.copy()
+		I.update( {'testname':testname})
 		I.update(info)
 		Acquisition.__init__(s,I)
 		
@@ -125,6 +127,19 @@ class SSAGA(Acquisition):
 	def_info = {'technique':'interview'}
 	collection = 'SSAGA'
 	
+	part_name = 'question'
+	repeat_name = 'followup'
+
+	def __init__(s, info={}):
+		I = s.def_info.copy()
+		I.update(info)
+		Acquisition.__init__(s,I)
+
+class Core(Acquisition):
+
+	def_info = {'technique':'interview'}
+	collection = 'core'
+
 	part_name = 'question'
 	repeat_name = 'followup'
 

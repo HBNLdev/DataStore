@@ -450,7 +450,7 @@ class neuropsych_summary:
 		s.session = s.fileparts[3][0]
 		s.motivation = int(s.fileparts[3][1])
 		
-		s.data = {'subject':s.subject_id,
+		s.data = {'ID':s.subject_id,
 				'site':s.site,
 				'session':s.session,
 				'motivation':s.motivation,
@@ -519,7 +519,7 @@ class tolt_summary_file(neuropsych_summary):
 
 	def __init__(s,filepath):
 		neuropsych_summary.__init__(s,filepath)
-		s.rdead_file()
+		s.read_file()
 
 class cbst_summary_file(neuropsych_summary):
 	
