@@ -1,6 +1,7 @@
 ''' Compilation tools for HBNL
 '''
 
+import numpy as np
 import pandas as pd
 import organization as O
 import quest_import as qi
@@ -84,7 +85,7 @@ def buildframe_fromdocs(docs):
     return df
 
 def join_collection(keyDF, coll, subcoll=None, add_query={},
-    id_field='ID', join_inds=['ID'], sparsify=False):
+    join_inds=['ID'], id_field='ID', sparsify=False):
     if subcoll is not None:
         name = subcoll
     else:
@@ -94,17 +95,35 @@ def join_collection(keyDF, coll, subcoll=None, add_query={},
     query.update(add_query)
     docs = get_colldocs(coll, subcoll, query)
 
-    dDF = pd.DataFrame.from_records(
+    newDF = pd.DataFrame.from_records(
         [O.flatten_dict(r) for r in list(docs)] )
-    dDF['ID'] = dDF[id_field]
-    dDF.set_index(join_inds, inplace=True)
-    dDF.columns = [ name[:3]+'_'+c for c in dDF.columns ]
+    newDF['ID'] = newDF[id_field]
+    newDF.columns = [ name[:3]+'_'+c if c not in ['ID','session','followup']
+                else c for c in newDF.columns ]
 
     if sparsify:
-        subsparsify_df(dDF, O.Mdb[coll].name, name)
+        subsparsify_df(newDF, O.Mdb[coll].name, name)
+    
+    keyDF = prepare_indices(keyDF, join_inds)
+    newDF = prepare_indices(newDF, join_inds)
 
-    jDF = keyDF.join(dDF)
+    jDF = keyDF.join(newDF)
     return jDF
+
+def prepare_indices(df, join_inds):
+    for ji in join_inds:
+        if ji not in df.index.names:
+            if pd.isnull(df[ji]).values.any():
+                df[ji] = df[ji].apply(fix_indexcol)
+            do_append = not df.index.name is None
+            df = df.set_index(ji, append=do_append)
+    return df
+
+def fix_indexcol(s):
+    if s is np.NaN:
+        return 'x'
+    else:
+        return s
 
 def subsparsify_df(df, coll_name, subcoll_value=None):
     sdict = sparse_submaps[coll_name]
