@@ -1,7 +1,9 @@
 '''Handling HBNL files
 '''
 
-import os, shutil, subprocess
+import os
+import shutil
+import subprocess
 import utils
 from collections import OrderedDict
 from datetime import datetime
@@ -15,15 +17,18 @@ site_hash = {'a': 'uconn',
              'd': 'suny',
              'e': 'washu',
              'f': 'ucsd',
+             'h': 'unknown',
              '1': 'uconn',
              '2': 'indiana',
              '3': 'iowa',
              '4': 'suny',
              '5': 'washu',
              '6': 'ucsd',
-             '7': 'howard'
+             '7': 'howard',
+             '8': 'unknown'
              }
-site_hash_rev = {v: k for k, v in site_hash.items() if k in [str(n) for n in range(1, 8)]}
+site_hash_rev = {
+    v: k for k, v in site_hash.items() if k in [str(n) for n in range(1, 9)]}
 
 experiment_shorthands = {'aa': 'ap3',
                          'ab': 'abk',
@@ -107,9 +112,11 @@ def parse_filename(filename, include_full_ID=False):
             site = subject_piece[0] + '-subjects'
             if fam_number == '0000':  # no family
                 family = 0
-            # need to check master file here to see if h and p subjects are masscomp or neuroscan
+            # need to check master file here to see if h and p subjects are
+            # masscomp or neuroscan
             if fam_number == '0001':
-                family = 0;  # need to look here for three recordings on family 0001
+                # need to look here for three recordings on family 0001
+                family = 0;
 
         else:
             family = fam_number
@@ -122,7 +129,7 @@ def parse_filename(filename, include_full_ID=False):
         system = 'masscomp'
         experiment_short = filename[:2]
         experiment = experiment_shorthands[experiment_short]
-        site_letter = filename[3]
+        site_letter = filename[3].lower()
         if filename[4:8] in ['0000', '5000']:  # no family
             site = site_letter + '-subjects'
             family = 0
@@ -140,6 +147,8 @@ def parse_filename(filename, include_full_ID=False):
             session_letter = 'b'
 
         subject = filename[8:11]
+        subject_piece = site_hash_rev[ site_hash[site_letter] ]+filename[4:11]
+        version = filename[2]
 
     output = {'system': system,
               'experiment': experiment,
@@ -163,9 +172,12 @@ def parse_filename(filename, include_full_ID=False):
 def parse_filename_tester():
     cases = [('vp3_6_e1_10162024_avg.mt', 'neuroscan', 'vp3', 'uconn', 162, 24, 'e', 1),
              ('vp2e0157027.mt', 'masscomp', 'vp3', 'washu', 157, 27, 'a', 1),
-             ('aod_5_a1_c0000857_avg.h1', 'neuroscan', 'aod', 'c-subjects', 0, 857, 'a', 1),
-             ('vp2c5000027.mt', 'masscomp', 'vp3', 'c-subjects', 0, 27, 'a', 2),
-             ('aod_5_a2_c0000857_avg.h1', 'neuroscan', 'aod', 'c-subjects', 0, 857, 'a', 2)
+             ('aod_5_a1_c0000857_avg.h1', 'neuroscan',
+              'aod', 'c-subjects', 0, 857, 'a', 1),
+             ('vp2c5000027.mt', 'masscomp',
+              'vp3', 'c-subjects', 0, 27, 'a', 2),
+             ('aod_5_a2_c0000857_avg.h1', 'neuroscan',
+              'aod', 'c-subjects', 0, 857, 'a', 2)
              ]
     for case in cases:
         info = parse_filename(case[0])
@@ -189,7 +201,8 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
                         if file_parameters:
                             file_info = parse_filename(filename)
 
-                            param_ck = [file_parameters[k] == file_info[k] for k in file_parameters]
+                            param_ck = [file_parameters[k] == file_info[k]
+                                        for k in file_parameters]
                         else:
                             param_ck = [True]
                         if time_range:
@@ -200,7 +213,8 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
                         else:
                             time_ck = True
                         if filter_list:
-                            filter_ck = any([s in filename for s in filter_list])
+                            filter_ck = any(
+                                [s in filename for s in filter_list])
                         else:
                             filter_ck = True
                         if all(param_ck) and time_ck and filter_ck:
@@ -211,7 +225,7 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
 
 ##############################
 ##
-##		EEG
+# EEG
 ##
 ##############################
 
@@ -236,7 +250,8 @@ class cnth1_file:
         s.file_info = parse_filename(s.filename)
 
     def read_trial_info(s, nlines=-1):
-        h5header = subprocess.check_output(['/opt/bin/print_h5_header', s.filepath])
+        h5header = subprocess.check_output(
+            ['/opt/bin/print_h5_header', s.filepath])
         head_lines = h5header.decode().split('\n')
         hD = {}
         for L in head_lines[:nlines]:
@@ -275,10 +290,10 @@ class mt_file:
                                  'ant': {(1, 'j'): ['P3', 'N4'],
                                          # (2,'p'):['P3','N4'],
                                          (3, 'a'): ['P3', 'N4'],
-                                         (4, 'w'): ['P3', 'N4']
-                                         }
-                                 }
-    data_structure = '{(case#,peak):{electrodes:(amplitude,latency),reaction_time:time} }'  # string for reference
+                                         (4, 'w'): ['P3', 'N4']}}
+
+    # string for reference
+    data_structure = '{(case#,peak):{electrodes:(amplitude,latency),reaction_time:time} }'
 
     ant_cases_types_lk = [((1, '"A"', '"Antonym"'),
                            (2, '"J"', '"Jumble"'),
@@ -305,6 +320,13 @@ class mt_file:
                       3: {1: 3, 2: 1, 3: 4, 4: 2}}
 
     # 4:{1:1,2:2,3:3,4:4} }
+    case_nums2names = {'aod': {1: 't', 2: 'nt'},
+                       'vp3': {1: 't', 2: 'nt', 3: 'nv'},
+                       'ant': {1: 'j', 2: 'p', 3: 'a', 4: 'w'},
+                       'cpt': {1: 'g', 2: 'c', 3: 'cng',
+                       		   4: 'db4ng', 5: 'ng', 6: 'dad'},
+               		   'stp': {1: 'c', 2: 'i'},
+                       		   }
 
     def normAntCase(sub_ses):
         exp_doc = list(O.Mdb.EEG.find({'subject.subject_id': {'$regex': '.' + sub_ses[0] + '.'},
@@ -335,7 +357,7 @@ class mt_file:
         s.header_lines = 0
         while reading_header:
             file_line = of.readline()
-            if file_line[0] != '#':
+            if len(file_line) < 2 or file_line[0] != '#':
                 reading_header = False
                 continue
             s.header_lines += 1
@@ -348,21 +370,36 @@ class mt_file:
                 if cs_pks[1][0] != 'npeaks':
                     s.header['problems'] = True
                 else:
-                    s.header['cases_peaks'][int(cs_pks[0][1])] = int(cs_pks[1][1])
+                    s.header['cases_peaks'][
+                        int(cs_pks[0][1])] = int(cs_pks[1][1])
 
         of.close()
 
     def normed_cases_calc(s):
         try:
-            norm_dict = mt_file.normAntCase((s.file_info['id'], s.file_info['session']))
+            norm_dict = mt_file.normAntCase(
+                (s.file_info['id'], s.file_info['session']))
             s.normed_cases = norm_dict
         except:
             s.normed_cases = mt_file.ant_case_convD[0]
             s.norm_fail = True
 
     def parse_fileDB(s):
-    	s.parse_file()
-
+        s.parse_file()
+        exp = s.file_info['experiment']
+        ddict = {}
+        for k in s.data:
+            case_convdict = s.case_nums2names[exp]
+            newkey = case_convdict[int(k[0])] + '_' + k[1]
+            inner_ddict = {}
+            for inner_k, inner_v in s.data[k].items():
+                if type(inner_v) is tuple:
+                    inner_ddict.update(
+                        {inner_k: {'amp': inner_v[0], 'lat': inner_v[1]}})
+            ddict.update({newkey: inner_ddict})
+        s.data = ddict
+        s.data.update( s.file_info )
+        s.data['ID'] = s.data['id']
 
     def parse_file(s):
         of = open(s.fullpath, 'r')
@@ -444,83 +481,83 @@ class mt_file:
 
 ##############################
 ##
-##		Neuropsych
+# Neuropsych
 ##
 ##############################
 
 class neuropsych_xml:
-	''' For XML files found in /raw_data/neuropsych '''
+    ''' For XML files found in /raw_data/neuropsych '''
 
-	# labels for fields output by david's awk script
-	cols = ['id', 'dob', 'gender', 'hand', 'testdate', 'sessioncode',
-			'motivTOT', 'motivCBST', 'motivTOLT', 'age', '3r_mim', '3r_mom',
-			'3r_em', '3r_%ao', '3r_apt', '3r_atoti', '3r_ttrti', '3r_atrti',
-			'4r_mim', '4r_mom', '4r_em', '4r_%ao', '4r_apt', '4r_atoti',
-			'4r_ttrti', '4r_atrti', '5r_mim', '5r_mom', '5r_em', '5r_%ao',
-			'5r_apt', '5r_atoti', '5r_ttrti', '5r_atrti', 'tt_mim', 'tt_mom',
-			'tt_em', 'tt_%ao', 'tt_apt', 'tt_atoti', 'tt_ttrti', 'tt_atrti',
-			'tc_f', 'span_f', 'tat_f', 'tcat_f', 'tc_b', 'span_b', 'tat_b',
-			'tcat_b']
+    # labels for fields output by david's awk script
+    cols = ['id', 'dob', 'gender', 'hand', 'testdate', 'sessioncode',
+            'motivTOT', 'motivCBST', 'motivTOLT', 'age', '3r_mim', '3r_mom',
+            '3r_em', '3r_%ao', '3r_apt', '3r_atoti', '3r_ttrti', '3r_atrti',
+            '4r_mim', '4r_mom', '4r_em', '4r_%ao', '4r_apt', '4r_atoti',
+            '4r_ttrti', '4r_atrti', '5r_mim', '5r_mom', '5r_em', '5r_%ao',
+            '5r_apt', '5r_atoti', '5r_ttrti', '5r_atrti', 'tt_mim', 'tt_mom',
+            'tt_em', 'tt_%ao', 'tt_apt', 'tt_atoti', 'tt_ttrti', 'tt_atrti',
+            'tc_f', 'span_f', 'tat_f', 'tcat_f', 'tc_b', 'span_b', 'tat_b',
+            'tcat_b']
 
-	def __init__(s, filepath):
-		s.filepath = filepath
-		s.path = os.path.dirname(s.filepath)
-		s.path_parts = filepath.split(os.path.sep)
-		s.filename = os.path.splitext(s.path_parts[-1])[0]
-		s.fileparts = s.filename.split('_')
+    def __init__(s, filepath):
+        s.filepath = filepath
+        s.path = os.path.dirname(s.filepath)
+        s.path_parts = filepath.split(os.path.sep)
+        s.filename = os.path.splitext(s.path_parts[-1])[0]
+        s.fileparts = s.filename.split('_')
 
-		s.site = s.path_parts[-3]
-		s.subject_id = s.fileparts[0]
-		s.session = s.fileparts[1]
-		
-		s.data = {'ID': s.subject_id,
-		          'site': s.site,
-		          'session': s.session,
-		          }
-		s.read_file()
+        s.site = s.path_parts[-3]
+        s.subject_id = s.fileparts[0]
+        s.session = s.fileparts[1]
+        
+        s.data = {'ID': s.subject_id,
+                  'site': s.site,
+                  'session': s.session,
+                  }
+        s.read_file()
 
-	def read_file(s):
-		# this function needs to be in /usr/bin of the invoking system
-		func_name = 'do_np_processB'
-		raw_line = subprocess.check_output( [func_name, s.filepath])
-		data_dict = s.parse_csvline(raw_line)
-		data_dict.pop('id', None)
-		data_dict.pop('sessioncode', None)
-		s.data.update( data_dict )
+    def read_file(s):
+        # this function needs to be in /usr/bin of the invoking system
+        func_name = 'do_np_processB'
+        raw_line = subprocess.check_output( [func_name, s.filepath])
+        data_dict = s.parse_csvline(raw_line)
+        data_dict.pop('id', None)
+        data_dict.pop('sessioncode', None)
+        s.data.update( data_dict )
 
-	def parse_csvline(s, raw_line):
-		# [:-1] excludes the \n at line end
-		lst = raw_line[:-1].decode('utf-8').split(',')
+    def parse_csvline(s, raw_line):
+        # [:-1] excludes the \n at line end
+        lst = raw_line[:-1].decode('utf-8').split(',')
 
-		# handle missing data, '.' will indicate a missing val
-		if 'No TOLT file' in lst[10] and 'No CBST file' in lst[10]:
-			lst = lst[:10] + 41*['.']
-		elif 'No TOLT file' in lst[10]:
-			lst = lst[:10] + 32*['.'] + lst[11:]
-		elif 'No CBST file' in lst[42]:
-			lst = lst[:42] + 9*['.']
+        # handle missing data, '.' will indicate a missing val
+        if 'No TOLT file' in lst[10] and 'No CBST file' in lst[10]:
+            lst = lst[:10] + 41*['.']
+        elif 'No TOLT file' in lst[10]:
+            lst = lst[:10] + 32*['.'] + lst[11:]
+        elif 'No CBST file' in lst[42]:
+            lst = lst[:42] + 9*['.']
 
-		# convert to dict in anticipation of storing as record
-		d = dict(zip(s.cols, lst))
-		# convert dict items to appropriate types
-		for k, v in d.items():
-			d[k] = s.parse_csvitem(k, d.pop(k)) # pop passes the val to parser
-		return d
+        # convert to dict in anticipation of storing as record
+        d = dict(zip(s.cols, lst))
+        # convert dict items to appropriate types
+        for k, v in d.items():
+            d[k] = s.parse_csvitem(k, d.pop(k)) # pop passes the val to parser
+        return d
 
-	def parse_csvitem(s, k, v):
-		if v is '.':
-			return None # these will get safely coerced to NaN by pandas df
-		else:
-			v = v.lstrip() # remove leading whitespace
-			if k in ['dob', 'testdate']: 
-				v = datetime.strptime(v, '%m/%d/%Y') # dates
-			elif k in ['id', 'gender', 'hand', 'sessioncode']:
-				pass # leave these as strings
-			elif '%' in k: 
-				v = float(v[:-1])/100 # percentages converted to proportions
-			else:
-				v = float(v) # all other data becomes float
-			return v
+    def parse_csvitem(s, k, v):
+        if v is '.':
+            return None # these will get safely coerced to NaN by pandas df
+        else:
+            v = v.lstrip() # remove leading whitespace
+            if k in ['dob', 'testdate']: 
+                v = datetime.strptime(v, '%m/%d/%Y') # dates
+            elif k in ['id', 'gender', 'hand', 'sessioncode']:
+                pass # leave these as strings
+            elif '%' in k: 
+                v = float(v[:-1])/100 # percentages converted to proportions
+            else:
+                v = float(v) # all other data becomes float
+            return v
 
 class neuropsych_summary:
     def __init__(s, filepath):
@@ -559,13 +596,13 @@ class neuropsych_summary:
 
 
 def parse_value_with_info(val, column, integer_columns, float_columns, boolean_columns={}):
-	if column in integer_columns:
-		val = int(val)
-	elif column in float_columns:
-	    val = float(val)
-	elif column in boolean_columns:
-		val = bool(boolean_columns[column].index(val))
-	return val
+    if column in integer_columns:
+        val = int(val)
+    elif column in float_columns:
+        val = float(val)
+    elif column in boolean_columns:
+        val = bool(boolean_columns[column].index(val))
+    return val
 
 class tolt_summary_file(neuropsych_summary):
     integer_columns = ['PegCount', 'MinimumMoves', 'MovesMade', 'ExcessMoves']
@@ -573,8 +610,8 @@ class tolt_summary_file(neuropsych_summary):
     # boolean_columns = {}
 
     section_header_funs_names = OrderedDict([
-    	('Trial Summary', ('parse_trial_summary', 'trials')),
-    	('Test Summary', ('parse_test_summary', 'tests'))])
+        ('Trial Summary', ('parse_trial_summary', 'trials')),
+        ('Test Summary', ('parse_test_summary', 'tests'))])
 
     def parse_trial_summary(s, trial_cols, trial_lines):
         trials = {}
@@ -738,7 +775,7 @@ def move_picked_files_to_processed(from_base, from_folders, working_directory, f
 
 ##############################
 ##
-##		ERP Task Behavior
+# ERP Task Behavior
 ##
 ##############################
 
