@@ -18,7 +18,7 @@ subjects_queries = { 'AA GWAS subjects':{'AAfamGWAS':'x'},
 subcoll_fnames = {'questionnaires': 'questname',
                   'neuropsych':'testname',
                   }
-
+ 
 sparse_submaps = {'questionnaires': qi.sparser_sub,
                   'subjects': mi.sparser_sub,
                   }
@@ -27,13 +27,9 @@ sparse_addmaps = {'subjects': mi.sparser_add,
                   }
 
 def populate_subcolldict():
-    subcoll_dict = {}
-    for coll in O.Mdb.collection_names():
-        if coll in subcoll_fnames.keys():
-            distinct_subcolls = O.Mdb[coll].distinct(subcoll_fnames[coll])
-            subcoll_dict.update({coll:distinct_subcolls})
-        else:
-            subcoll_dict.update({coll:None})
+    subcoll_dict = {coll:O.Mdb[coll].distinct(subcoll_fnames[coll])
+        if coll in subcoll_fnames.keys() else None
+        for coll in O.Mdb.collection_names() }
     return subcoll_dict
 
 subcoll_dict = populate_subcolldict()
@@ -61,13 +57,13 @@ def check_collinputs(coll, subcoll=None, mode='program'):
     if subcoll is not None and subcoll not in subcoll_dict[coll]:
         result = False
         if mode == 'interactive':
-            print('{0} not found in {1}, below are valid'.format(subcoll, coll))
+            print('{0} not found in {1}, below are valid'.format(subcoll,coll))
             print(', '.join(subcoll_dict[coll]))
 
     return result
 
 def display_collcontents(coll, subcoll=None):
-    ck_res = check_collinputs(coll, subcoll)
+    ck_res = check_collinputs(coll, subcoll, mode='interactive')
     if not ck_res:
         return
     if subcoll is None:
@@ -75,9 +71,10 @@ def display_collcontents(coll, subcoll=None):
     else:
         doc = O.Mdb[coll].find_one({subcoll_fnames[coll]:subcoll})
     pp.pprint(sorted(list(doc.keys())))
+    # pp.pprint(sorted(list(O.unflatten_dict(doc).keys())))
 
 def get_colldocs(coll, subcoll=None, addquery={}):
-    ck_res = check_collinputs(coll, subcoll)
+    ck_res = check_collinputs(coll, subcoll, mode='interactive')
     if not ck_res:
         return
     query = {}
@@ -95,29 +92,34 @@ def buildframe_fromdocs(docs):
     return df
 
 def join_collection(keyDF, coll, subcoll=None, add_query={},
-    join_inds=['ID'], id_field='ID', sparsify=False):
+    join_inds=['ID'], id_field='ID', sparsify=False,
+    drop_empty=True):
     if subcoll is not None:
         name = subcoll
     else:
         name = coll
 
-    query = {id_field: {'$in': list(keyDF.index)}}
+    query = {id_field: {'$in': list(keyDF.index)}} # should be more general
     query.update(add_query)
     docs = get_colldocs(coll, subcoll, query)
 
     newDF = pd.DataFrame.from_records(
         [O.flatten_dict(r) for r in list(docs)] )
-    newDF['ID'] = newDF[id_field]
+    newDF['ID'] = newDF[id_field] # should be more general
     newDF.columns = [ name[:3]+'_'+c if c not in ['ID','session','followup']
-                else c for c in newDF.columns ]
+                else c for c in newDF.columns ] # should be more general
 
     if sparsify:
         subsparsify_df(newDF, O.Mdb[coll].name, name)
     
-    keyDF = prepare_indices(keyDF, join_inds)
-    newDF = prepare_indices(newDF, join_inds)
+    prepare_indices(keyDF, join_inds)
+    prepare_indices(newDF, join_inds)
 
     jDF = keyDF.join(newDF)
+
+    if drop_empty:
+        drop_emptycols(jDF)
+
     return jDF
 
 def prepare_indices(df, join_inds):
@@ -125,27 +127,38 @@ def prepare_indices(df, join_inds):
         if ji not in df.index.names:
             if pd.isnull(df[ji]).values.any():
                 df[ji] = df[ji].apply(fix_indexcol)
-            do_append = not df.index.name is None
-            df = df.set_index(ji, append=do_append)
-    return df
+            do_append = df.index.name != None
+            df.set_index(ji, append=do_append, inplace=True) # inplace right?
 
 def fix_indexcol(s):
-    if s is np.NaN:
+    if s is np.NaN: # does this cover all cases?
         return 'x'
     else:
         return s
 
+def drop_emptycols(df):
+    # check for empty columns and drop them
+    dropped_lst = []
+    for col in df.columns:
+        if pd.isnull(df[col]).values.all():
+            dropped_lst.append(col)
+            df.drop(col, axis=1, inplace=True)
+    print('the following empty columns were dropped:')
+    print(dropped_lst)
+
 def subsparsify_df(df, coll_name, subcoll_value=None):
     sdict = sparse_submaps[coll_name]
-    if subcoll_value is not None:
-        skeys = sdict[subcoll_value]
-    else:
+    if subcoll_value is None:
         skeys = sdict
+    else:
+        skeys = sdict[subcoll_value]
     columns_todrop = []
     for dfc in df.columns:
         for skey in skeys:
             if skey in dfc:
                 columns_todrop.append(dfc)
+    print('The following columns were dropped:')
+    print(columns_todrop)
     df.drop(columns_todrop, axis=1, inplace=True)
 
 def addsparsify_df(df, coll_name, subcoll_value=None):
@@ -158,4 +171,6 @@ def addsparsify_df(df, coll_name, subcoll_value=None):
     for dfc in df.columns:
         if dfc not in skeys:
             columns_todrop.append(dfc)
+    print('The following columns were dropped:')
+    print(columns_todrop)
     df.drop(columns_todrop, axis=1, inplace=True)
