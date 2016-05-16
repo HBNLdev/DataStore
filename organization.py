@@ -6,7 +6,7 @@ import pymongo
 import pandas as pd
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
-Mdb = MongoConn['COGAm']
+Mdb = MongoConn['COGAt']
 
 
 def flatten_dict(D, prefix=''):
@@ -41,7 +41,6 @@ def unflatten_dict(D, delimiter='_', skipkeys=set()):
             d[parts[-1]] = value
     return resultDict
 
-
 # if type(d[part]) is not float: # should be more general check
 
 def remove_NaTs(rec):
@@ -61,6 +60,12 @@ class MongoBacked:
         remove_NaTs(s.data)
         Mdb[s.collection].insert(s.data)
 
+class SourceInfo(MongoBacked):
+
+	def __init__(s, coll, source_set, subcoll=None):
+
+		s.collection = coll
+		s.data = {'_source': source_set, '_subcoll': subcoll}
 
 class Acquisition(MongoBacked):
     def_info = {'site': None,
@@ -199,6 +204,24 @@ class Subject(MongoBacked):
                 'ID': 'd0001001'
                 }
     collection = 'subjects'
+
+    def __init__(s, info={}):
+        I = s.def_info.copy()
+        I.update(info)
+        I['_ID'] = I['ID']
+
+        s.DOB = I['DOB']
+        s.sex = I['sex']
+        s.studies = []
+        s.acquisitions = []
+        s.data = I
+
+class Session(MongoBacked):
+    def_info = {'DOB': datetime.datetime(1900, 1, 1),
+                'sex': 'f',
+                'ID': 'd0001001'
+                }
+    collection = 'sessions'
 
     def __init__(s, info={}):
         I = s.def_info.copy()

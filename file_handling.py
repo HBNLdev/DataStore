@@ -189,6 +189,7 @@ def parse_filename_tester():
 
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
     file_list = []
+    date_list = []
 
     for dName, sdName, fList in os.walk(starting_directory):
 
@@ -219,8 +220,11 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
                             filter_ck = True
                         if all(param_ck) and time_ck and filter_ck:
                             file_list.append(fullpath)
+                            date_mod = datetime.fromtimestamp(
+                            	os.path.getmtime(fullpath))
+                            date_list.append(date_mod)
 
-    return file_list
+    return file_list, date_list
 
 
 ##############################

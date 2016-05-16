@@ -9,10 +9,25 @@ import master_info as mi
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
-subjects_queries = { 'AA GWAS subjects':{'AAfamGWAS':'x'},
-                     'AA GWAS families':{'AAfamGWAS':'f'},
-                     'Phase4 subjects': {'Phase4-session':
+subjects_queries = { 'AAfamGWAS':{'AAfamGWAS':'x'},
+                     'AAfamGWASfam':{'AAfamGWAS':'f'},
+                     'a-subjects':{'POP':'A'},
+                     'ccGWAS':{'ccGWAS':{'$ne':np.nan}},
+                     'COGA11k':{'COGA11k-fam':{'$ne':np.nan}},
+                     'COGA4500':{'4500':'x'},
+                     'c-subjects':{'POP':'C'},
+                     'EAfamGWAS':{'EAfamGWAS':'x'},
+                     'EAfamGWASfam':{'EAfamGWAS':'f'},
+                     'ExomeSeq':{'ExomeSeq':'x'},
+                     'fMRI-NKI-bd1':{'fMRI':{'$in':['1a','1b']}},
+                     'fMRI-NKI-bd2':{'fMRI':{'$in':['2a','2b']}},
+                     'fMRI-NYU-hr':{'fMRI':{'$in':['3a','3b']}},
+                     'h-subjects':{'POP':'H'},
+                     'PhaseIV': {'Phase4-session':
                             {'$in':['a','b','c','d']}},
+                     'p-subjects':{'POP':'P'},
+                     'smokeScreen':{'SmS':{'$ne':np.nan}},
+                     'wave12':{'Wave12':'x'},
                     }
 
 subcoll_fnames = {'questionnaires': 'questname',

@@ -2,9 +2,12 @@
 '''
 
 master_path = '/export/home/mike/projects/mongo/EEG-master-file-14.csv'
+# master_path = '/processed_data/master-file/EEG-master-file-16.csv'
 master= None
 
-import datetime, os
+import os
+from datetime import datetime
+
 import pandas as pd
 import numpy as np
 
@@ -42,7 +45,7 @@ def calc_date_w_Qs(dstr):
 			if dstr[3:5] == '??':
 				dstr = dstr[:2]+'/15'+dstr[5:]
 	try:
-		return datetime.datetime.strptime(dstr,'%m/%d/%Y')
+		return datetime.strptime(dstr,'%m/%d/%Y')
 	except:
 		print('problem with date: '+dstr)
 		return np.nan 
@@ -57,15 +60,18 @@ def load_master( preloaded= None, force_reload=False, custom_path=None):
 		master_path_use= custom_path
 	else: master_path_use= master_path
 
-	if not type(master)==pd.core.frame.DataFrame  or force_reload:	
-		master = pd.read_csv(master_path_use, 
-							converters={'ID':str}, na_values=['.'],low_memory=False)
+	if not type(master)==pd.core.frame.DataFrame  or force_reload:
+		# check date modified on master file
+		master_mtime = datetime.fromtimestamp(os.path.getmtime(master_path_use))
+		# read as csv
+		master = pd.read_csv(master_path_use, converters={'ID':str},
+			na_values=['.'],low_memory=False)
 	
-		master.set_index('ID',drop=False,inplace=True)#verify_integrity=True)
+		master.set_index('ID', drop=False, inplace=True)#verify_integrity=True)
 		for dcol in ['DOB'] + [col for col in master.columns if '-date' in col]:
 			master[dcol] = master[dcol].map(calc_date_w_Qs)
 	
-	return
+	return master_mtime
 
 def masterYOB():
 	'''Writes _YOB version of master file in same location

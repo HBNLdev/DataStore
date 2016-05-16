@@ -10,6 +10,29 @@ import organization as O
 
 sparser_sub = {'achenbach': ['af_', 'bp_']}
 
+def_info = {'path': '/active_projects/mike/zork-ph4-65-bl/session/',
+            'version': 4,
+            'date_lbl': ['ADM_Y','ADM_M','ADM_D'],
+            'na_val': '',
+            'dateform': '%Y-%m-%d',
+            'file_ext': '.sas7bdat.csv',
+            'max_fups': 5,
+            'id_lbl': 'ind_id',
+            }
+
+knowledge = {'achenbach': {'file_pfixes': ['asr4', 'ysr4'],
+                           'date_lbl': 'datefilled',
+                           'drop_keys': ['af_','bp_']},
+             'bis':       {'file_pfixes': ['bis_a_score4', 'bis_score4']},
+             'neo':       {'file_pfixes': ['neo4']},
+             'sensation': {'file_pfixes': ['sssc4','ssv4']},
+             'daily':     {'file_pfixes': ['daily4']},
+             'aeq':       {'file_pfixes': ['aeqa4','aeq4']},
+             'craving':   {'file_pfixes': ['crv4']},
+             'dependence':{'file_pfixes': ['dpndnce4']},
+             'sre':       {'file_pfixes': ['sre_score4']},
+             }
+
 def quest_pathfollowup(path, file_pfixes, file_ext, max_fups):
     fn_dict = {}
     fn_infolder = glob(path+'*'+file_ext)
@@ -36,46 +59,58 @@ def df_fromcsv( fullpath, id_lbl='ind_id', na_val='' ):
     df['ID'] = df[id_lbl]
     return df
 
-def import_questfolder(qname, path, file_pfixes, id_lbl, date_lbl, na_val = '',
-    dateform = '%Y-%m-%d', file_ext='.sas7bdat.csv', max_fups = 5):
-    # get dict of filepaths and the followup number
-    file_dict = quest_pathfollowup(path, file_pfixes, file_ext, max_fups)
+def build_inputdict( name ):
+    idict = def_info.copy()
+    idict.update( knowledge(name) )
+    return idict
+
+def import_questfolder(qname):
+    # build inputs
+    i = build_inputdict( qname )
+    # get dict of filepaths and followup numbers
+    file_dict = quest_pathfollowup(i['path'], i['file_pfixes'],
+                    i['file_ext'], i['max_fups'])
     if not file_dict:
         print('There were no files in the path specified.')
     # for each file
     for f, followup_num in file_dict.items():
         # read csv in as dataframe
-        df = df_fromcsv( os.path.join(path,f), id_lbl, na_val)
+        df = df_fromcsv( os.path.join(i['path'],f), i['id_lbl'], i['na_val'])
         # if date_lbl is a list, replace columns with one strjoined column
-        if type(date_lbl) == list:
+        if type(i['date_lbl']) == list:
             new_col = pd.Series(['']*df.shape[0], index=df.index)
             hyphen_col = pd.Series(['-']*df.shape[0], index=df.index)
-            new_col += df[date_lbl[0]].apply(int).apply(str)
-            for e in date_lbl[1:]:
+            new_col += df[i['date_lbl'][0]].apply(int).apply(str)
+            for e in i['date_lbl'][1:]:
                 new_col += hyphen_col
                 new_col += df[e].apply(int).apply(str)
-            df['-'.join(date_lbl)] = new_col
+            df['-'.join(i['date_lbl'])] = new_col
         # attempt to convert columns to dates
         for c in df:
             try:
-                df[c] = df[c].apply( parse_date, args=(dateform,) )
+                df[c] = df[c].apply( parse_date, args=(i['dateform'],) )
             except:
                 pass
         # convert to records and store in mongo coll, noting followup_num
         for drec in df.to_dict(orient='records'):
             ro = O.Questionnaire(qname, followup_num, drec)
             ro.storeNaTsafe()
+        datemod = datetime.fromtimestamp(os.path.getmtime(i['path']))
+        sourceO = O.SourceInfo('questionnaires', (i['path'], datemod), qname)
+        sourceO.store()
 
-def match_fups2sessions(qname, id_lbl, date_lbl):
+def match_fups2sessions(qname):
+    # build inputs
+    i = build_inputdict( qname )
     # determine matching session letters (across followups)
-    if type(date_lbl) == list:
-        date_lbl = '-'.join(date_lbl)
+    if type(i['date_lbl']) == list:
+        i['date_lbl'] = '-'.join(i['date_lbl'])
     session_datecols = [letter+'-date' for letter in 'abcdefg']
     s = O.Mdb['subjects']
     q = O.Mdb['questionnaires']
     qc = q.find( {'questname': qname} )
     for qrec in qc:
-        testdate = qrec[date_lbl]
+        testdate = qrec[i['date_lbl']]
         # try to access subject record, notify if not possible
         try:
             s_rec = s.find( {'ID': qrec['ID']} )[0]
