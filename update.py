@@ -9,15 +9,16 @@ def subjects():
 
     # compare source file names and date modified
 
-    if mi.path == source_rec['_s'][0] and mi_mtime <= source_rec['_s'][1]:
+    if mi.master_path == source_rec[0]['_source'][0] and mi_mtime <= source_rec[0]['_source'][1]:
         return  # same path and older/same mdate, no update required
 
     else:  # new masterfile, do update
 
-        old_ids = {rec['ID'] for rec in O.Mdb['subjects'].find(
-            {'ID': {'$exists': True}})}
-        new_ids = {mi.master['ID'].tolist()}  # sets
+        old_ids = set(rec['ID'] for rec in O.Mdb['subjects'].find(
+            {'ID': {'$exists': True}}))
+        new_ids = set(mi.master['ID'].tolist())  # sets
         add_ids = new_ids - old_ids
+        print(add_ids)
 
         addID_df = mi.master[mi.master['ID'].isin(add_ids)]
         for rec in addID_df.to_dict(orient='records'):
@@ -25,12 +26,15 @@ def subjects():
             sO.storeNaTsafe()
             # can do sessions here too
 
-        sourceO = O.Source('subjects', [mi.path, mi_mtime])
+        sourceO = O.SourceInfo('subjects', [mi.path, mi_mtime])
         sourceO.update()
 
 
 def sessions():
 
+    pass
+
+    '''
     mi_mtime = mi.load_master()
     source_rec = O.Mdb['subjects'].find({'_source': {'$exists': True}})
 
@@ -54,6 +58,7 @@ def sessions():
 
         sourceO = O.Source('subjects', [mi.path, mi_mtime])
         sourceO.update()
+    '''
 
 
 def erp():

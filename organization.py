@@ -43,6 +43,7 @@ def unflatten_dict(D, delimiter='_', skipkeys=set()):
 
 # if type(d[part]) is not float: # should be more general check
 
+
 def remove_NaTs(rec):
     for k, v in rec.items():
         typ = type(v)
@@ -53,19 +54,26 @@ def remove_NaTs(rec):
 class MongoBacked:
     def store(s):
         s.data['insert_time'] = datetime.datetime.now()
-        Mdb[s.collection].insert(s.data)
+        Mdb[s.collection].insert_one(s.data)
 
     def storeNaTsafe(s):
         s.data['insert_time'] = datetime.datetime.now()
         remove_NaTs(s.data)
-        Mdb[s.collection].insert(s.data)
+        Mdb[s.collection].insert_one(s.data)
+
+    def update(s):
+        s.data['update_time'] = datetime.datetime.now()
+        Mdb[s.collection].update_one(s.update_query, {'$set': s.data})
+
 
 class SourceInfo(MongoBacked):
 
-	def __init__(s, coll, source_set, subcoll=None):
+    def __init__(s, coll, source_set, subcoll=None):
 
-		s.collection = coll
-		s.data = {'_source': source_set, '_subcoll': subcoll}
+        s.collection = coll
+        s.data = {'_source': source_set, '_subcoll': subcoll}
+        s.update_query = {'_source': {'$exists': True}}
+
 
 class Acquisition(MongoBacked):
     def_info = {'site': None,
@@ -101,18 +109,18 @@ class Neuropsych(Acquisition):
 
 
 class ERPPeak(Acquisition):
-	def_info = {'technique': 'EEG',
+    def_info = {'technique': 'EEG',
                 'system': 'unknown'}
 
-	collection = 'ERP'
+    collection = 'ERP'
 
-	part_name = 'experiment'
-	repeat_name = 'session'
+    part_name = 'experiment'
+    repeat_name = 'session'
 
-	def __init__(s, info={}):
-	    I = s.def_info.copy()
-	    I.update(info)
-	    Acquisition.__init__(s, I)
+    def __init__(s, info={}):
+        I = s.def_info.copy()
+        I.update(info)
+        Acquisition.__init__(s, I)
 
 
 class Electrophysiology(Acquisition):
@@ -215,6 +223,7 @@ class Subject(MongoBacked):
         s.studies = []
         s.acquisitions = []
         s.data = I
+
 
 class Session(MongoBacked):
     def_info = {'DOB': datetime.datetime(1900, 1, 1),

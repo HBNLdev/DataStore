@@ -1,8 +1,8 @@
 '''EEGmaster
 '''
 
-master_path = '/export/home/mike/projects/mongo/EEG-master-file-14.csv'
-# master_path = '/processed_data/master-file/EEG-master-file-16.csv'
+# master_path = '/export/home/mike/projects/mongo/EEG-master-file-14.csv'
+master_path = '/processed_data/master-file/EEG-master-file-16.csv'
 master= None
 
 import os
