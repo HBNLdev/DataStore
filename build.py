@@ -1,7 +1,6 @@
 '''build collections'''
 
 import os
-import pandas as pd
 from datetime import datetime
 from glob import glob
 
@@ -23,7 +22,7 @@ def sessions():
     # fast
     master_mtime = mi.load_master()
     for char in 'abcdefghijk':
-        sessionDF = mi.master[pd.notnull(mi.master[char+'-run'])]
+        sessionDF = mi.master[mi.master[char+'-run'].notnull()]
         sessionDF['session'] = char
         for col in ['raw', 'date', 'age']:
             sessionDF[col] = sessionDF[char+'-'+col]
