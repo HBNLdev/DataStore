@@ -3,6 +3,7 @@
 import os
 from datetime import datetime
 from glob import glob
+import numpy as np
 
 import master_info as mi
 import quest_import as qi
@@ -23,14 +24,24 @@ def sessions():
     master_mtime = mi.load_master()
     for char in 'abcdefghijk':
         sessionDF = mi.master[mi.master[char+'-run'].notnull()]
-        sessionDF['session'] = char
-        for col in ['raw', 'date', 'age']:
-            sessionDF[col] = sessionDF[char+'-'+col]
-        for rec in sessionDF.to_dict(orient='records'):
-            so = O.Session(rec)
-            so.storeNaTsafe()
+        if sessionDF.empty:
+            continue
+        else:
+            sessionDF['session'] = char
+            sessionDF['followup'] = sessionDF.apply(calc_followupcol, axis=1)
+            for col in ['raw', 'date', 'age']:
+                sessionDF[col] = sessionDF[char+'-'+col]
+            for rec in sessionDF.to_dict(orient='records'):
+                so = O.Session(rec)
+                so.storeNaTsafe()
     sourceO = O.SourceInfo('sessions', (mi.master_path, master_mtime))
     sourceO.store()
+
+def calc_followupcol(row):
+    if row['Phase4-session'] is np.nan or row['Phase4-session'] not in 'abcd':
+        return np.nan
+    else:
+        return ord(row['session']) - ord(row['Phase4-session'])
 
 def erp():
     # 3 minutes

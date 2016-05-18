@@ -77,8 +77,26 @@ def sessions():
 
 
 def erp():
-    pass
+    mt_files, datemods = FH.identify_files('/processed_data/mt-files/','*.mt')
+    bad_files=['/processed_data/mt-files/ant/uconn/mc/an1a0072007.df.mt',
+        ]
 
+    source_rec = O.Mdb['ERP'].find({'_source': {'$exists': True}})[0]
+    
+    old_files = set(t[0] for t in source_rec['_source'])
+    new_files = set(mt_files)
+    add_files = new_files - old_files
+
+    for fp in add_files:
+        if fp in bad_files:
+            continue
+        mtO = FH.mt_file( fp )
+        mtO.parse_fileDB()
+        erpO = O.ERPPeak( mtO.data )
+        erpO.store()
+
+    # sourceO = O.SourceInfo('ERP', list(add_uids))
+    # sourceO.update()
 
 def neuropsych_xml():
     pass
