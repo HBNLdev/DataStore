@@ -394,13 +394,14 @@ class mt_file:
         ddict = {}
         for k in s.data:
             case_convdict = s.case_nums2names[exp]
-            newkey = case_convdict[int(k[0])] + '_' + k[1]
+            case = case_convdict[int(k[0])]
+            peak = k[1]
             inner_ddict = {}
-            for inner_k, inner_v in s.data[k].items():
-                if type(inner_v) is tuple:
+            for chan, amp_lat in s.data[k].items(): # chans
+                if type(amp_lat) is tuple: # if amp / lat tuple
                     inner_ddict.update(
-                        {inner_k: {'amp': inner_v[0], 'lat': inner_v[1]}})
-            ddict.update({newkey: inner_ddict})
+                        {chan: {'amp': amp_lat[0], 'lat': amp_lat[1]}})
+            ddict.update({case+'_'+peak: inner_ddict})
         s.data = ddict
         s.data.update( s.file_info )
         s.data['ID'] = s.data['id']

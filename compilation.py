@@ -1,6 +1,7 @@
 ''' Compilation tools for HBNL
 '''
 
+import itertools
 import numpy as np
 import pandas as pd
 import organization as O
@@ -50,6 +51,10 @@ def populate_subcolldict():
 
 subcoll_dict = populate_subcolldict()
 
+def display_samples():
+    lst = sorted([(k, get_subjectdocs(k).count()) for k in subjects_queries])
+    pp.pprint(lst)
+
 
 def display_dbcontents():
     pp.pprint(subcoll_dict)
@@ -96,14 +101,14 @@ def display_collcontents(coll, subcoll=None):
     # pp.pprint(sorted(list(O.unflatten_dict(doc).keys())))
 
 
-def get_colldocs(coll, subcoll=None, addquery={}):
+def get_colldocs(coll, subcoll=None, add_query={}):
     ck_res = check_collinputs(coll, subcoll, mode='interactive')
     if not ck_res:
         return
     query = {}
     if subcoll is not None:
         query.update({subcoll_fnames[coll]: subcoll})
-    query.update(addquery)
+    query.update(add_query)
     docs = O.Mdb[coll].find(query)
     return docs
 
@@ -116,7 +121,22 @@ def buildframe_fromdocs(docs):
     return df
 
 
-def join_collection(keyDF, coll, subcoll=None, add_query={},
+def buildframe_fromERPdocs(docs, conds_peaks, chans, measures):
+    df = pd.DataFrame.from_records(
+        [O.flatten_dict(d) for d in list(docs)])
+
+    keep_list = set('_'.join(tup) for tup in \
+        list(itertools.product(conds_peaks, chans, measures)))
+    all_list = set(col for col in df.columns if 'amp' in col or 'lat' in col)
+
+    drop_list = all_list - keep_list
+    df.drop(drop_list, axis=1, inplace=True)
+    if 'ID' in df.columns:
+        df.set_index(['ID'], inplace=True)
+    return df
+
+
+def join_collection(keyDF_in, coll, subcoll=None, add_query={},
                     join_inds=['ID'], id_field='ID', sparsify=False,
                     drop_empty=True):
     if subcoll is not None:
@@ -124,22 +144,23 @@ def join_collection(keyDF, coll, subcoll=None, add_query={},
     else:
         name = coll
 
+    keyDF = keyDF_in.copy()
+
     query = {id_field: {'$in': list(keyDF.index)}}  # should be more general
     query.update(add_query)
     docs = get_colldocs(coll, subcoll, query)
 
     newDF = pd.DataFrame.from_records(
-        [O.flatten_dict(r) for r in list(docs)])
+        [O.flatten_dict(r) for r in list(docs)]) # BIG JUMP HERE
     newDF['ID'] = newDF[id_field]  # should be more general
-    newDF.columns = [name[:3] + '_' + c if c not in ['ID', 'session', 'followup']
-                     else c for c in newDF.columns]  # should be more general
 
     if sparsify:
         subsparsify_df(newDF, O.Mdb[coll].name, name)
-
-    prepare_indices(keyDF, join_inds)
     prepare_indices(newDF, join_inds)
+    newDF.columns = [name[:3] + '_' + c for c in newDF.columns]
 
+    
+    prepare_indices(keyDF, join_inds)
     jDF = keyDF.join(newDF)
 
     if drop_empty:  # remove duplicate & empty rows, empty columns

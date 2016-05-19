@@ -10,12 +10,14 @@ import organization as O
 
 sparser_sub = {'achenbach': ['af_', 'bp_']}
 
-def_info = {'path': '/active_projects/mike/zork-ph4-65-bl/session/',
+def_info = {# 'path': '/processed_data/zork/zork-65/session/',
+            'path': '/active_projects/mike/zork-ph4-65-bl/session/',
             'version': 4,
             'date_lbl': ['ADM_Y','ADM_M','ADM_D'],
             'na_val': '',
             'dateform': '%Y-%m-%d',
             'file_ext': '.sas7bdat.csv',
+            # 'file_ext': '.sas7bdat',
             'max_fups': 5,
             'id_lbl': 'ind_id',
             }
@@ -59,23 +61,34 @@ def df_fromcsv( fullpath, id_lbl='ind_id', na_val='' ):
     df['ID'] = df[id_lbl]
     return df
 
+def df_fromsas( fullpath, id_lbl='ind_id' ):
+    # read csv in as dataframe
+    df = pd.read_sas( fullpath, format='sas7bdat' )
+    # convert id to str and save as new column
+    df[id_lbl] = df[id_lbl].apply(int).apply(str)
+    df['ID'] = df[id_lbl]
+    print(df)
+    return df
+
 def build_inputdict( name ):
     idict = def_info.copy()
-    idict.update( knowledge(name) )
+    idict.update( knowledge[name] )
     return idict
 
 def import_questfolder(qname):
     # build inputs
     i = build_inputdict( qname )
     # get dict of filepaths and followup numbers
-    file_dict = quest_pathfollowup(i['path'], i['file_pfixes'],
+    file_dict = quest_pathfollowup(i['path']+qname+'/', i['file_pfixes'],
                     i['file_ext'], i['max_fups'])
+    print(i)
     if not file_dict:
         print('There were no files in the path specified.')
     # for each file
     for f, followup_num in file_dict.items():
         # read csv in as dataframe
-        df = df_fromcsv( os.path.join(i['path'],f), i['id_lbl'], i['na_val'])
+        df = df_fromcsv( os.path.join(i['path'], f), i['id_lbl'], i['na_val'])
+        # df = df_fromsas( os.path.join(i['path'], f), i['id_lbl'])
         # if date_lbl is a list, replace columns with one strjoined column
         if type(i['date_lbl']) == list:
             new_col = pd.Series(['']*df.shape[0], index=df.index)
