@@ -10,6 +10,7 @@ from datetime import datetime
 
 import pandas as pd
 import numpy as np
+import file_handling as FH
 
 sparser_sub = ['famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP',
                'DOB', 'twin', 'EEG', 'System', 'Wave12', 'Wave12-fam',
@@ -54,6 +55,13 @@ def calc_date_w_Qs(dstr):
         return np.nan
 
 
+def site_fromIDstr(IDstr):
+    if IDstr[0].isnumeric():
+        return FH.site_hash[IDstr[0]]
+    else:
+        return 'suny'
+
+
 def load_master(preloaded=None, force_reload=False, custom_path=None):
     global master
     if type(preloaded) == pd.core.frame.DataFrame and not custom_path:
@@ -70,15 +78,23 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
         master_mtime = datetime.fromtimestamp(
             os.path.getmtime(master_path_use))
         # read as csv
-        master = pd.read_csv(master_path_use, converters={'ID': str},
+        master = pd.read_csv(master_path_use,
+        					 converters={'ID': str, 'mID': str, 'fID': str},
                              na_values=['.'], low_memory=False)
-
-        # verify_integrity=True)
         master.set_index('ID', drop=False, inplace=True)
+
         for dcol in ['DOB'] + [col for col in master.columns if '-date' in col]:
             master[dcol] = master[dcol].map(calc_date_w_Qs)
 
-    return master_mtime
+        master['site'] = master['ID'].apply(site_fromIDstr)
+
+        for pcol in ['mID', 'fID']:
+            jDF = pd.merge(master[['ID', pcol]], master[['ID', 'alc_dep_dx']],
+                           how='left', left_on=[pcol], right_on=['ID'])
+            jDF.set_index('ID_x', inplace=True)
+            jDF.index.names = ['ID']
+            master['alc_dep_dx_' + pcol[0]] = jDF['alc_dep_dx']
+        return master_mtime
 
 
 def masterYOB():
@@ -142,7 +158,7 @@ def subjects_for_study(study, return_series=False):
             id_series = id_series | (master[study_identifier_info[0]] == label)
     else:
         id_series = master[
-            study_identifier_info[0]] == study_identifier_info[1]
+                        study_identifier_info[0]] == study_identifier_info[1]
 
     if return_series:
         return id_series
@@ -151,7 +167,6 @@ def subjects_for_study(study, return_series=False):
 
 
 def frame_for_study(study):
-
     id_series = subjects_for_study(study)
 
     study_frame = master.ix[id_series]
@@ -180,7 +195,6 @@ def sessions_for_subject_experiment(subject_id, experiment):
 
 
 def protect_dates(filepath):
-
     path, filename = os.path.split(filepath)
     newname = filename.replace('.', '_protectedDates.')
 

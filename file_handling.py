@@ -253,6 +253,13 @@ class cnth1_file:
         s.filename = os.path.split(filepath)[1]
         s.file_info = parse_filename(s.filename)
 
+    def parse_fileDB(s):
+        ''' prepare the data field for the database object '''
+        s.data = {}
+        s.data.update( s.file_info )
+        s.data.update( {'filepath': s.filepath} )
+        s.data['ID'] = s.data['id']
+
     def read_trial_info(s, nlines=-1):
         h5header = subprocess.check_output(
             ['/opt/bin/print_h5_header', s.filepath])
