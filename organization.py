@@ -4,6 +4,7 @@
 import datetime
 import pymongo
 import pandas as pd
+import file_handling as FH
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 Mdb = MongoConn['COGAt']
@@ -112,7 +113,7 @@ class ERPPeak(Acquisition):
     def_info = {'technique': 'EEG',
                 'system': 'unknown'}
 
-    collection = 'ERP'
+    collection = 'ERPpeaks'
 
     part_name = 'experiment'
     repeat_name = 'session'
@@ -123,11 +124,26 @@ class ERPPeak(Acquisition):
         Acquisition.__init__(s, I)
 
 
-class Electrophysiology(Acquisition):
+class ERPData(Acquisition):
     def_info = {'technique': 'EEG',
                 'system': 'unknown'}
 
-    collection = 'EEG'
+    collection = 'ERPdata'
+
+    part_name = 'experiment'
+    repeat_name = 'session'
+
+    def __init__(s, info={}):
+        I = s.def_info.copy()
+        I.update(info)
+        Acquisition.__init__(s, I)
+
+
+class EEGData(Acquisition):
+    def_info = {'technique': 'EEG',
+                'system': 'unknown'}
+
+    collection = 'EEGdata'
 
     part_name = 'experiment'
     repeat_name = 'session'

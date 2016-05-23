@@ -13,6 +13,8 @@ pp = pprint.PrettyPrinter(indent=4)
 subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     'AAfamGWASfam': {'AAfamGWAS': 'f'},
                     'a-subjects': {'POP': 'A'},
+                    'BrainDysfunction': {'POP': {'$in': ['A', 'C', 'H', 'P']},
+                                         'EEG': 'x'},
                     'ccGWAS': {'ccGWAS': {'$ne': np.nan}},
                     'COGA11k': {'COGA11k-fam': {'$ne': np.nan}},
                     'COGA4500': {'4500': 'x'},
@@ -24,6 +26,8 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     # 'fMRI-NKI-bd2':{'fMRI':{'$in':['2a','2b']}},
                     # 'fMRI-NYU-hr':{'fMRI':{'$in':['3a','3b']}},
                     'h-subjects': {'POP': 'H'},
+                    'HighRisk': {'POP': {'$in': ['COGA', 'COGA-Ctl']},
+                                 'site': 'suny', 'EEG': 'x'},
                     'PhaseIV': {'Phase4-session':
                                 {'$in': ['a', 'b', 'c', 'd']}},
                     'p-subjects': {'POP': 'P'},
@@ -146,6 +150,8 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={},
 
     keyDF = keyDF_in.copy()
 
+    # if len(keyDF.index.names) > 1:
+    #     id_nind = 
     query = {id_field: {'$in': list(keyDF.index)}}  # should be more general
     query.update(add_query)
     docs = get_colldocs(coll, subcoll, query)
