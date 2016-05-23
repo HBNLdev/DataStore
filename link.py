@@ -28,9 +28,11 @@ def create_links(parent_coll_name,link_coll_name,link_fields,add_query={}):
         link_query = {'$and':[ {lf:pd[lf]} for lf in link_fields] }
         link_docs = link_coll.find(link_query)
         lcount += link_docs.count()
-        if lcount:#link_docs.count():
+        if link_docs.count():#link_docs.count():
             link_ids = [ d['_id'] for d in link_docs ]
             parent_coll.update({'_id':pd['_id']},{ '$set':{'_links.'+link_coll_name:link_ids} })
             #if debug:
             ldocs+=1
+
     print(ldocs, 'updated with',lcount, 'total links')
+

@@ -66,9 +66,7 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
         master_path_use = master_path
 
     if not type(master) == pd.core.frame.DataFrame or force_reload:
-        # check date modified on master file
-        master_mtime = datetime.fromtimestamp(
-            os.path.getmtime(master_path_use))
+
         # read as csv
         master = pd.read_csv(master_path_use, converters={'ID': str},
                              na_values=['.'], low_memory=False)
@@ -77,6 +75,10 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
         master.set_index('ID', drop=False, inplace=True)
         for dcol in ['DOB'] + [col for col in master.columns if '-date' in col]:
             master[dcol] = master[dcol].map(calc_date_w_Qs)
+
+    # check date modified on master file
+    master_mtime = datetime.fromtimestamp(
+        os.path.getmtime(master_path_use))	
 
     return master_mtime
 
