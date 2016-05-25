@@ -2,7 +2,8 @@
 
 import organization as O
 
-def create_links(parent_coll_name,link_coll_name,link_fields,add_query={}):
+def create_links(parent_coll_name,link_coll_name,link_fields,
+        add_query={}):#,link_axes=[]):
     '''store list of _id's in link_coll_name collection
        under link_coll_name fileld of '_link' document in
        each appropriate parent_coll document
@@ -36,3 +37,21 @@ def create_links(parent_coll_name,link_coll_name,link_fields,add_query={}):
 
     print(ldocs, 'updated with',lcount, 'total links')
 
+def assemble_links_query(parent_cursor,link_description):
+    ''' parent cursor - result of a query on the parent collection
+        link_description - string name linked collection
+                        or a list of name and subfield
+    '''
+    link_ids = []
+    if type(link_description) == str:
+        link_fields = [ link_description ]
+    else: link_fields = link_description
+
+    def get_fields(document):
+        for fd in ['_links']+link_fields:
+            document = document.get(fd,{})
+        return document
+
+    [ link_ids.extend( get_fields(doc) ) for doc in parent_cursor ]
+
+    return {'_id':{'$in':link_ids}}
