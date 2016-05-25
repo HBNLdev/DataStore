@@ -46,6 +46,8 @@ sparse_submaps = {'questionnaires': qi.sparser_sub,
 sparse_addmaps = {'subjects': mi.sparser_add,
                   }
 
+default_ERPfields = {'ID': 1, 'session': 1, 'version': 1, '_id': 0}
+
 
 def populate_subcolldict():
     subcoll_dict = {coll: O.Mdb[coll].distinct(subcoll_fnames[coll])
@@ -54,6 +56,7 @@ def populate_subcolldict():
     return subcoll_dict
 
 subcoll_dict = populate_subcolldict()
+
 
 def display_samples():
     lst = sorted([(k, get_subjectdocs(k).count()) for k in subjects_queries])
@@ -105,15 +108,20 @@ def display_collcontents(coll, subcoll=None):
     # pp.pprint(sorted(list(O.unflatten_dict(doc).keys())))
 
 
-def get_colldocs(coll, subcoll=None, add_query={}):
+def get_colldocs(coll, subcoll=None, add_query={}, add_proj={}):
     ck_res = check_collinputs(coll, subcoll, mode='interactive')
     if not ck_res:
         return
     query = {}
+    proj = {}
     if subcoll is not None:
         query.update({subcoll_fnames[coll]: subcoll})
     query.update(add_query)
-    docs = O.Mdb[coll].find(query)
+    proj.update(add_proj)
+    if proj:
+        docs = O.Mdb[coll].find(query, proj)
+    else:
+        docs = O.Mdb[coll].find(query)
     return docs
 
 
@@ -125,19 +133,11 @@ def buildframe_fromdocs(docs):
     return df
 
 
-def buildframe_fromERPdocs(docs, conds_peaks, chans, measures):
-    df = pd.DataFrame.from_records(
-        [O.flatten_dict(d) for d in list(docs)])
-
-    keep_list = set('_'.join(tup) for tup in \
-        list(itertools.product(conds_peaks, chans, measures)))
-    all_list = set(col for col in df.columns if 'amp' in col or 'lat' in col)
-
-    drop_list = all_list - keep_list
-    df.drop(drop_list, axis=1, inplace=True)
-    if 'ID' in df.columns:
-        df.set_index(['ID'], inplace=True)
-    return df
+def format_ERPprojection(conds_peaks, chans, measures):
+    proj = default_ERPfields.copy()
+    proj.update({'.'.join([cp, chan, m]): 1
+                 for cp in conds_peaks for chan in chans for m in measures})
+    return proj
 
 
 def join_collection(keyDF_in, coll, subcoll=None, add_query={},
@@ -150,14 +150,12 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={},
 
     keyDF = keyDF_in.copy()
 
-    # if len(keyDF.index.names) > 1:
-    #     id_nind = 
-    query = {id_field: {'$in': list(keyDF.index)}}  # should be more general
+    query = {id_field: {'$in': list(keyDF.index.get_level_values(id_field))}}
     query.update(add_query)
     docs = get_colldocs(coll, subcoll, query)
 
     newDF = pd.DataFrame.from_records(
-        [O.flatten_dict(r) for r in list(docs)]) # BIG JUMP HERE
+        [O.flatten_dict(r) for r in list(docs)])  # BIG JUMP HERE
     newDF['ID'] = newDF[id_field]  # should be more general
 
     if sparsify:
@@ -165,7 +163,6 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={},
     prepare_indices(newDF, join_inds)
     newDF.columns = [name[:3] + '_' + c for c in newDF.columns]
 
-    
     prepare_indices(keyDF, join_inds)
     jDF = keyDF.join(newDF)
 
