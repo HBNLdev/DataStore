@@ -47,6 +47,7 @@ sparse_addmaps = {'subjects': mi.sparser_add,
                   }
 
 default_ERPfields = {'ID': 1, 'session': 1, 'version': 1, '_id': 0}
+default_EROfields = {'ID': 1, 'session': 1, '_id': 0}
 
 
 def populate_subcolldict():
@@ -136,10 +137,25 @@ def buildframe_fromdocs(docs):
     return df
 
 
-def format_ERPprojection(conds_peaks, chans, measures):
+def format_ERPprojection(conds_peaks, chans, measures=['amp', 'lat']):
     proj = default_ERPfields.copy()
     proj.update({'.'.join([cp, chan, m]): 1
                  for cp in conds_peaks for chan in chans for m in measures})
+    return proj
+
+
+def format_EROprojection(conds, freqs, times, chans, measures=['evo', 'tot']):
+
+    def convert_decimal(string):
+        return ''.join(['p' if char is '.' else char for char in string])
+
+    freqs = [[convert_decimal(str(float(int(lim)))) for lim in lims]
+             for lims in freqs]
+    times = [[str(int(lim)) for lim in lims] for lims in times]
+
+    proj = default_EROfields.copy()
+    proj.update({'.'.join([m, cond, f[0], f[1], t[0], t[1], 'data', chan]): 1
+                 for m in measures for cond in conds for f in freqs for t in times for chan in chans})
     return proj
 
 
