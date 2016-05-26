@@ -130,6 +130,9 @@ def buildframe_fromdocs(docs):
         [O.flatten_dict(d) for d in list(docs)])
     if 'ID' in df.columns:
         df.set_index(['ID'], inplace=True)
+    # drop empty columns
+    df.dropna(axis=1, how='all', inplace=True)
+
     return df
 
 
