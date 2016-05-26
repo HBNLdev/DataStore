@@ -7,7 +7,7 @@ import pandas as pd
 import file_handling as FH
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
-Mdb = MongoConn['COGAt']
+Mdb = MongoConn['COGAb']
 
 
 def flatten_dict(D, prefix=''):
@@ -93,6 +93,49 @@ class Acquisition(MongoBacked):
         s.date = I['date']
         s.subject = I['subject']
         s.data = I
+
+class EROpheno(Acquisition):
+    def_info = {'technique':'EEG',
+                'system':'unknown'}
+    collection = 'EROpheno'
+
+    def __init__(s,data):
+        s.data = data
+
+        s.subject = data['ID']
+        s.session = data['session']
+        s.experiment = data['experiment']
+
+    def store(s):
+        Sdata = s.data.copy()
+
+        doc_query = { fd:Sdata.pop(fd) for fd in ['ID','session','experiment'] }
+        desc_fields = ['power type','case','frequency min','frequency max',
+                     'time min','time max']
+        # converting description fields to strings and replacing '.' with 'p' to 
+        # avoid conflict with mongo nesting syntax
+        data_desc = dd = { fd:str(Sdata.pop(fd)).replace('.','p') \
+                         for fd in desc_fields }
+        proc_fields = ['parameters','file date','mod date']
+        proc_desc = { fd:Sdata.pop(fd) for fd in proc_fields }
+
+        doc_lookup = Mdb[s.collection].find( doc_query )
+        dataD = {'process':proc_desc, 'data':Sdata}
+        if doc_lookup.count() == 0:
+            doc = doc_query
+            doc[dd['power type']] = { dd['case']:{
+                    dd['frequency min']:{
+                    dd['frequency max']:{
+                        dd['time min']:{
+                        dd['time max']: dataD }}}}
+                                    }
+            doc['insert time'] = datetime.datetime.now()
+
+            Mdb[s.collection].insert_one(doc)
+        else:
+            update_str = '.'.join( [dd[fd] for fd in desc_fields ] )
+            Mdb[s.collection].update(doc_query,{'$set':{update_str:dataD,
+                                    'update time':datetime.datetime.now() } })
 
 
 class Neuropsych(Acquisition):

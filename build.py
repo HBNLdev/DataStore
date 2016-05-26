@@ -161,3 +161,29 @@ def erp_data():
         eegO.store()
     sourceO = O.SourceInfo('ERPdata', list(zip(avgh1_files, datemods)))
     sourceO.store()
+
+def ero_pheno(files_dates = None):
+    if not files_dates:
+        base_dir = '/processed_data'
+        start_dirs = ['csv-files-v60'] #,'csv-files-v40'
+        glob_expr = '*.csv'
+        skip_dir = 'ERO-results'
+        for start_dir in start_dirs:
+            path = os.path.join(base_dir,start_dir)
+            all_eeg_csvs, datemods = FH.identify_files(path,glob_expr)
+            site_eeg_csvs_dates = [ fp_d for fp_d in zip(all_eeg_csvs,datemods) \
+                                if skip_dir not in fp_d[0] ]
+
+    else: site_eeg_csvs_dates = files_dates
+
+    for fileP,date in site_eeg_csvs_dates:
+        fileO = FH.ERO_csv( fileP )
+
+        for sub_ses in fileO.data_by_sub_ses():
+
+            eroPhenoO = O.EROpheno( sub_ses )
+            eroPhenoO.store()
+
+
+    
+    #return site_eeg_csvs_dates
