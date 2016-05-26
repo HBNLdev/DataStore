@@ -8,6 +8,7 @@ import utils
 from collections import OrderedDict
 from datetime import datetime
 import scipy.io
+import pandas as pd
 
 import organization as O
 
@@ -489,6 +490,104 @@ class mt_file:
             if latency1 > latency2:
                 return (False, 'Wrong order for case ' + str(case))
         return True
+
+class ERO_csv:
+    ''' Compilations in processed data '''
+    columns = ['ID', 'session', 'trial', 'F3', 'FZ', 'F4', 'C3', 'CZ', 'C4', 'P3','PZ', 'P4']
+    parameterD = {'e':{'name':'electrodes',
+                        'values':{'1':'all',
+                                '4':'center 9'}
+                        },
+                'b':{'name':'baseline type',
+                        'values':{'0':'none',
+                                '1':'mean'} },
+                #'m':{},
+                'hi':{'name':'hi-pass','values':'numeric'},
+                'lo':{'name':'lo-pass','values':'numeric'},
+                'n':{'name':'minimum trials','values':'numeric'},
+                's':{'name':'threshold electrodes','values':'numeric'},
+                't':{'name':'threshold level','values':'numeric'},
+                'u':{'name':'threshold min time','values':'numeric'},
+                'v':{'name':'threshold max time','values':'numeric'},
+                }
+    defaults_by_exp = {}
+
+    def parse_parameters(param_string,unknown=set()):
+        pD = {'unknown':unknown}
+        for p in param_string.split('-'):
+            pFlag = p[0]
+            if pFlag in ERO_csv.parameterD:
+                pLookup = ERO_csv.parameterD[pFlag]
+                pval = p[1:]
+                pOpts = pLookup['values']
+                if  pOpts == 'numeric':
+                    pval = int(pval)
+                else:
+                    pval = pOpts[pval]
+                pD[pLookup['name']] = pval
+            else:
+                pD['unknown'].update(p)
+        return pD
+
+    def __init__(s, filepath):
+        s.filepath = filepath
+        s.filename = os.path.split(filepath)[1]
+        s.parameters = ERO_csv.defaults_by_exp.copy()
+
+        s.parse_fileinfo()
+
+    def parse_fileinfo(s):
+        path_parts = s.filepath.split(os.path.sep)
+        path_parameters = path_parts[-3]
+        s.parameters.update( ERO_csv.parse_parameters( path_parameters ) )
+
+        file_parts = s.filename.split('_')
+        exp, case = file_parts[0].split('-')
+        freq_min, freq_max = [float(v) for v in file_parts[1].split('-') ]
+        time_min, time_max = [int(v) for v in file_parts[2].split('-') ]
+        for param in file_parts[3:-4]:
+            s.parameters.update( ERO_csv.parse_parameters(param, 
+                                    unknown=s.parameters['unknown']) )
+
+
+        s.parameters['unknown'] = list(s.parameters['unknown'])
+        pwr_type = file_parts[-4].split('-')[0]
+        date = file_parts[-1].split('.')[0]
+        mod_date = datetime.fromtimestamp(os.path.getmtime(s.filepath))
+
+        s.exp_info = {'experiment': exp,
+                  'case': case }
+
+        s.dates = {'file date': date,
+                  'mod date': mod_date}
+
+        s.phenotype = {'power type':pwr_type,
+                        'frequency min':freq_min,
+                        'frequency max':freq_max,
+                        'time min':time_min,
+                        'time max':time_max }
+
+    def read_data(s):
+        ''' prepare the data field for the database object '''
+        s.data = pd.read_csv(s.filepath,converters={'ID':str},na_values=['.'])
+
+    def data_for_file(s):
+        fileD = s.phenotype.copy()
+        fileD.update(s.exp_info)
+        fileD.update(s.parameters)
+        fileD.update(s.dates)
+
+        return fileD
+
+    def data_by_sub_ses(s):
+        ''' returns an iterator over rows of data by subject and session including 
+            file and phenotype info '''
+        s.read_data()
+        for row in s.data.iterrows():
+            rowD = row[1].to_dict()
+            rowD.update(s.exp_info)
+            rowD.update(s.phenotype)
+            yield rowD
 
 
 ##############################
