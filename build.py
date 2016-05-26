@@ -180,9 +180,15 @@ def ero_pheno(files_dates = None):
         fileO = FH.ERO_csv( fileP )
         file_info = fileO.data_for_file()
 
-        eroFileO = O.EROcsv(fileP,file_info)
-        insert_info = eroFileO.store_track()
-        fileO_id = insert_info.inserted_id
+        eroFileQ = O.Mdb['EROcsv'].find({'filepath':fileP})
+        if eroFileQ.count() > 1:
+            print('Repeat for '+fileP)
+        if eroFileQ.count() > 0:
+            fileO_id = eroFileQ.next()['_id']
+        else:
+            eroFileO = O.EROcsv(fileP,file_info)
+            insert_info = eroFileO.store_track()
+            fileO_id = insert_info.inserted_id
 
         for sub_ses in fileO.data_by_sub_ses():
 
