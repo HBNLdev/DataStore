@@ -571,16 +571,22 @@ class ERO_csv:
         ''' prepare the data field for the database object '''
         s.data = pd.read_csv(s.filepath,converters={'ID':str},na_values=['.'])
 
+    def data_for_file(s):
+        fileD = s.phenotype.copy()
+        fileD.update(s.exp_info)
+        fileD.update(s.parameters)
+        fileD.update(s.dates)
+
+        return fileD
+
     def data_by_sub_ses(s):
         ''' returns an iterator over rows of data by subject and session including 
             file and phenotype info '''
         s.read_data()
         for row in s.data.iterrows():
             rowD = row[1].to_dict()
-            rowD.update(s.dates)
             rowD.update(s.exp_info)
             rowD.update(s.phenotype)
-            rowD['parameters'] = s.parameters
             yield rowD
 
 

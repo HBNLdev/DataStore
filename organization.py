@@ -57,6 +57,11 @@ class MongoBacked:
         s.data['insert_time'] = datetime.datetime.now()
         Mdb[s.collection].insert_one(s.data)
 
+    def store_track(s):
+        s.data['insert_time'] = datetime.datetime.now()
+        insert = Mdb[s.collection].insert_one(s.data)
+        return insert
+
     def storeNaTsafe(s):
         s.data['insert_time'] = datetime.datetime.now()
         remove_NaTs(s.data)
@@ -94,13 +99,27 @@ class Acquisition(MongoBacked):
         s.subject = I['subject']
         s.data = I
 
+class EROcsv(MongoBacked):
+
+    collection = 'EROcsv'
+
+    desc_fields = ['power type','experiment','case','frequency min','frequency max',
+             'time min','time max','parameters','file date', 'mod date']
+
+    def __init__(s,filepath,info):
+        s.filepath = filepath
+        s.data = info
+        s.data['filepath'] = filepath
+
+
 class EROpheno(Acquisition):
     def_info = {'technique':'EEG',
                 'system':'unknown'}
     collection = 'EROpheno'
 
-    def __init__(s,data):
+    def __init__(s,data,data_file_id):
         s.data = data
+        s.data_file_link = data_file_id
 
         s.subject = data['ID']
         s.session = data['session']
@@ -116,11 +135,9 @@ class EROpheno(Acquisition):
         # avoid conflict with mongo nesting syntax
         data_desc = dd = { fd:str(Sdata.pop(fd)).replace('.','p') \
                          for fd in desc_fields }
-        proc_fields = ['parameters','file date','mod date']
-        proc_desc = { fd:Sdata.pop(fd) for fd in proc_fields }
 
         doc_lookup = Mdb[s.collection].find( doc_query )
-        dataD = {'process':proc_desc, 'data':Sdata}
+        dataD = {'EROcsv_link':s.data_file_link, 'data':Sdata}
         if doc_lookup.count() == 0:
             doc = doc_query
             doc[dd['power type']] = { dd['case']:{
