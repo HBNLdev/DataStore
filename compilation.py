@@ -146,10 +146,7 @@ def format_ERPprojection(conds_peaks, chans, measures=['amp', 'lat']):
 
 def format_EROprojection(conds, freqs, times, chans, measures=['evo', 'tot']):
 
-    def convert_decimal(string):
-        return ''.join(['p' if char is '.' else char for char in string])
-
-    freqs = [[convert_decimal(str(float(int(lim)))) for lim in lims]
+    freqs = [[str(float(int(lim))).replace('.', 'p') for lim in lims]
              for lims in freqs]
     times = [[str(int(lim)) for lim in lims] for lims in times]
 

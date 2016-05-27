@@ -117,7 +117,7 @@ def parse_filename(filename, include_full_ID=False):
             # masscomp or neuroscan
             if fam_number == '0001':
                 # need to look here for three recordings on family 0001
-                family = 0;
+                family = 0
 
         else:
             family = fam_number
@@ -148,7 +148,7 @@ def parse_filename(filename, include_full_ID=False):
             session_letter = 'b'
 
         subject = filename[8:11]
-        subject_piece = site_hash_rev[ site_hash[site_letter] ]+filename[4:11]
+        subject_piece = site_hash_rev[site_hash[site_letter]] + filename[4:11]
         version = filename[2]
 
     output = {'system': system,
@@ -222,7 +222,7 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
                         if all(param_ck) and time_ck and filter_ck:
                             file_list.append(fullpath)
                             date_mod = datetime.fromtimestamp(
-                            	os.path.getmtime(fullpath))
+                                os.path.getmtime(fullpath))
                             date_list.append(date_mod)
 
     return file_list, date_list
@@ -257,8 +257,8 @@ class cnth1_file:
     def parse_fileDB(s):
         ''' prepare the data field for the database object '''
         s.data = {}
-        s.data.update( s.file_info )
-        s.data.update( {'filepath': s.filepath} )
+        s.data.update(s.file_info)
+        s.data.update({'filepath': s.filepath})
         s.data['ID'] = s.data['id']
 
     def read_trial_info(s, nlines=-1):
@@ -336,9 +336,9 @@ class mt_file:
                        'vp3': {1: 't', 2: 'nt', 3: 'nv'},
                        'ant': {1: 'j', 2: 'p', 3: 'a', 4: 'w'},
                        'cpt': {1: 'g', 2: 'c', 3: 'cng',
-                       		   4: 'db4ng', 5: 'ng', 6: 'dad'},
-               		   'stp': {1: 'c', 2: 'i'},
-                       		   }
+                               4: 'db4ng', 5: 'ng', 6: 'dad'},
+                       'stp': {1: 'c', 2: 'i'},
+                       }
 
     def normAntCase(sub_ses):
         exp_doc = list(O.Mdb.EEG.find({'subject.subject_id': {'$regex': '.' + sub_ses[0] + '.'},
@@ -365,7 +365,7 @@ class mt_file:
 
     def parse_header(s):
         of = open(s.fullpath, 'r')
-        reading_header = True;
+        reading_header = True
         s.header_lines = 0
         while reading_header:
             file_line = of.readline()
@@ -405,13 +405,13 @@ class mt_file:
             case = case_convdict[int(k[0])]
             peak = k[1]
             inner_ddict = {}
-            for chan, amp_lat in s.data[k].items(): # chans
-                if type(amp_lat) is tuple: # if amp / lat tuple
+            for chan, amp_lat in s.data[k].items():  # chans
+                if type(amp_lat) is tuple:  # if amp / lat tuple
                     inner_ddict.update(
                         {chan: {'amp': amp_lat[0], 'lat': amp_lat[1]}})
-            ddict.update({case+'_'+peak: inner_ddict})
+            ddict.update({case + '_' + peak: inner_ddict})
         s.data = ddict
-        s.data.update( s.file_info )
+        s.data.update(s.file_info)
         s.data['ID'] = s.data['id']
 
     def parse_file(s):
@@ -424,7 +424,8 @@ class mt_file:
             key = (Ld['case_num'], Ld['peak'])
             if key not in s.data:
                 s.data[key] = OrderedDict()
-            s.data[key][Ld['electrode'].upper()] = (Ld['amplitude'], Ld['latency'])
+            s.data[key][Ld['electrode'].upper()] = (
+                Ld['amplitude'], Ld['latency'])
             if 'reaction_time' not in s.data[key]:
                 s.data[key]['reaction_time'] = Ld['reaction_time']
         return
@@ -440,9 +441,12 @@ class mt_file:
                 header_data[cp[0]] = 0
             header_data[cp[0]] += 1
 
-        s.header_text = '#nchans ' + str(len(s.data[cases_peaks[0]]) - 1) + '\n'  # one less for reaction_time
+        # one less for reaction_time
+        s.header_text = '#nchans ' + \
+            str(len(s.data[cases_peaks[0]]) - 1) + '\n'
         for cs, ch_count in header_data.items():
-            s.header_text += '#case ' + str(cs) + '; npeaks ' + str(ch_count) + ';\n'
+            s.header_text += '#case ' + \
+                str(cs) + '; npeaks ' + str(ch_count) + ';\n'
 
         print(s.header_text)
 
@@ -456,7 +460,8 @@ class mt_file:
         case_problems = []
         for pknum_name, pk_list in expected.items():
             if s.header['cases_peaks'][pknum_name[0]] != len(pk_list):
-                case_problems.append('Wrong number of peaks for case ' + str(pknum_name))
+                case_problems.append(
+                    'Wrong number of peaks for case ' + str(pknum_name))
         if case_problems:
             return str(case_problems)
 
@@ -480,47 +485,50 @@ class mt_file:
                 latency1 = float(s.data[(str(case[0]), peaks[0])]['FZ'][1])
                 latency2 = float(s.data[(str(case[0]), peaks[1])]['FZ'][1])
             except:
-                print(s.fullpath + ': ' + str(s.data[(str(case[0]), peaks[0])].keys()))
+                print(s.fullpath + ': ' +
+                      str(s.data[(str(case[0]), peaks[0])].keys()))
             if latency1 > latency_thresh:
                 return (
-                False, str(case) + ' ' + peaks[0] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
+                    False, str(case) + ' ' + peaks[0] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
             if latency2 > latency_thresh:
                 return (
-                False, str(case) + ' ' + peaks[1] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
+                    False, str(case) + ' ' + peaks[1] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
             if latency1 > latency2:
                 return (False, 'Wrong order for case ' + str(case))
         return True
 
+
 class ERO_csv:
     ''' Compilations in processed data '''
-    columns = ['ID', 'session', 'trial', 'F3', 'FZ', 'F4', 'C3', 'CZ', 'C4', 'P3','PZ', 'P4']
-    parameterD = {'e':{'name':'electrodes',
-                        'values':{'1':'all',
-                                '4':'center 9'}
+    columns = ['ID', 'session', 'trial', 'F3', 'FZ',
+               'F4', 'C3', 'CZ', 'C4', 'P3', 'PZ', 'P4']
+    parameterD = {'e': {'name': 'electrodes',
+                        'values': {'1': 'all',
+                                   '4': 'center 9'}
                         },
-                'b':{'name':'baseline type',
-                        'values':{'0':'none',
-                                '1':'mean'} },
-                #'m':{},
-                'hi':{'name':'hi-pass','values':'numeric'},
-                'lo':{'name':'lo-pass','values':'numeric'},
-                'n':{'name':'minimum trials','values':'numeric'},
-                's':{'name':'threshold electrodes','values':'numeric'},
-                't':{'name':'threshold level','values':'numeric'},
-                'u':{'name':'threshold min time','values':'numeric'},
-                'v':{'name':'threshold max time','values':'numeric'},
-                }
+                  'b': {'name': 'baseline type',
+                        'values': {'0': 'none',
+                                   '1': 'mean'}},
+                  #'m':{},
+                  'hi': {'name': 'hi-pass', 'values': 'numeric'},
+                  'lo': {'name': 'lo-pass', 'values': 'numeric'},
+                  'n': {'name': 'minimum trials', 'values': 'numeric'},
+                  's': {'name': 'threshold electrodes', 'values': 'numeric'},
+                  't': {'name': 'threshold level', 'values': 'numeric'},
+                  'u': {'name': 'threshold min time', 'values': 'numeric'},
+                  'v': {'name': 'threshold max time', 'values': 'numeric'},
+                  }
     defaults_by_exp = {}
 
-    def parse_parameters(param_string,unknown=set()):
-        pD = {'unknown':unknown}
+    def parse_parameters(param_string, unknown=set()):
+        pD = {'unknown': unknown}
         for p in param_string.split('-'):
             pFlag = p[0]
             if pFlag in ERO_csv.parameterD:
                 pLookup = ERO_csv.parameterD[pFlag]
                 pval = p[1:]
                 pOpts = pLookup['values']
-                if  pOpts == 'numeric':
+                if pOpts == 'numeric':
                     pval = int(pval)
                 else:
                     pval = pOpts[pval]
@@ -539,16 +547,15 @@ class ERO_csv:
     def parse_fileinfo(s):
         path_parts = s.filepath.split(os.path.sep)
         path_parameters = path_parts[-3]
-        s.parameters.update( ERO_csv.parse_parameters( path_parameters ) )
+        s.parameters.update(ERO_csv.parse_parameters(path_parameters))
 
         file_parts = s.filename.split('_')
         exp, case = file_parts[0].split('-')
-        freq_min, freq_max = [float(v) for v in file_parts[1].split('-') ]
-        time_min, time_max = [int(v) for v in file_parts[2].split('-') ]
+        freq_min, freq_max = [float(v) for v in file_parts[1].split('-')]
+        time_min, time_max = [int(v) for v in file_parts[2].split('-')]
         for param in file_parts[3:-4]:
-            s.parameters.update( ERO_csv.parse_parameters(param, 
-                                    unknown=s.parameters['unknown']) )
-
+            s.parameters.update(ERO_csv.parse_parameters(param,
+                                                         unknown=s.parameters['unknown']))
 
         s.parameters['unknown'] = list(s.parameters['unknown'])
         pwr_type = file_parts[-4].split('-')[0]
@@ -556,20 +563,21 @@ class ERO_csv:
         mod_date = datetime.fromtimestamp(os.path.getmtime(s.filepath))
 
         s.exp_info = {'experiment': exp,
-                  'case': case }
+                      'case': case}
 
         s.dates = {'file date': date,
-                  'mod date': mod_date}
+                   'mod date': mod_date}
 
-        s.phenotype = {'power type':pwr_type,
-                        'frequency min':freq_min,
-                        'frequency max':freq_max,
-                        'time min':time_min,
-                        'time max':time_max }
+        s.phenotype = {'power type': pwr_type,
+                       'frequency min': freq_min,
+                       'frequency max': freq_max,
+                       'time min': time_min,
+                       'time max': time_max}
 
     def read_data(s):
         ''' prepare the data field for the database object '''
-        s.data = pd.read_csv(s.filepath,converters={'ID':str},na_values=['.'])
+        s.data = pd.read_csv(s.filepath, converters={
+                             'ID': str}, na_values=['.'])
 
     def data_for_file(s):
         fileD = s.phenotype.copy()
@@ -583,11 +591,10 @@ class ERO_csv:
         ''' returns an iterator over rows of data by subject and session including 
             file and phenotype info '''
         s.read_data()
-        for row in s.data.iterrows():
-            rowD = row[1].to_dict()
-            rowD.update(s.exp_info)
-            rowD.update(s.phenotype)
-            yield rowD
+        for row in s.data.to_dict(orient='records'):
+            row.update(s.exp_info)
+            row.update(s.phenotype)
+            yield row
 
 
 ##############################
@@ -620,7 +627,7 @@ class neuropsych_xml:
         s.site = s.path_parts[-3]
         s.subject_id = s.fileparts[0]
         s.session = s.fileparts[1]
-        
+
         s.data = {'ID': s.subject_id,
                   'site': s.site,
                   'session': s.session,
@@ -630,11 +637,11 @@ class neuropsych_xml:
     def read_file(s):
         # this function needs to be in /usr/bin of the invoking system
         func_name = 'do_np_processB'
-        raw_line = subprocess.check_output( [func_name, s.filepath])
+        raw_line = subprocess.check_output([func_name, s.filepath])
         data_dict = s.parse_csvline(raw_line)
         data_dict.pop('id', None)
         data_dict.pop('sessioncode', None)
-        s.data.update( data_dict )
+        s.data.update(data_dict)
 
     def parse_csvline(s, raw_line):
         # [:-1] excludes the \n at line end
@@ -642,33 +649,34 @@ class neuropsych_xml:
 
         # handle missing data, '.' will indicate a missing val
         if 'No TOLT file' in lst[10] and 'No CBST file' in lst[10]:
-            lst = lst[:10] + 41*['.']
+            lst = lst[:10] + 41 * ['.']
         elif 'No TOLT file' in lst[10]:
-            lst = lst[:10] + 32*['.'] + lst[11:]
+            lst = lst[:10] + 32 * ['.'] + lst[11:]
         elif 'No CBST file' in lst[42]:
-            lst = lst[:42] + 9*['.']
+            lst = lst[:42] + 9 * ['.']
 
         # convert to dict in anticipation of storing as record
         d = dict(zip(s.cols, lst))
         # convert dict items to appropriate types
         for k, v in d.items():
-            d[k] = s.parse_csvitem(k, d.pop(k)) # pop passes the val to parser
+            d[k] = s.parse_csvitem(k, d.pop(k))  # pop passes the val to parser
         return d
 
     def parse_csvitem(s, k, v):
         if v is '.':
-            return None # these will get safely coerced to NaN by pandas df
+            return None  # these will get safely coerced to NaN by pandas df
         else:
-            v = v.lstrip() # remove leading whitespace
-            if k in ['dob', 'testdate']: 
-                v = datetime.strptime(v, '%m/%d/%Y') # dates
+            v = v.lstrip()  # remove leading whitespace
+            if k in ['dob', 'testdate']:
+                v = datetime.strptime(v, '%m/%d/%Y')  # dates
             elif k in ['id', 'gender', 'hand', 'sessioncode']:
-                pass # leave these as strings
-            elif '%' in k: 
-                v = float(v[:-1])/100 # percentages converted to proportions
+                pass  # leave these as strings
+            elif '%' in k:
+                v = float(v[:-1]) / 100  # percentages converted to proportions
             else:
-                v = float(v) # all other data becomes float
+                v = float(v)  # all other data becomes float
             return v
+
 
 class neuropsych_summary:
     def __init__(s, filepath):
@@ -697,12 +705,14 @@ class neuropsych_summary:
         of.close()
 
         # find section line numbers
-        section_beginnings = [lines.index(k) for k in s.section_header_funs_names] + [-1]
+        section_beginnings = [lines.index(
+            k) for k in s.section_header_funs_names] + [-1]
         ind = -1
         for sec, fun_nm in s.section_header_funs_names.items():
             ind += 1
             sec_cols = lines[section_beginnings[ind] + 1].split('\t')
-            sec_lines = [L.split('\t') for L in lines[section_beginnings[ind] + 2:section_beginnings[ind + 1]]]
+            sec_lines = [L.split('\t') for L in lines[section_beginnings[
+                ind] + 2:section_beginnings[ind + 1]]]
             s.data[fun_nm[1]] = eval('s.' + fun_nm[0])(sec_cols, sec_lines)
 
 
@@ -715,9 +725,11 @@ def parse_value_with_info(val, column, integer_columns, float_columns, boolean_c
         val = bool(boolean_columns[column].index(val))
     return val
 
+
 class tolt_summary_file(neuropsych_summary):
     integer_columns = ['PegCount', 'MinimumMoves', 'MovesMade', 'ExcessMoves']
-    float_columns = ['AvgPickupTime', 'AvgTotalTime', 'AvgTrialTime', '%AboveOptimal', 'TotalTrialsTime', 'AvgTrialsTime']
+    float_columns = ['AvgPickupTime', 'AvgTotalTime', 'AvgTrialTime',
+                     '%AboveOptimal', 'TotalTrialsTime', 'AvgTrialsTime']
     # boolean_columns = {}
 
     section_header_funs_names = OrderedDict([
@@ -729,7 +741,8 @@ class tolt_summary_file(neuropsych_summary):
         for trial_line in trial_lines:
             trialD = {}
             for col, val in zip(trial_cols, trial_line):
-                val = parse_value_with_info(val, col, s.integer_columns, s.float_columns)
+                val = parse_value_with_info(
+                    val, col, s.integer_columns, s.float_columns)
                 if col == 'TrialNumber':
                     trial_num = val
                 else:
@@ -741,15 +754,17 @@ class tolt_summary_file(neuropsych_summary):
         # summary data is transposed
         for lnum, tl in enumerate(test_lines):
             if tl[0][0] == '%':
-                test_lines[lnum] = [tl[0]] + [st[:-1] if '%' in st else st for st in tl[1:]]
+                test_lines[lnum] = [tl[0]] + \
+                    [st[:-1] if '%' in st else st for st in tl[1:]]
             # print(type(tl),tl)
             # print([ st[:-1] if '%' in st else st for st in tl[1:] ])
             # tlinesP.append( tl[0] + [ st[:-1] if '%' in st else st for st in tl[1:] ] )
-        test_data = {line[0]: [parse_value_with_info(val, line[0], s.integer_columns, s.float_columns) \
+        test_data = {line[0]: [parse_value_with_info(val, line[0], s.integer_columns, s.float_columns)
                                for val in line[1:]] for line in test_lines}
         caseD = {}  # case:{} for case in test_cols[1:] }
         for cnum, case in enumerate(test_cols[1:]):
-            caseD[case] = {stat: data[cnum] for stat, data in test_data.items()}
+            caseD[case] = {stat: data[cnum]
+                           for stat, data in test_data.items()}
         return caseD
 
     def __init__(s, filepath):
@@ -760,7 +775,8 @@ class tolt_summary_file(neuropsych_summary):
 class cbst_summary_file(neuropsych_summary):
     integer_columns = ['Trials', 'TrialsCorrect']
     float_columns = ['TrialTime', 'AverageTime']
-    boolean_columns = {'Direction': ['Backward', 'Forward'], 'Correct': ['-', '+']}  # False, True
+    boolean_columns = {'Direction': [
+        'Backward', 'Forward'], 'Correct': ['-', '+']}  # False, True
 
     section_header_funs_names = {'Trial Summary': ('parse_trial_summary', 'trials'),
                                  'Test Summary': ('parse_test_summary', 'tests')}
@@ -770,7 +786,8 @@ class cbst_summary_file(neuropsych_summary):
         for trial_line in trial_lines:
             trialD = {}
             for col, val in zip(trial_cols, trial_line):
-                val = parse_value_with_info(val, col, s.integer_columns, s.float_columns, s.boolean_columns)
+                val = parse_value_with_info(
+                    val, col, s.integer_columns, s.float_columns, s.boolean_columns)
                 if col == 'TrialNum':
                     trial_num = val
                 else:
@@ -786,7 +803,8 @@ class cbst_summary_file(neuropsych_summary):
                 if col == 'Direction':
                     dirD = tests[val]
                 else:
-                    val = parse_value_with_info(val, col, s.integer_columns, s.float_columns, s.boolean_columns)
+                    val = parse_value_with_info(
+                        val, col, s.integer_columns, s.float_columns, s.boolean_columns)
                     if col == 'Length':
                         test_len = val
                     else:
@@ -813,7 +831,8 @@ def move_picked_files_to_processed(from_base, from_folders, working_directory, f
 
     to_base = '/processed_data/mt-files/'
     to_copy = []
-    counts = {'non coga': 0, 'total': 0, 'to move': 0, 'masscomp': 0, 'neuroscan': 0}
+    counts = {'non coga': 0, 'total': 0,
+              'to move': 0, 'masscomp': 0, 'neuroscan': 0}
     if do_now:
         delete_file = open(os.path.join(working_directory,
                                         utils.next_file_with_base(working_directory, 'picked_files_copied_to_processed',
@@ -829,10 +848,12 @@ def move_picked_files_to_processed(from_base, from_folders, working_directory, f
                 continue
 
             print('checking: ' + from_folder)
-            files = [f for f in os.listdir(from_folder) if not os.path.isdir(os.path.join(from_folder, f))]
+            files = [f for f in os.listdir(from_folder) if not os.path.isdir(
+                os.path.join(from_folder, f))]
             if filter_list:
                 print(len(files))
-                files = [f for f in files if any([s in f for s in filter_list])]
+                files = [f for f in files if any(
+                    [s in f for s in filter_list])]
                 print(len(files))
             for file in files:
                 counts['total'] += 1
@@ -861,9 +882,9 @@ def move_picked_files_to_processed(from_base, from_folders, working_directory, f
                         if reject:
                             to_path += 'reject' + os.path.sep
 
-                        to_copy.append((from_folder + os.path.sep + file, to_path))
+                        to_copy.append(
+                            (from_folder + os.path.sep + file, to_path))
                         counts['to move'] += 1
-
 
                     except:
                         print('uninterpretable file: ' + file)
@@ -919,7 +940,7 @@ class erpbeh_mat:
             for mi, meas in enumerate(column_names[2:6]):  # hackish
                 for ti, ttype in enumerate(exp[1][0]):
                     df_dict.update({ttype[0] + '_' + meas:
-                                        float(struct[ei][mi + 2][ti])})
+                                    float(struct[ei][mi + 2][ti])})
 
         s.data.update(O.unflatten_dict(df_dict))
         # s.data.update(df_dict)

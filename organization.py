@@ -99,25 +99,26 @@ class Acquisition(MongoBacked):
         s.subject = I['subject']
         s.data = I
 
+
 class EROcsv(MongoBacked):
 
     collection = 'EROcsv'
 
-    desc_fields = ['power type','experiment','case','frequency min','frequency max',
-             'time min','time max','parameters','file date', 'mod date']
+    desc_fields = ['power type', 'experiment', 'case', 'frequency min', 'frequency max',
+                   'time min', 'time max', 'parameters', 'file date', 'mod date']
 
-    def __init__(s,filepath,info):
+    def __init__(s, filepath, info):
         s.filepath = filepath
         s.data = info
         s.data['filepath'] = filepath
 
 
 class EROpheno(Acquisition):
-    def_info = {'technique':'EEG',
-                'system':'unknown'}
+    def_info = {'technique': 'EEG',
+                'system': 'unknown'}
     collection = 'EROpheno'
 
-    def __init__(s,data,data_file_id):
+    def __init__(s, data, data_file_id):
         s.data = data
         s.data_file_link = data_file_id
 
@@ -128,31 +129,32 @@ class EROpheno(Acquisition):
     def store(s):
         Sdata = s.data.copy()
 
-        doc_query = { fd:Sdata.pop(fd) for fd in ['ID','session','experiment'] }
-        desc_fields = ['power type','case','frequency min','frequency max',
-                     'time min','time max']
-        # converting description fields to strings and replacing '.' with 'p' to 
+        doc_query = {fd: Sdata.pop(fd)
+                     for fd in ['ID', 'session', 'experiment']}
+        desc_fields = ['power type', 'case', 'frequency min', 'frequency max',
+                       'time min', 'time max']
+        # converting description fields to strings and replacing '.' with 'p' to
         # avoid conflict with mongo nesting syntax
-        data_desc = dd = { fd:str(Sdata.pop(fd)).replace('.','p') \
-                         for fd in desc_fields }
+        data_desc = dd = {fd: str(Sdata.pop(fd)).replace('.', 'p')
+                          for fd in desc_fields}
 
-        doc_lookup = Mdb[s.collection].find( doc_query )
-        dataD = {'EROcsv_link':s.data_file_link, 'data':Sdata}
+        doc_lookup = Mdb[s.collection].find(doc_query)
+        dataD = {'EROcsv_link': s.data_file_link, 'data': Sdata}
         if doc_lookup.count() == 0:
             doc = doc_query
-            doc[dd['power type']] = { dd['case']:{
-                    dd['frequency min']:{
-                    dd['frequency max']:{
-                        dd['time min']:{
-                        dd['time max']: dataD }}}}
-                                    }
+            doc[dd['power type']] = {dd['case']: {
+                dd['frequency min']: {
+                    dd['frequency max']: {
+                        dd['time min']: {
+                            dd['time max']: dataD}}}}
+            }
             doc['insert time'] = datetime.datetime.now()
 
             Mdb[s.collection].insert_one(doc)
         else:
-            update_str = '.'.join( [dd[fd] for fd in desc_fields ] )
-            Mdb[s.collection].update(doc_query,{'$set':{update_str:dataD,
-                                    'update time':datetime.datetime.now() } })
+            update_str = '.'.join([dd[fd] for fd in desc_fields])
+            Mdb[s.collection].update({'_id': doc_lookup['_id']}, {
+                                     '$set': {update_str: dataD, 'update time': datetime.datetime.now()}})
 
 
 class Neuropsych(Acquisition):
