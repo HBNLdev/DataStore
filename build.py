@@ -199,4 +199,27 @@ def ero_pheno(files_dates=None):
 
         print('.', end='')
 
+
+def ero_pheno_summary(csvs):
+    for fileP in csvs:
+        fileO = FH.ERO_summary_csv(fileP)
+        file_info = fileO.data_for_file()  # all filename parsing to here
+
+        eroFileQ = O.Mdb['EROcsv'].find({'filepath': fileP})
+        if eroFileQ.count() > 1:
+            print('Repeat for ' + fileP)
+        if eroFileQ.count() > 0:
+            fileO_id = eroFileQ.next()['_id']
+        else:
+            eroFileO = O.EROcsv(fileP, file_info)
+            insert_info = eroFileO.store_track()
+            fileO_id = insert_info.inserted_id
+
+        for sub_ses in fileO.data_by_sub_ses():
+
+            eroPhenoO = O.EROpheno(sub_ses, fileO_id)
+            eroPhenoO.store()
+
+        print('.', end='')
+
     # return site_eeg_csvs_dates

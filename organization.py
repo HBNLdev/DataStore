@@ -7,7 +7,7 @@ import pandas as pd
 import file_handling as FH
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
-Mdb = MongoConn['COGAb']
+Mdb = MongoConn['COGAt']
 
 
 def flatten_dict(D, prefix=''):
@@ -111,6 +111,7 @@ class EROcsv(MongoBacked):
         s.filepath = filepath
         s.data = info
         s.data['filepath'] = filepath
+        s.data['unknown'] = list(s.data['unknown'])
 
 
 class EROpheno(Acquisition):
@@ -153,8 +154,9 @@ class EROpheno(Acquisition):
             Mdb[s.collection].insert_one(doc)
         else:
             update_str = '.'.join([dd[fd] for fd in desc_fields])
-            Mdb[s.collection].update({'_id': doc_lookup['_id']}, {
-                                     '$set': {update_str: dataD, 'update time': datetime.datetime.now()}})
+            Mdb[s.collection].update({'_id': doc_lookup[0]['_id']},
+                                     {'$set': {update_str: dataD,
+                                               'update time': datetime.datetime.now()}})
 
 
 class Neuropsych(Acquisition):
