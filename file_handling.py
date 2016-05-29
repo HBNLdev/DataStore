@@ -693,11 +693,25 @@ class ERO_summary_csv:
             file and phenotype info '''
         s.read_data()
 
-        print('finished reading and dropping columns')
         for row in s.data.to_dict(orient='records'):
             row.update(s.exp_info)
             row.update(s.phenotype)
             yield row
+
+    def data_3tuple_bulklist(s):
+        def join_ufields(row, exp):
+            return '_'.join([row['ID'], row['session'], exp])
+        s.read_data()
+        if s.data.shape[0] == 0:
+            s.data = []
+            return
+        s.data['uID'] = s.data.apply(join_ufields, axis=1,
+                                     args=[s.exp_info['experiment']])
+        for k, v in s.exp_info.items():
+            s.data[k] = v
+        for k, v in s.phenotype.items():
+            s.data[k] = str(v).replace('.', 'p')
+        s.data = list(s.data.to_dict(orient='records'))
 
 
 ##############################

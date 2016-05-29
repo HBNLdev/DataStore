@@ -215,11 +215,34 @@ def ero_pheno_summary(csvs):
             insert_info = eroFileO.store_track()
             fileO_id = insert_info.inserted_id
 
-        for sub_ses in fileO.data_by_sub_ses():
+        for sub_ses in fileO.data_by_sub_ses():  # start planning here for bulk
 
             eroPhenoO = O.EROpheno(sub_ses, fileO_id)
             eroPhenoO.store()
 
         print('.', end='')
 
-    # return site_eeg_csvs_dates
+
+def ero_pheno_summary_bulk(csvs):
+    # rewritten to use bulk_write
+    for fpath in csvs:
+        csvfileO = FH.ERO_summary_csv(fpath)
+        file_info = csvfileO.data_for_file()  # all filename parsing to here
+
+        eroFileQ = O.Mdb['EROcsv'].find({'filepath': fpath})
+        # in the line above should project only _id
+        if eroFileQ.count() >= 1:
+            print('Repeat for ' + fpath)
+            continue
+        else:
+            csvorgO = O.EROcsv(fpath, file_info)
+            insert_info = csvorgO.store_track()
+            csvfileO_id = insert_info.inserted_id
+
+        csvfileO.data_3tuple_bulklist()
+        if csvfileO.data:
+            orgO = O.EROpheno(csvfileO.data, csvfileO_id)
+            orgO.store_bulk()
+        else:
+            print(fpath, 'was empty')
+        print('.', end='')

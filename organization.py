@@ -123,9 +123,10 @@ class EROpheno(Acquisition):
         s.data = data
         s.data_file_link = data_file_id
 
-        s.subject = data['ID']
-        s.session = data['session']
-        s.experiment = data['experiment']
+        if len(s.data) == 1:
+            s.subject = data['ID']
+            s.session = data['session']
+            s.experiment = data['experiment']
 
     def store(s):
         Sdata = s.data.copy()
@@ -157,6 +158,42 @@ class EROpheno(Acquisition):
             Mdb[s.collection].update({'_id': doc_lookup[0]['_id']},
                                      {'$set': {update_str: dataD,
                                                'update time': datetime.datetime.now()}})
+
+    def store_bulk(s):
+        Sdata = s.data.copy()  # is a list
+        desc_fields = ['power type', 'case', 'frequency min',
+                       'frequency max', 'time min', 'time max']
+
+        adding_uids = [new_rec['uID'] for new_rec in Sdata]
+        doc_lookup = Mdb[s.collection].find(
+            {'uID': {'$in': adding_uids}}, {'uID': 1})
+        # in the line above, should project only uID and _id
+        existing_mapper = {doc['uID']: doc['_id'] for doc in doc_lookup}
+
+        bulk_lst = []
+        update_str = '.'.join([Sdata[0][fd] for fd in desc_fields])
+        for new_rec in Sdata:
+            data = {k: new_rec[k] for k in new_rec if 'ln' in k}
+            dataD = {'EROcsv_link': s.data_file_link, 'data': data}
+            if new_rec['uID'] in existing_mapper.keys():
+                # add UpdateOne
+                update_op = pymongo.operations.UpdateOne(
+                    {'_id': existing_mapper[new_rec['uID']]},
+                    {'$set': {update_str: dataD, 'update time': datetime.datetime.now()}})
+                bulk_lst.append(update_op)
+            else:
+                # add InsertOne
+                add_doc = {k: new_rec[k]
+                           for k in ['uID', 'ID', 'session', 'experiment']}
+                add_doc[new_rec['power type']] = {new_rec['case']: {
+                    new_rec['frequency min']: {
+                        new_rec['frequency max']: {
+                            new_rec['time min']: {
+                                new_rec['time max']: dataD}}}}}
+                add_doc['insert time'] = datetime.datetime.now()
+                insert_op = pymongo.operations.InsertOne(add_doc)
+                bulk_lst.append(insert_op)
+        Mdb[s.collection].bulk_write(bulk_lst, ordered=False)
 
 
 class Neuropsych(Acquisition):
