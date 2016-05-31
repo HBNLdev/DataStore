@@ -123,11 +123,6 @@ class EROpheno(Acquisition):
         s.data = data
         s.data_file_link = data_file_id
 
-        if len(s.data) == 1:
-            s.subject = data['ID']
-            s.session = data['session']
-            s.experiment = data['experiment']
-
     def store(s):
         Sdata = s.data.copy()
 
@@ -137,8 +132,8 @@ class EROpheno(Acquisition):
                        'time min', 'time max']
         # converting description fields to strings and replacing '.' with 'p' to
         # avoid conflict with mongo nesting syntax
-        data_desc = dd = {fd: str(Sdata.pop(fd)).replace('.', 'p')
-                          for fd in desc_fields}
+        dd = {fd: str(Sdata.pop(fd)).replace('.', 'p')
+              for fd in desc_fields}
 
         doc_lookup = Mdb[s.collection].find(doc_query)
         dataD = {'EROcsv_link': s.data_file_link, 'data': Sdata}
@@ -160,6 +155,9 @@ class EROpheno(Acquisition):
                                                'update time': datetime.datetime.now()}})
 
     def store_bulk(s):
+        ''' from a list of records to add/update,
+            creates a list of pymongo inserts / updates,
+            then performs them simultaneously with bulk_write '''
         Sdata = s.data.copy()  # is a list
         desc_fields = ['power type', 'case', 'frequency min',
                        'frequency max', 'time min', 'time max']
@@ -194,6 +192,38 @@ class EROpheno(Acquisition):
                 insert_op = pymongo.operations.InsertOne(add_doc)
                 bulk_lst.append(insert_op)
         Mdb[s.collection].bulk_write(bulk_lst, ordered=False)
+
+    def store_joined_bulk(s):
+        ''' bulk_write list of records that have been formatted
+            from joining many CSVs together '''
+        adding_uids = [new_rec['uID'] for new_rec in s.data]
+        doc_lookup = Mdb[s.collection].find(
+            {'uID': {'$in': adding_uids}}, {'uID': 1})
+        existing_mapper = {doc['uID']: doc['_id'] for doc in doc_lookup}
+
+        bulk_lst = []
+        for new_rec in s.data:
+            if new_rec['uID'] in existing_mapper.keys():
+                # add UpdateOne
+                set_spec = unflatten_dict({k.replace('_', '.', 5): v
+                                           for k, v in new_rec.items()})
+                set_spec.update({'update time': datetime.datetime.now()})
+                update_op = pymongo.operations.UpdateOne(
+                    {'_id': existing_mapper[new_rec['uID']]},
+                    {'$set': set_spec})
+                bulk_lst.append(update_op)
+            else:
+                # add InsertOne
+                add_doc = unflatten_dict(new_rec)
+                add_doc['insert time'] = datetime.datetime.now()
+                insert_op = pymongo.operations.InsertOne(add_doc)
+                bulk_lst.append(insert_op)
+        try:
+            Mdb[s.collection].bulk_write(bulk_lst, ordered=False)
+        except:
+            print(s.data_file_link)
+            print(bulk_lst)
+            raise
 
 
 class Neuropsych(Acquisition):

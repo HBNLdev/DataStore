@@ -578,13 +578,14 @@ class ERO_csv:
         ''' prepare the data field for the database object '''
         s.data = pd.read_csv(s.filepath, converters={
                              'ID': str}, na_values=['.'])
+        dup_cols=[col for col in s.data.columns if '.' in col]
+        s.data.drop(dup_cols, axis=1, inplace=True)
 
     def data_for_file(s):
         fileD = s.phenotype.copy()
         fileD.update(s.exp_info)
         fileD.update(s.parameters)
         fileD.update(s.dates)
-
         return fileD
 
     def data_by_sub_ses(s):
@@ -596,52 +597,37 @@ class ERO_csv:
             row.update(s.phenotype)
             yield row
 
+    def data_forjoin(s):
+        ''' creates unique doc identifying field and renames columns
+            in preparation for joining with other CSVs '''
+        def join_ufields(row, exp):
+            return '_'.join([row['ID'], row['session'], exp])
 
-class ERO_summary_csv:
+        s.read_data()
+        if s.data.empty:
+            return
+
+        s.data['uID'] = s.data.apply(join_ufields, axis=1,
+                                     args=[s.exp_info['experiment']])
+        s.data.drop(['ID', 'session'], axis=1, inplace=True)
+        s.data.set_index('uID', inplace=True)
+
+        rename_dict = {col: '_'.join([s.phenotype['power type'],
+                          s.exp_info['case'],
+                          str(s.phenotype['frequency min']).replace('.','p'),
+                          str(s.phenotype['frequency max']).replace('.','p'),
+                          str(s.phenotype['time min']),
+                          str(s.phenotype['time max']),
+                          'data',
+                          col])
+                   		for col in s.data.columns}
+        s.data.rename(columns=rename_dict, inplace=True)
+
+
+class ERO_summary_csv(ERO_csv):
     ''' Compilations in processed data/csv-files-*/ERO-results '''
     rem_columns = ['sex', 'EROage', 'POP', 'wave12-race', '4500-race',
                    'ccGWAS-race', 'COGA11k-race', 'alc_dep_dx', 'alc_dep_ons']
-    parameterD = {'e': {'name': 'electrodes',
-                        'values': {'1': 'all',
-                                   '4': 'center 9'}
-                        },
-                  'b': {'name': 'baseline type',
-                        'values': {'0': 'none',
-                                   '1': 'mean'}},
-                  #'m':{},
-                  'hi': {'name': 'hi-pass', 'values': 'numeric'},
-                  'lo': {'name': 'lo-pass', 'values': 'numeric'},
-                  'n': {'name': 'minimum trials', 'values': 'numeric'},
-                  's': {'name': 'threshold electrodes', 'values': 'numeric'},
-                  't': {'name': 'threshold level', 'values': 'numeric'},
-                  'u': {'name': 'threshold min time', 'values': 'numeric'},
-                  'v': {'name': 'threshold max time', 'values': 'numeric'},
-                  }
-    defaults_by_exp = {}
-
-    def parse_parameters(param_string, unknown=set()):
-        pD = {'unknown': unknown}
-        for p in param_string.split('-'):
-            pFlag = p[0]
-            if pFlag in ERO_summary_csv.parameterD:
-                pLookup = ERO_summary_csv.parameterD[pFlag]
-                pval = p[1:]
-                pOpts = pLookup['values']
-                if pOpts == 'numeric':
-                    pval = int(pval)
-                else:
-                    pval = pOpts[pval]
-                pD[pLookup['name']] = pval
-            else:
-                pD['unknown'].update(p)
-        return pD
-
-    def __init__(s, filepath):
-        s.filepath = filepath
-        s.filename = os.path.split(filepath)[1]
-        s.parameters = ERO_summary_csv.defaults_by_exp.copy()
-
-        s.parse_fileinfo()
 
     def parse_fileinfo(s):
         path_parts = s.filepath.split(os.path.sep)
@@ -675,44 +661,28 @@ class ERO_summary_csv:
                        'time max': time_max}
 
     def read_data(s):
-        ''' prepare the data field for the database object '''
         s.data = pd.read_csv(s.filepath, converters={
                              'ID': str}, na_values=['.'])
-        s.data.drop(s.rem_columns, axis=1, inplace=True)
-
-    def data_for_file(s):
-        fileD = s.phenotype.copy()
-        fileD.update(s.exp_info)
-        fileD.update(s.parameters)
-        fileD.update(s.dates)
-
-        return fileD
-
-    def data_by_sub_ses(s):
-        ''' returns an iterator over rows of data by subject and session including 
-            file and phenotype info '''
-        s.read_data()
-
-        for row in s.data.to_dict(orient='records'):
-            row.update(s.exp_info)
-            row.update(s.phenotype)
-            yield row
+        s.data.drop(s.rem_columns, axis=1, inplace=True) # drop extra cols
+        dup_cols=[col for col in s.data.columns if '.' in col]
+        s.data.drop(dup_cols, axis=1, inplace=True)
 
     def data_3tuple_bulklist(s):
         def join_ufields(row, exp):
             return '_'.join([row['ID'], row['session'], exp])
+
         s.read_data()
-        if s.data.shape[0] == 0:
-            s.data = []
+        if s.data.empty:
             return
+
         s.data['uID'] = s.data.apply(join_ufields, axis=1,
                                      args=[s.exp_info['experiment']])
         for k, v in s.exp_info.items():
             s.data[k] = v
         for k, v in s.phenotype.items():
             s.data[k] = str(v).replace('.', 'p')
-        s.data = list(s.data.to_dict(orient='records'))
 
+        s.data = list(s.data.to_dict(orient='records'))
 
 ##############################
 ##
