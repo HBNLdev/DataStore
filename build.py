@@ -163,7 +163,7 @@ def erp_data():
     sourceO.store()
 
 
-def ero_pheno(files_dates=None):
+def ero_pheno(files_dates=None,debug=False):
     if not files_dates:
         base_dir = '/processed_data'
         start_dirs = ['csv-files-v60']  # ,'csv-files-v40'
@@ -178,7 +178,15 @@ def ero_pheno(files_dates=None):
     else:
         site_eeg_csvs_dates = files_dates
 
+    if debug:
+        D_loop_times = []
+        D_sub_ses_times = []
+
     for fileP, date in site_eeg_csvs_dates:
+        if debug:
+            D_loop_start = datetime.now()
+            D_loop_sub_ses_times = []
+
         fileO = FH.ERO_csv(fileP)
         file_info = fileO.data_for_file()  # all filename parsing to here
 
@@ -193,10 +201,22 @@ def ero_pheno(files_dates=None):
             fileO_id = insert_info.inserted_id
 
         for sub_ses in fileO.data_by_sub_ses():
-
+            if debug:
+                D_sub_ses_start = datetime.now()
             eroPhenoO = O.EROpheno(sub_ses, fileO_id)
             eroPhenoO.store()
+            if debug:
+                D_sub_ses_t = datetime.now() - D_sub_ses_start
+                D_loop_sub_ses_times.append(D_sub_ses_t)
+        if debug:
+            D_sub_ses_times.append(D_loop_sub_ses_times)
+            D_loop_times.append( datetime.now() - D_loop_start )
+
 
         print('.', end='')
+
+    if debug:
+        return {'loops':D_loop_times,
+                'sub_ses':D_sub_ses_times}
 
     # return site_eeg_csvs_dates
