@@ -150,6 +150,7 @@ class EROpheno(Acquisition):
             Mdb[s.collection].insert_one(doc)
         else:
             update_str = '.'.join([dd[fd] for fd in desc_fields])
+
             Mdb[s.collection].update({'_id': doc_lookup[0]['_id']},
                                      {'$set': {update_str: dataD,
                                                'update time': datetime.datetime.now()}})
@@ -224,7 +225,6 @@ class EROpheno(Acquisition):
             print(s.data_file_link)
             print(bulk_lst)
             raise
-
 
 class Neuropsych(Acquisition):
     def_info = {'technique': 'cognitive test'}
