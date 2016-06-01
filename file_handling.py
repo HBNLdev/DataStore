@@ -578,13 +578,14 @@ class ERO_csv:
         ''' prepare the data field for the database object '''
         s.data = pd.read_csv(s.filepath, converters={
                              'ID': str}, na_values=['.'])
+        dup_cols=[col for col in s.data.columns if '.' in col]
+        s.data.drop(dup_cols, axis=1, inplace=True)
 
     def data_for_file(s):
         fileD = s.phenotype.copy()
         fileD.update(s.exp_info)
         fileD.update(s.parameters)
         fileD.update(s.dates)
-
         return fileD
 
     def data_by_sub_ses(s):
@@ -596,6 +597,92 @@ class ERO_csv:
             row.update(s.phenotype)
             yield row
 
+    def data_forjoin(s):
+        ''' creates unique doc identifying field and renames columns
+            in preparation for joining with other CSVs '''
+        def join_ufields(row, exp):
+            return '_'.join([row['ID'], row['session'], exp])
+
+        s.read_data()
+        if s.data.empty:
+            return
+
+        s.data['uID'] = s.data.apply(join_ufields, axis=1,
+                                     args=[s.exp_info['experiment']])
+        s.data.drop(['ID', 'session'], axis=1, inplace=True)
+        s.data.set_index('uID', inplace=True)
+
+        rename_dict = {col: '_'.join([s.phenotype['power type'],
+                          s.exp_info['case'],
+                          str(s.phenotype['frequency min']).replace('.','p'),
+                          str(s.phenotype['frequency max']).replace('.','p'),
+                          str(s.phenotype['time min']),
+                          str(s.phenotype['time max']),
+                          'data',
+                          col])
+                   		for col in s.data.columns}
+        s.data.rename(columns=rename_dict, inplace=True)
+
+
+class ERO_summary_csv(ERO_csv):
+    ''' Compilations in processed data/csv-files-*/ERO-results '''
+    rem_columns = ['sex', 'EROage', 'POP', 'wave12-race', '4500-race',
+                   'ccGWAS-race', 'COGA11k-race', 'alc_dep_dx', 'alc_dep_ons']
+
+    def parse_fileinfo(s):
+        path_parts = s.filepath.split(os.path.sep)
+        calc_version = path_parts[2][-3:]
+
+        file_parts = s.filename.split('_')
+        end_parts = file_parts[-1].split('.')
+
+        calc_parameters = end_parts[0]
+        s.parameters.update(ERO_summary_csv.parse_parameters(calc_parameters))
+
+        exp, case = file_parts[0].split('-')
+        freq_min, freq_max = [float(v) for v in file_parts[1].split('-')]
+        time_min, time_max = [int(v) for v in file_parts[2].split('-')]
+
+        pwr_type = file_parts[3].split('-')[0]
+        date = end_parts[1]
+        mod_date = datetime.fromtimestamp(os.path.getmtime(s.filepath))
+
+        s.exp_info = {'experiment': exp,
+                      'case': case}
+
+        s.dates = {'file date': date,
+                   'mod date': mod_date}
+
+        s.phenotype = {'calc version': calc_version,
+                       'power type': pwr_type,
+                       'frequency min': freq_min,
+                       'frequency max': freq_max,
+                       'time min': time_min,
+                       'time max': time_max}
+
+    def read_data(s):
+        s.data = pd.read_csv(s.filepath, converters={
+                             'ID': str}, na_values=['.'])
+        s.data.drop(s.rem_columns, axis=1, inplace=True) # drop extra cols
+        dup_cols=[col for col in s.data.columns if '.' in col]
+        s.data.drop(dup_cols, axis=1, inplace=True)
+
+    def data_3tuple_bulklist(s):
+        def join_ufields(row, exp):
+            return '_'.join([row['ID'], row['session'], exp])
+
+        s.read_data()
+        if s.data.empty:
+            return
+
+        s.data['uID'] = s.data.apply(join_ufields, axis=1,
+                                     args=[s.exp_info['experiment']])
+        for k, v in s.exp_info.items():
+            s.data[k] = v
+        for k, v in s.phenotype.items():
+            s.data[k] = str(v).replace('.', 'p')
+
+        s.data = list(s.data.to_dict(orient='records'))
 
 ##############################
 ##
