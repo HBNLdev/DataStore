@@ -44,10 +44,11 @@ sparse_submaps = {'questionnaires': qi.sparser_sub,
                   }
 
 sparse_addmaps = {'subjects': mi.sparser_add,
+                  'sessions': mi.session_sadd,
                   }
 
 default_ERPfields = {'ID': 1, 'session': 1, 'version': 1, '_id': 0}
-default_EROfields = {'ID': 1, 'session': 1, '_id': 0}
+default_EROfields = {'ID': 1, 'session': 1, 'uID': 1, '_id': 0}
 
 
 def populate_subcolldict():
@@ -68,14 +69,38 @@ def display_dbcontents():
     pp.pprint(subcoll_dict)
 
 
-def get_subjectdocs(sample):
+def get_subjectdocs(sample, sparsify=False):
     if sample not in subjects_queries.keys():
         print('sample incorrectly specified, the below are valid')
-        # print(', '.join(sorted(list(subjects_queries.keys()))))
         pp.pprint(sorted(list(subjects_queries.keys())))
         return
     else:
-        docs = O.Mdb['subjects'].find(subjects_queries[sample])
+        if sparsify:
+            proj = format_sparseproj('subjects')
+            proj.update({'_id': 0})
+            docs = O.Mdb['subjects'].find(subjects_queries[sample], proj)
+        else:    
+            docs = O.Mdb['subjects'].find(subjects_queries[sample])
+        return docs
+
+def get_sessiondocs(sample, followups=None, sparsify=False):
+    if sample not in subjects_queries.keys():
+        print('sample incorrectly specified, the below are valid')
+        pp.pprint(sorted(list(subjects_queries.keys())))
+        return
+    else:
+        query = subjects_queries[sample]
+        if followups:
+            if len(followups) > 0:
+                query.update({'followup': {'$in': followups}})
+            else:
+                query.update({'followup': followups[0]})
+        if sparsify:
+            proj = format_sparseproj('sessions')
+            proj.update({'_id': 0})
+            docs = O.Mdb['sessions'].find(subjects_queries[sample], proj)
+        else:    
+            docs = O.Mdb['sessions'].find(subjects_queries[sample])
         return docs
 
 
@@ -126,15 +151,26 @@ def get_colldocs(coll, subcoll=None, add_query={}, add_proj={}):
     return docs
 
 
-def buildframe_fromdocs(docs):
+def buildframe_fromdocs(docs, inds=['ID','session']):
     df = pd.DataFrame.from_records(
         [O.flatten_dict(d) for d in list(docs)])
-    if 'ID' in df.columns:
-        df.set_index(['ID'], inplace=True)
+    for ind in inds:
+        if ind in df.columns:
+            if df.index.is_integer():
+                df.set_index(ind, inplace=True)
+            else:
+                df.set_index(ind, append=True, inplace=True)
     # drop empty columns
     df.dropna(axis=1, how='all', inplace=True)
-
     return df
+
+
+def format_sparseproj(coll, subcoll=None):
+    if coll in sparse_addmaps.keys():
+        proj = {field: 1 for field in sparse_addmaps[coll]}
+    else:
+        proj = {}
+    return proj
 
 
 def format_ERPprojection(conds_peaks, chans, measures=['amp', 'lat']):
@@ -146,7 +182,7 @@ def format_ERPprojection(conds_peaks, chans, measures=['amp', 'lat']):
 
 def format_EROprojection(conds, freqs, times, chans, measures=['evo', 'tot']):
 
-    freqs = [[str(float(int(lim))).replace('.', 'p') for lim in lims]
+    freqs = [[str(float(lim)).replace('.', 'p') for lim in lims]
              for lims in freqs]
     times = [[str(int(lim)) for lim in lims] for lims in times]
 
@@ -157,8 +193,7 @@ def format_EROprojection(conds, freqs, times, chans, measures=['evo', 'tot']):
 
 
 def join_collection(keyDF_in, coll, subcoll=None, add_query={},
-                    join_inds=['ID'], id_field='ID', sparsify=False,
-                    drop_empty=True):
+                    join_inds=['ID'], id_field='ID', drop_empty=True):
     if subcoll is not None:
         name = subcoll
     else:
@@ -174,8 +209,6 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={},
         [O.flatten_dict(r) for r in list(docs)])  # BIG JUMP HERE
     newDF['ID'] = newDF[id_field]  # should be more general
 
-    if sparsify:
-        subsparsify_df(newDF, O.Mdb[coll].name, name)
     prepare_indices(newDF, join_inds)
     newDF.columns = [name[:3] + '_' + c for c in newDF.columns]
 
@@ -183,7 +216,7 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={},
     jDF = keyDF.join(newDF)
 
     if drop_empty:  # remove duplicate & empty rows, empty columns
-        jDF.drop_duplicates(inplace=True)
+        # jDF.drop_duplicates(inplace=True)
         jDF.dropna(axis=0, how='all', inplace=True)
         jDF.dropna(axis=1, how='all', inplace=True)
 

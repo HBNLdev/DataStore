@@ -576,8 +576,8 @@ class ERO_csv:
 
     def read_data(s):
         ''' prepare the data field for the database object '''
-        s.data = pd.read_csv(s.filepath, converters={
-                             'ID': str}, na_values=['.'])
+        s.data = pd.read_csv(s.filepath, converters={'ID': str},
+            na_values=['.'], error_bad_lines=False, warn_bad_lines=True)
         dup_cols=[col for col in s.data.columns if '.' in col]
         s.data.drop(dup_cols, axis=1, inplace=True)
 

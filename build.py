@@ -2,6 +2,7 @@
 
 import os
 from datetime import datetime
+from collections import OrderedDict
 from glob import glob
 import numpy as np
 import pandas as pd
@@ -253,53 +254,65 @@ def ero_pheno_summary_bulk(csvs):
         print('.', end='')
 
 
+
 def ero_pheno_join_bulk(csvs):
     ''' join all CSVs in one terminal subdirectory together,
         then bulk_write their rows '''
     def split_field(s, ind):
         return s.split('_')[ind]
 
-    fp_dict = {}
+    fp_dict = OrderedDict()
     for fp in csvs:
         subdir, file = os.path.split(fp)
         if subdir not in fp_dict.keys():
             fp_dict.update({subdir: []})
         fp_dict[subdir].append(file)
 
-    for subdir, file_list in fp_dict.items():
-        joinDF = pd.DataFrame()
-        for filename in file_list:
-            fpath = os.path.join(subdir, filename)
-            csvfileO = FH.ERO_csv(fpath)
-            file_info = csvfileO.data_for_file()  # all filename parsing to here
+    try:
+	    for subdir, file_list in fp_dict.items():
+	        joinDF = pd.DataFrame()
+	        for filename in file_list:
+	            fpath = os.path.join(subdir, filename)
+	            csvfileO = FH.ERO_csv(fpath)
+	            file_info = csvfileO.data_for_file()  #filename parsing to here
 
-            eroFileQ = O.Mdb['EROcsv'].find({'filepath': fpath}, {'_id': 1})
-            if eroFileQ.count() >= 1:
-                print('Repeat for ' + fpath)
-                continue
-            else:
-                csvorgO = O.EROcsv(fpath, file_info)
-                csvorgO.store_track()
+	            eroFileQ = O.Mdb['EROcsv'].find({'filepath': fpath}, {'_id': 1})
+	            if eroFileQ.count() >= 1:
+	                # print('Repeat for ' + fpath)
+	                continue
+	            else:
+	                csvorgO = O.EROcsv(fpath, file_info)
+	                csvorgO.store_track()
 
-            csvfileO.data_forjoin()  # here CSV actually gets read
-            if csvfileO.data.empty:
-                print(fpath, 'was empty')
-                continue
-            if joinDF.empty:
-                joinDF = csvfileO.data
-            else:
-                # check if the columns already exist in the joinDF
-                new_cols = csvfileO.data.columns.difference(joinDF.columns)
-                if len(new_cols) > 0:
-                    joinDF = joinDF.join(csvfileO.data, how='outer')
+	            csvfileO.data_forjoin()  # here CSV actually gets read
+	            if csvfileO.data.empty:
+	                print(fpath, 'was empty')
+	                continue
+	            if joinDF.empty:
+	                joinDF = csvfileO.data
+	            else:
+	                # check if the columns already exist in the joinDF
+	                new_cols = csvfileO.data.columns.difference(joinDF.columns)
+	                if len(new_cols) > 0:
+	                    joinDF = joinDF.join(csvfileO.data, how='outer')
+	            del csvfileO
 
-        if joinDF.empty:
-            continue
-        joinDF.reset_index(inplace=True)
-        joinDF['ID'] = joinDF['uID'].apply(split_field, args=[0])
-        joinDF['session'] = joinDF['uID'].apply(split_field, args=[1])
-        joinDF['experiment'] = joinDF['uID'].apply(split_field, args=[2])
+	        if joinDF.empty:
+	            print('x', end='')
+	            continue
+	        joinDF.reset_index(inplace=True)
+	        joinDF['ID'] = joinDF['uID'].apply(split_field, args=[0])
+	        joinDF['session'] = joinDF['uID'].apply(split_field, args=[1])
+	        joinDF['experiment'] = joinDF['uID'].apply(split_field, args=[2])
 
-        orgO = O.EROpheno(joinDF.to_dict(orient='records'), subdir)
-        orgO.store_joined_bulk()
-        print('.', end='')
+	        orgO = O.EROpheno(joinDF.to_dict(orient='records'), subdir)
+	        del joinDF
+	        orgO.store_joined_bulk()
+	        del orgO
+	        print('.', end='')
+    except KeyboardInterrupt:
+    	print(subdir)
+    	print(filename)
+    	raise
+
+

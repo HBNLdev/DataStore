@@ -29,6 +29,8 @@ sparser_add = ['ID', 'sex', 'handedness', 'Self-reported-race', 'alc_dep_dx',
                'alc_dep_ons', 'a-age', 'b-age', 'c-age', 'd-age', 'e-age',
                'f-age', 'g-age', 'h-age', 'i-age', 'j-age', 'k-age']
 
+session_sadd = [field for field in sparser_add if 'age' not in field]
+session_sadd.extend(['session', 'followup', 'age'])
 
 def calc_date_w_Qs(dstr):
     ''' assumes date of form mm/dd/yyyy
