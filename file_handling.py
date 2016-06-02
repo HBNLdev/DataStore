@@ -306,10 +306,12 @@ class mt_file:
                                          (2, 'nt'): ['N1', 'P3'],
                                          (3, 'nv'): ['N1', 'P3']
                                          },
-                                 'ant': {(1, 'j'): ['P3', 'N4'],
-                                         # (2,'p'):['P3','N4'],
-                                         (3, 'a'): ['P3', 'N4'],
-                                         (4, 'w'): ['P3', 'N4']}}
+                                 'ant': {(1, 'a'): ['P3', 'N4'],
+                                         (2,'j'):['P3','N4'],
+                                         (3, 'w'): ['P3', 'N4'],
+                                         #(4, 'p'): ['P3', 'N4']
+                                         }
+                                }
 
     # string for reference
     data_structure = '{(case#,peak):{electrodes:(amplitude,latency),reaction_time:time} }'
@@ -348,9 +350,10 @@ class mt_file:
                        }
 
     def normAntCase(sub_ses):
-        exp_doc = list(O.Mdb.EEG.find({'subject.subject_id': {'$regex': '.' + sub_ses[0] + '.'},
-                                       'subject.session_code': {'$regex': '.' + sub_ses[1] + '.'},
-                                       'experiment.exp_name': {'$regex': '.ant.'}}))[0]
+        exp_doc = list(O.MongoConn['COGAa'].EEG.find
+                            ({'subject.subject_id': {'$regex': '.' + sub_ses[0] + '.'},
+                            'subject.session_code': {'$regex': '.' + sub_ses[1] + '.'},
+                            'experiment.exp_name': {'$regex': '.ant.'}}))[0]
         case_tup = tuple(
             sorted([tuple([csD[fd] for fd in mt_file.case_fields]) for cnum, csD in exp_doc['case'].items()]))
         case_type = mt_file.ant_cases_types_lk.index(case_tup)
@@ -362,7 +365,10 @@ class mt_file:
         s.header = {'cases_peaks': {}}
 
         s.parse_fileinfo()
+        if s.file_info['experiment'] == 'ant':
+            s.normed_cases_calc()
         s.parse_header()
+
 
     def parse_fileinfo(s):
         s.file_info = parse_filename(s.filename)
@@ -389,8 +395,10 @@ class mt_file:
                 if cs_pks[1][0] != 'npeaks':
                     s.header['problems'] = True
                 else:
-                    s.header['cases_peaks'][
-                        int(cs_pks[0][1])] = int(cs_pks[1][1])
+                    case = int(cs_pks[0][1])
+                    if 'normed_cases' in dir(s):
+                        case = s.normed_cases[case]
+                    s.header['cases_peaks'][case] = int(cs_pks[1][1])
 
         of.close()
 
@@ -429,7 +437,9 @@ class mt_file:
         s.data = OrderedDict()
         for L in data_lines:
             Ld = {c: v for c, v in zip(s.columns, L.split())}
-            key = (Ld['case_num'], Ld['peak'])
+            if 'normed_cases' in dir(s):
+                Ld['case_num'] = s.normed_cases[int(Ld['case_num'])]
+            key = (int(Ld['case_num']), Ld['peak'])
             if key not in s.data:
                 s.data[key] = OrderedDict()
             s.data[key][Ld['electrode'].upper()] = (
@@ -479,9 +489,9 @@ class mt_file:
         if 'data' not in dir(s):
             s.parse_file()
         for case, peaks in s.cases_peaks_by_experiment[s.file_info['experiment']].items():
-            if (str(case[0]), peaks[0]) not in s.data:
+            if ( case[0], peaks[0]) not in s.data:
                 return (False, 'case ' + str(case) + ' missing ' + peaks[0] + ' peak')
-            if (str(case[0]), peaks[1]) not in s.data:
+            if ( case[0], peaks[1]) not in s.data:
                 return (False, 'case ' + str(case) + ' missing ' + peaks[1] + ' peak')
         return True
 
@@ -490,11 +500,11 @@ class mt_file:
             s.parse_file()
         for case, peaks in s.cases_peaks_by_experiment[s.file_info['experiment']].items():
             try:
-                latency1 = float(s.data[(str(case[0]), peaks[0])]['FZ'][1])
-                latency2 = float(s.data[(str(case[0]), peaks[1])]['FZ'][1])
+                latency1 = float(s.data[( case[0], peaks[0])]['FZ'][1])
+                latency2 = float(s.data[( case[0], peaks[1])]['FZ'][1])
             except:
                 print(s.fullpath + ': ' +
-                      str(s.data[(str(case[0]), peaks[0])].keys()))
+                      str(s.data[( case[0], peaks[0])].keys()))
             if latency1 > latency_thresh:
                 return (
                     False, str(case) + ' ' + peaks[0] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
