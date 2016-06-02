@@ -228,6 +228,13 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
     return file_list, date_list
 
 
+def join_ufields(row, exp=None):
+    if exp:
+        return '_'.join([row['ID'], row['session'], exp])
+    else:
+        return '_'.join([row['ID'], row['session']])
+
+
 ##############################
 ##
 # EEG
@@ -421,6 +428,7 @@ class mt_file:
         s.data = ddict
         s.data.update(s.file_info)
         s.data['ID'] = s.data['id']
+        s.data['uID'] = s.data.apply(join_ufields, axis=1)
 
     def parse_file(s):
         of = open(s.fullpath, 'r')
@@ -669,8 +677,6 @@ class ERO_csv:
     def data_forjoin(s):
         ''' creates unique doc identifying field and renames columns
             in preparation for joining with other CSVs '''
-        def join_ufields(row, exp):
-            return '_'.join([row['ID'], row['session'], exp])
 
         s.read_data()
         if s.data.empty:
