@@ -26,7 +26,8 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     # 'fMRI-NKI-bd2':{'fMRI':{'$in':['2a','2b']}},
                     # 'fMRI-NYU-hr':{'fMRI':{'$in':['3a','3b']}},
                     'h-subjects': {'POP': 'H'},
-                    'HighRisk': {'POP': {'$in': ['COGA', 'COGA-Ctl']},
+                    'HighRisk': {'POP': {'$in': ['COGA', 'COGA-Ctl', 'IRPG',
+                                            'IRPG-Ctl']},
                                  'site': 'suny', 'EEG': 'x'},
                     'PhaseIV': {'Phase4-session':
                                 {'$in': ['a', 'b', 'c', 'd']}},
@@ -82,6 +83,7 @@ def get_subjectdocs(sample, sparsify=False):
         else:    
             docs = O.Mdb['subjects'].find(subjects_queries[sample])
         return docs
+
 
 def get_sessiondocs(sample, followups=None, sparsify=False):
     if sample not in subjects_queries.keys():
@@ -140,7 +142,7 @@ def get_colldocs(coll, subcoll=None, add_query={}, add_proj={}):
         return
     query = {}
     proj = {}
-    if subcoll is not None:
+    if subcoll:
         query.update({subcoll_fnames[coll]: subcoll})
     query.update(add_query)
     proj.update(add_proj)
@@ -237,34 +239,3 @@ def fix_indexcol(s):
         return 'x'
     else:
         return s
-
-
-def subsparsify_df(df, coll_name, subcoll_value=None):
-    sdict = sparse_submaps[coll_name]
-    if subcoll_value is None:
-        skeys = sdict
-    else:
-        skeys = sdict[subcoll_value]
-    columns_todrop = []
-    for dfc in df.columns:
-        for skey in skeys:
-            if skey in dfc:
-                columns_todrop.append(dfc)
-    print('The following columns were dropped:')
-    print(columns_todrop)
-    df.drop(columns_todrop, axis=1, inplace=True)
-
-
-def addsparsify_df(df, coll_name, subcoll_value=None):
-    sdict = sparse_addmaps[coll_name]
-    if subcoll_value is not None:
-        skeys = sdict[subcoll_value]
-    else:
-        skeys = sdict
-    columns_todrop = []
-    for dfc in df.columns:
-        if dfc not in skeys:
-            columns_todrop.append(dfc)
-    print('The following columns were dropped:')
-    print(columns_todrop)
-    df.drop(columns_todrop, axis=1, inplace=True)
