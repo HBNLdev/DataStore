@@ -29,6 +29,9 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     'HighRisk': {'POP': {'$in': ['COGA', 'COGA-Ctl', 'IRPG',
                                             'IRPG-Ctl']},
                                  'site': 'suny', 'EEG': 'x'},
+                    'HighRiskFam': {'POP': {'$in': ['COGA', 'COGA-Ctl', 'IRPG',
+                                            'IRPG-Ctl']},
+                                 'site': 'suny'},
                     'PhaseIV': {'Phase4-session':
                                 {'$in': ['a', 'b', 'c', 'd']}},
                     'p-subjects': {'POP': 'P'},
@@ -182,20 +185,22 @@ def format_ERPprojection(conds_peaks, chans, measures=['amp', 'lat']):
     return proj
 
 
-def format_EROprojection(conds, freqs, times, chans, measures=['evo', 'tot']):
+def format_EROprojection(conds, freqs, times, chans,
+        measures=['evo', 'tot'], calc_types=['v60-all']):
 
     freqs = [[str(float(lim)).replace('.', 'p') for lim in lims]
              for lims in freqs]
     times = [[str(int(lim)) for lim in lims] for lims in times]
 
     proj = default_EROfields.copy()
-    proj.update({'.'.join([m, cond, f[0], f[1], t[0], t[1], 'data', chan]): 1
-                 for m in measures for cond in conds for f in freqs for t in times for chan in chans})
+    proj.update({'.'.join([c, m, cond, f[0], f[1], t[0], t[1], 'data', chan]): 1
+                 for c in calc_types for m in measures for cond in conds for f in freqs for t in times for chan in chans})
     return proj
 
 
-def join_collection(keyDF_in, coll, subcoll=None, add_query={},
-                    join_inds=['ID'], id_field='ID', drop_empty=True):
+def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
+                    join_inds=['ID'], id_field='ID', drop_empty=True,
+                    how='left'):
     if subcoll is not None:
         name = subcoll
     else:
@@ -205,7 +210,7 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={},
 
     query = {id_field: {'$in': list(keyDF.index.get_level_values(id_field))}}
     query.update(add_query)
-    docs = get_colldocs(coll, subcoll, query)
+    docs = get_colldocs(coll, subcoll, query, add_proj)
 
     newDF = pd.DataFrame.from_records(
         [O.flatten_dict(r) for r in list(docs)])  # BIG JUMP HERE
@@ -215,7 +220,7 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={},
     newDF.columns = [name[:3] + '_' + c for c in newDF.columns]
 
     prepare_indices(keyDF, join_inds)
-    jDF = keyDF.join(newDF)
+    jDF = keyDF.join(newDF, how=how)
 
     if drop_empty:  # remove duplicate & empty rows, empty columns
         # jDF.drop_duplicates(inplace=True)

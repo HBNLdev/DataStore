@@ -276,7 +276,7 @@ def ero_pheno_summary_bulk(csvs):
 
 
 
-def ero_pheno_join_bulk(csvs):
+def ero_pheno_join_bulk(csvs, start_ind=0):
     ''' join all CSVs in one terminal subdirectory together,
         then bulk_write their rows '''
     def split_field(s, ind):
@@ -290,12 +290,21 @@ def ero_pheno_join_bulk(csvs):
         fp_dict[subdir].append(file)
 
     try:
-	    for subdir, file_list in fp_dict.items():
+	    for subdir, file_list in list(fp_dict.items())[start_ind:]:
 	        joinDF = pd.DataFrame()
 	        for filename in file_list:
 	            fpath = os.path.join(subdir, filename)
 	            csvfileO = FH.ERO_csv(fpath)
 	            file_info = csvfileO.data_for_file()  #filename parsing to here
+	            
+	            if (file_info['site']=='washu' or \
+	            	file_info['site']=='suny') and \
+					file_info['experiment']=='vp3' and \
+	            	'threshold electrodes' in csvfileO.parameters and \
+	            	csvfileO.parameters['threshold electrodes']==9:
+	            	print(',', end='')
+	            	continue
+            	
 
 	            eroFileQ = O.Mdb['EROcsv'].find({'filepath': fpath}, {'_id': 1})
 	            if eroFileQ.count() >= 1:
@@ -331,7 +340,7 @@ def ero_pheno_join_bulk(csvs):
 	        orgO.store_joined_bulk()
 	        del orgO
 	        print('.', end='')
-    except KeyboardInterrupt:
+    except:
     	print(subdir)
     	print(filename)
     	raise
