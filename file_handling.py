@@ -306,9 +306,9 @@ class mt_file:
                                          (2, 'nt'): ['N1', 'P3'],
                                          (3, 'nv'): ['N1', 'P3']
                                          },
-                                 'ant': {(1, 'a'): ['P3', 'N4'],
-                                         (2,'j'):['P3','N4'],
-                                         (3, 'w'): ['P3', 'N4'],
+                                 'ant': {(1, 'a'): ['N4','P3'],
+                                         (2,'j'):['N4','P3'],
+                                         (3, 'w'): ['N4','P3'],
                                          #(4, 'p'): ['P3', 'N4']
                                          }
                                 }
@@ -447,6 +447,65 @@ class mt_file:
             if 'reaction_time' not in s.data[key]:
                 s.data[key]['reaction_time'] = Ld['reaction_time']
         return
+
+    def parse_fileDF(s):
+        s.dataDF = pd.read_csv(s.fullpath,delim_whitespace=True,
+                            comment='#',names = s.columns )
+
+    def check_peak_order(s):
+        ''' Pandas Dataframe based '''
+        if 'dataDF' not in dir(s):
+            s.parse_fileDF()
+        if 'normed_cases' in dir(s):
+            case_lk = { v:k for k,v in s.normed_cases.items() }
+        probs = {}
+        #peaks by case number
+        case_peaks = { k[0]:v for k,v in \
+            s.cases_peaks_by_experiment[s.file_info['experiment']].items() }
+        cols_use = ['electrode','latency']
+        for case in s.dataDF['case_num'].unique():
+            cDF = s.dataDF[ s.dataDF['case_num']==case ]
+            if 'normed_cases' in dir(s):
+                case_norm = case_lk[case]
+            else: case_norm = case
+            if case_norm in case_peaks:
+                pk = case_peaks[case_norm][0]
+                ordDF = cDF[ cDF['peak'] == pk ][cols_use]
+                ordDF.rename(columns={'latency':'latency_'+pk},inplace=True)
+                peak_track = [pk]
+                delta_cols = []
+                for pk in case_peaks[case][1:]:
+                    pkDF = cDF[ cDF['peak'] == pk ][cols_use]
+                    pkDF.rename(columns={'latency':'latency_'+pk},inplace=True)
+                    #return (ordDF, pkDF)
+                    ordDF = ordDF.join(pkDF,on='electrode',rsuffix=pk)
+                    delta_col = pk+'_'+peak_track[-1]+'_delta'
+                    ordDF[ delta_col ] = \
+                        ordDF['latency_'+pk] - ordDF['latency_'+peak_track[-1]]
+                    peak_track.append(pk)
+                    delta_cols.append(delta_col)
+
+                for dc in delta_cols:
+                    wrong_order = ordDF[ ordDF[dc] < 0 ]
+                    if len(wrong_order) > 0:
+                        case_name = case_nums2names[s.file_info['experiment']][case_norm]
+                        probs[case_name+'_'+dc] = list(wrong_order['electrode'])
+
+        if len(probs) == 0:
+            return True
+        else:
+            return probs
+
+    def check_max_latency(s,latency_thresh=1000):
+        ''' Pandas Dataframe based '''
+        if 'dataDF' not in dir(s):
+            s.parse_fileDF()
+        high_lat = s.dataDF[ s.dataDF['latency'] > latency_thresh ]
+        if len(high_lat) == 0:
+            return True
+        else:
+            return high_lat[ ['case_num','electorde','peak','amplitude','latency'] ]
+
 
     def build_header(s):
         if 'data' not in dir(s):
