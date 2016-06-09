@@ -624,7 +624,9 @@ class ERO_csv:
 
     def parse_fileinfo(s):
         path_parts = s.filepath.split(os.path.sep)
+        calc_version = path_parts[2][-3:]
         path_parameters = path_parts[-3]
+        site = path_parts[-2]
         s.parameters.update(ERO_csv.parse_parameters(path_parameters))
 
         file_parts = s.filename.split('_')
@@ -641,7 +643,8 @@ class ERO_csv:
         mod_date = datetime.fromtimestamp(os.path.getmtime(s.filepath))
 
         s.exp_info = {'experiment': exp,
-                      'case': case}
+                      'case': case,
+                      'site': site}
 
         s.dates = {'file date': date,
                    'mod date': mod_date}
@@ -650,7 +653,8 @@ class ERO_csv:
                        'frequency min': freq_min,
                        'frequency max': freq_max,
                        'time min': time_min,
-                       'time max': time_max}
+                       'time max': time_max,
+                       'version': calc_version}
 
     def read_data(s):
         ''' prepare the data field for the database object '''
@@ -680,6 +684,8 @@ class ERO_csv:
             in preparation for joining with other CSVs '''
 
         s.read_data()
+        if s.data.shape[1] <= 3:
+            s.data = pd.DataFrame()
         if s.data.empty:
             return
 
@@ -687,8 +693,17 @@ class ERO_csv:
                                      args=[s.exp_info['experiment']])
         s.data.drop(['ID', 'session'], axis=1, inplace=True)
         s.data.set_index('uID', inplace=True)
+        bad_list = ['50338099_a_vp3', '50700072_a_vp3', '50174138_e_vp3', '50164139_c_vp3', '50126477_a_vp3']
+        drop_rows = [uID for uID in s.data.index.values if uID in bad_list]
+        s.data.drop(drop_rows, inplace=True)
 
-        rename_dict = {col: '_'.join([s.phenotype['power type'],
+        if 'threshold electrodes' in s.parameters:
+            thresh_str = str(s.parameters['threshold electrodes'])
+        else:
+            thresh_str = 'all'
+
+        rename_dict = {col: '_'.join([s.phenotype['version']+'-'+thresh_str,
+                          s.phenotype['power type'],
                           s.exp_info['case'],
                           str(s.phenotype['frequency min']).replace('.','p'),
                           str(s.phenotype['frequency max']).replace('.','p'),
