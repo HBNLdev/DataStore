@@ -68,6 +68,11 @@ init_files = [ init_files_by_exp[ ex ] for ex in experiments ]
 
 app_data = { expr:{} for expr in experiments }
 
+#userName for store path
+if '_' in user:
+	userName = user.split('_')[1]
+else: userName = 'default'
+app_data['user'] = userName
 app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),f) for f in init_files ]
 app_data['paths input'] = []
 	
@@ -520,7 +525,9 @@ def save_handler():
 	# build mt text (makes default output location), write to a test location
 	eeg.build_mt(cases, peaks, amps1d, lats1d)
 	print(eeg.mt)
-	test_dir = '/active_projects/test'
+	test_dir = os.path.join('/active_projects/test', app_data['user'] )
+	if not os.path.exists(test_dir):
+		os.mkdir(test_dir)
 	fullpath = os.path.join( test_dir, eeg.mt_name )
 	of = open( fullpath, 'w' )
 	of.write( eeg.mt )
