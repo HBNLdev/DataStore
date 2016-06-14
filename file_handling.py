@@ -617,16 +617,17 @@ class mt_file:
                 ordDF.rename(columns={'latency':'latency_'+pk},inplace=True)
                 peak_track = [pk]
                 delta_cols = []
-                for pk in case_peaks[case][1:]:
-                    pkDF = cDF[ cDF['peak'] == pk ][cols_use]
-                    pkDF.rename(columns={'latency':'latency_'+pk},inplace=True)
-                    #return (ordDF, pkDF)
-                    ordDF = ordDF.join(pkDF,on='electrode',rsuffix=pk)
-                    delta_col = pk+'_'+peak_track[-1]+'_delta'
-                    ordDF[ delta_col ] = \
-                        ordDF['latency_'+pk] - ordDF['latency_'+peak_track[-1]]
-                    peak_track.append(pk)
-                    delta_cols.append(delta_col)
+                if case in case_peaks:
+                    for pk in case_peaks[case][1:]:
+                        pkDF = cDF[ cDF['peak'] == pk ][cols_use]
+                        pkDF.rename(columns={'latency':'latency_'+pk},inplace=True)
+                        #return (ordDF, pkDF)
+                        ordDF = ordDF.join(pkDF,on='electrode',rsuffix=pk)
+                        delta_col = pk+'_'+peak_track[-1]+'_delta'
+                        ordDF[ delta_col ] = \
+                            ordDF['latency_'+pk] - ordDF['latency_'+peak_track[-1]]
+                        peak_track.append(pk)
+                        delta_cols.append(delta_col)
 
                 for dc in delta_cols:
                     wrong_order = ordDF[ ordDF[dc] < 0 ]
