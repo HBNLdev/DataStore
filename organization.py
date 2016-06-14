@@ -53,6 +53,7 @@ def remove_NaTs(rec):
 
 
 class MongoBacked:
+
     def store(s):
         s.data['insert_time'] = datetime.datetime.now()
         Mdb[s.collection].insert_one(s.data)
@@ -67,7 +68,18 @@ class MongoBacked:
         remove_NaTs(s.data)
         Mdb[s.collection].insert_one(s.data)
 
+    def compare(s, field='uID'):
+        c = Mdb[s.collection].find({field: s.data[field]})
+        if c.count() == 0:
+            s.new = True
+        else:
+            s.new = False
+            s._id = next(c)['_id']
+            s.update_query = {'_id': s._id}
+
     def update(s):
+        if 'insert_time' in s.data:
+            del s.data['insert_time']
         s.data['update_time'] = datetime.datetime.now()
         Mdb[s.collection].update_one(s.update_query, {'$set': s.data})
 

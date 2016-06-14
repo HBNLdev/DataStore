@@ -1,7 +1,6 @@
 ''' Compilation tools for HBNL
 '''
 
-import itertools
 import numpy as np
 import pandas as pd
 import organization as O
@@ -199,27 +198,34 @@ def format_EROprojection(conds, freqs, times, chans,
 
 
 def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
-                    join_inds=['ID'], id_field='ID', drop_empty=True,
-                    how='left'):
-    if subcoll is not None:
-        name = subcoll
-    else:
-        name = coll
+                    left_join_inds=['ID'], right_join_inds=['ID'], 
+                    id_field='ID', drop_empty=True,
+                    how='left', flatten=True, prefix=None):
+    if not prefix:
+        if subcoll is not None:
+            prefix = subcoll[:3]
+        else:
+            prefix = coll[:3]
 
     keyDF = keyDF_in.copy()
 
-    query = {id_field: {'$in': list(keyDF.index.get_level_values(id_field))}}
+    query = {id_field: {'$in': list(
+        keyDF.index.get_level_values(right_join_inds[0]))}}
     query.update(add_query)
     docs = get_colldocs(coll, subcoll, query, add_proj)
 
-    newDF = pd.DataFrame.from_records(
-        [O.flatten_dict(r) for r in list(docs)])  # BIG JUMP HERE
+    if flatten:
+        recs =[O.flatten_dict(r) for r in list(docs)]
+    else:
+        recs = [r for r in list(docs)]
+
+    newDF = pd.DataFrame.from_records(recs)
     newDF['ID'] = newDF[id_field]  # should be more general
 
-    prepare_indices(newDF, join_inds)
-    newDF.columns = [name[:3] + '_' + c for c in newDF.columns]
+    prepare_indices(newDF, left_join_inds)
+    newDF.columns = [prefix + '_' + c for c in newDF.columns]
 
-    prepare_indices(keyDF, join_inds)
+    prepare_indices(keyDF, right_join_inds)
     jDF = keyDF.join(newDF, how=how)
 
     if drop_empty:  # remove duplicate & empty rows, empty columns

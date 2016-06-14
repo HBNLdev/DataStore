@@ -3,9 +3,9 @@
 import os
 from datetime import datetime
 from collections import OrderedDict
-from glob import glob
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 import master_info as mi
 import quest_import as qi
@@ -102,20 +102,6 @@ def neuropsych_CBST():
     sourceO.store()
 
 
-def eeg_behavior():
-    # ~30 seconds per ~1000 subs
-    path = '/active_projects/mike/ph4bl_tb'
-    mats = glob(path + '/*.mat')
-    datemods = []
-    for mat in mats:
-        datemods.append(datetime.fromtimestamp(os.path.getmtime(mat)))
-        erpbeh_obj = FH.erpbeh_mat(mat)
-        record_obj = O.EEGBehavior(erpbeh_obj.data)
-        record_obj.store()
-    sourceO = O.SourceInfo('EEGbehavior', list(zip(mats, datemods)))
-    sourceO.store()
-
-
 def core():
     # fast
     folder = '/active_projects/mike/zork-ph4-65-bl/subject/core/'
@@ -163,6 +149,30 @@ def erp_data():
         eegO.store()
     sourceO = O.SourceInfo('ERPdata', list(zip(avgh1_files, datemods)))
     sourceO.store()
+
+
+def eeg_behavior(files_dms=None):
+    # ~8 hours total to parse all *.avg.h1's for behavior
+    # files_dms = pickle.load( open(
+    #	 '/active_projects/mike/pickles/avgh1s_dates.p', 'rb')  )
+	if not files_dms:
+		start_dir = '/processed_data/avg-h1-files/'
+		glob_expr = '*avg.h1'
+		avgh1_files, datemods = FH.identify_files(start_dir, glob_expr)
+	else:
+		avgh1_files, datemods = zip(*files_dms)
+
+	for f in tqdm(avgh1_files):
+		fO = FH.avgh1_file(f)  # basically identical at this point
+		fO.parse_behav_forDB()
+		erpbeh_obj = O.EEGBehavior(fO.data)
+		erpbeh_obj.compare()
+		if erpbeh_obj.new:
+			erpbeh_obj.store()
+		else:
+			erpbeh_obj.update()
+	sourceO = O.SourceInfo('EEGbehavior', list(zip(avgh1_files, datemods)))
+	sourceO.store()
 
 
 def ero_pheno(files_dates=None,debug=False):

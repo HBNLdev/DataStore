@@ -7,8 +7,9 @@ import subprocess
 import utils
 from collections import OrderedDict
 from datetime import datetime
-import scipy.io
+import h5py
 import pandas as pd
+import numpy as np
 
 import organization as O
 
@@ -292,6 +293,147 @@ class cnth1_file:
         s.trial_info = hD
 
 
+class avgh1_file(cnth1_file):
+    ''' represents *.avg.h1 files, mostly for the behavioral info inside '''
+
+    min_resptime = 100
+
+    def parse_behav_forDB(s):
+        ''' wrapper for main function that also prepares for DB insert '''
+        s.data = {}
+        
+        # experiment specific stuff
+        s.parse_behav() # puts behavioral results in s.results
+        s.data[s.exp] = O.unflatten_dict(s.results)
+        s.data[s.exp]['filepath'] = s.filepath
+        s.data[s.exp]['run'] = s.file_info.pop('run')
+        s.data[s.exp]['version'] = s.file_info.pop('version')
+
+        # ID-session specific stuff
+        s.data.update(s.file_info)
+        s.data['ID'] = s.data['id']
+        s.data['uID'] = s.data['ID']+'_'+s.data['session']
+
+    def parse_behav(s):
+        ''' main function. populates s.ev_df with the event table and
+            s.results with the results '''
+        s.load_data()
+        s.parse_seq()
+        s.calc_results()
+
+    def calc_results(s):
+        ''' calculates accuracy and reaction time from the event table '''
+        results = {}
+        for t, t_attrs in s.case_dict.items():
+            nm = t_attrs['code']
+            stmevs = s.ev_df['type_seq'] == t
+            if t_attrs['corr_resp'] in [0, -1]: # no response required
+                correct = s.ev_df.loc[stmevs, 'correct']
+                results[nm+'_acc'] = np.sum(correct) / np.sum(stmevs)
+                continue
+            # response required
+            rspevs = (np.roll(stmevs, 1)) & (s.ev_df['resp_seq'] != 0)
+            correct_late = (rspevs) & (s.ev_df['correct'])
+            correct = (correct_late) & ~(s.ev_df['late'])
+
+            results[nm+'_acc'] = np.sum(correct) / np.sum(stmevs)
+            results[nm+'_accwithlate'] = np.sum(correct_late) / np.sum(stmevs)
+            results[nm+'_medianrt'] = s.ev_df.loc[correct, 'rt'].median()
+            results[nm+'_medianrtwithlate'] = \
+                s.ev_df.loc[correct_late, 'rt'].median()
+
+        s.results = results
+
+    def load_data(s):
+        ''' prepare needed data from the h5py pointer '''
+        f = h5py.File(s.filepath)
+        s.exp = f['file/experiment/experiment'][0][-3][0].decode()
+        s.case_dict = {}
+        for column in f['file/run/case/case']:
+            s.case_dict.update({column[3][0]: {'code': column[-3][0].decode(),
+                                         'descriptor': column[-2][0].decode(),
+                                         'corr_resp': column[4][0],
+                                         'resp_win': column[9][0]}})
+        s.type_seq = np.array([col[1][0] for col in f['file/run/event/event']])
+        s.resp_seq = np.array([col[2][0] for col in f['file/run/event/event']])
+        s.time_seq = np.array([col[-1][0] for col in f['file/run/event/event']])
+        
+    def parse_seq(s):
+        ''' parse the behavioral sequence and create a dataframe containing
+            the event table '''
+
+        bad_elems = ~np.in1d(s.resp_seq, [0, 1, 2, 4, 8])
+        if np.any(bad_elems): s.resp_seq[bad_elems] = 0
+
+        s.ev_len = len(s.type_seq)
+        s.errant = np.zeros(s.ev_len, dtype=bool)
+        s.early = np.zeros(s.ev_len, dtype=bool)
+        s.late = np.zeros(s.ev_len, dtype=bool)
+        s.correct = np.zeros(s.ev_len, dtype=bool)
+        s.type_descriptor = []
+
+        s.parse_alg()
+
+        event_interval_ms = np.concatenate([[0], np.diff(s.time_seq)*1000])
+        rt = np.empty_like(event_interval_ms)*np.nan
+        rt[(s.resp_seq!=0) & ~s.errant] = \
+            event_interval_ms[(s.resp_seq!=0) & ~s.errant]
+        s.type_descriptor = np.array(s.type_descriptor, dtype=np.object_)
+        dd = {'type_seq': s.type_seq, 'type_descriptor': s.type_descriptor,
+            'correct': s.correct, 'rt': rt, 'resp_seq': s.resp_seq,
+            'errant': s.errant, 'early': s.early, 'late': s.late,
+            'time_seq': s.time_seq, 'event_interval_ms': event_interval_ms}
+        s.ev_df = pd.DataFrame(dd)
+
+    def parse_alg(s):
+        ''' algorithm applied to event structure '''
+        for ev, t in enumerate(s.type_seq):
+            if t == 0: # some kind of response
+                prev_t = s.type_seq[ev-1]
+                if ev == 0 or prev_t not in s.case_dict:
+                    # first type code is response
+                    s.type_descriptor.append('rsp_unknown')
+                    s.errant[ev] = True
+                    continue
+                else:
+                    # catch errant responses
+                    if prev_t==0 or s.case_dict[prev_t]['corr_resp'] in [0, -1]:
+                        s.type_descriptor.append('rsp_err')
+                        s.errant[ev] = True
+                        continue
+                    # catch early responses
+                    tmp_rt = (s.time_seq[ev] - s.time_seq[ev-1]) * 1000
+                    if tmp_rt > s.case_dict[prev_t]['resp_win']:
+                        s.late[ev] = True
+                    elif tmp_rt < s.min_resptime:
+                        s.early[ev] = True
+                        s.type_descriptor.append('rsp_early')
+                        continue
+                    # interpret correctness (could have been late)
+                    if s.resp_seq[ev] == s.case_dict[prev_t]['corr_resp']:
+                        s.type_descriptor.append('rsp_correct')
+                        s.correct[ev] = True
+                        continue
+                    else:
+                        s.type_descriptor.append('rsp_incorrect')
+                        s.correct[ev] = False
+                        continue
+            else: # some kind of stimulus
+                if t in s.case_dict:
+                    s.type_descriptor.append(s.exp+'_'+s.case_dict[t]['code'])
+                    # interpret correctness
+                    if ev+1 == s.ev_len: # if the last event
+                        # only correct if correct resp is no response
+                        s.correct[ev] = True if s.case_dict[t]['corr_resp'] \
+                            in [0, -1] else False
+                    else:  # if not the last event
+                        # only correct if following resp was correct
+                        s.correct[ev] = True if s.resp_seq[ev+1] == \
+                            s.case_dict[t]['corr_resp'] else False
+                else:
+                    s.type_descriptor.append('stm_unknown')
+
+
 class mt_file:
     ''' manually picked files from eeg experiments
         initialization only parses the filename, call parse_file to load data
@@ -429,6 +571,7 @@ class mt_file:
         s.data.update(s.file_info)
         s.data['ID'] = s.data['id']
         s.data['uID'] = s.data.apply(join_ufields, axis=1)
+        s.data['path'] = s.fullpath
 
     def parse_file(s):
         of = open(s.fullpath, 'r')
@@ -1080,44 +1223,3 @@ def move_picked_files_to_processed(from_base, from_folders, working_directory, f
         delete_file.close()
 
     return to_copy
-
-
-##############################
-##
-# ERP Task Behavior
-##
-##############################
-
-class erpbeh_mat:
-    def __init__(s, filepath):
-
-        s.filepath = filepath
-        s.path_parts = filepath.split(os.path.sep)
-        s.filename = os.path.splitext(s.path_parts[-1])[0]
-        s.fileparts = s.filename.split('_')
-
-        s.site = site_hash[s.filename[0]]
-        s.subject_id = s.fileparts[0]
-        s.session = s.fileparts[1]
-
-        s.data = {'ID': s.subject_id,
-                  'site': s.site,
-                  'session': s.session,
-                  }
-        s.read_file()
-
-    def read_file(s):
-
-        mat_dict = scipy.io.loadmat(s.filepath)
-        struct = mat_dict['output'][0]
-        column_names = struct.dtype.names
-
-        df_dict = {}
-        for ei, exp in enumerate(struct):
-            for mi, meas in enumerate(column_names[2:6]):  # hackish
-                for ti, ttype in enumerate(exp[1][0]):
-                    df_dict.update({ttype[0] + '_' + meas:
-                                    float(struct[ei][mi + 2][ti])})
-
-        s.data.update(O.unflatten_dict(df_dict))
-        # s.data.update(df_dict)
