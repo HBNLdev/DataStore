@@ -42,7 +42,7 @@ from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
 						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker, SingleIntervalTicker,
 				 		   PanTool, WheelZoomTool, ResizeTool,
-						   Asterisk, Segment, Line,  
+						   Asterisk, Segment, Line,
 						   VBox, HBox )
 from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
 				RadioButtonGroup, Button, Paragraph, Toggle )
@@ -148,7 +148,8 @@ def load_file(next=False, initialize=False, reload_flag=False):
 			expD['info'][2].text = details[1]
 			expD['info'][3].text = details[2]
 
-			yscale = eeg.get_yscale(channels=chans)
+			scale_chans = [ch for ch in chans if ch not in ['X','Y']]
+			yscale = eeg.get_yscale(channels=scale_chans)
 			#print('updating yscale: ',yscale)
 			#print('plot dir', dir(expD['components']['plots'][0][1].y_range))
 			for plt_row in expD['components']['plots']:
@@ -177,6 +178,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 
 def next_file():
 	load_file(next=True)
+	print( 'next file loaded' )
 
 def start_handler():
 	#exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
@@ -318,7 +320,7 @@ def make_plot(plot_setup, experiment, tool_generators):
 	plot.outline_line_width = None
 	plot.outline_line_color = None
 
-	app_data['dummy_plot'] = Line( x='dummy', y='dummy', name='dummy')
+	app_data['dummy_plot'] = Asterisk( x='dummy', y='dummy', name='dummy')
 	app_data['dummy_plotR'] = plot.add_glyph(app_data[experiment]['data source'], app_data['dummy_plot'])
 
 	if not dummy:
