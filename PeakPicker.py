@@ -160,7 +160,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 						plt.y_range.trigger('start',yscale[0],yscale[0])
 						plt.y_range.trigger('end',yscale[1],yscale[1])
 
-			if reload_flag:
+			if reload_flag or next:
 				for plt_row in expD['components']['plots']:
 					for plt in plt_row:
 						if plt:
