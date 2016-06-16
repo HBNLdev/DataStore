@@ -132,13 +132,18 @@ def load_file(next=False, initialize=False, reload_flag=False):
 				pickedD = expD['picked sources'][case].data
 				for fd in pickedD.keys():
 					pickedD[fd] = []
-				expD['picked sources'][case].set()
+				#expD['picked sources'][case].set()
+				expD['picked sources'][case].trigger('data',expD['picked sources'][case].data,
+														expD['picked sources'][case].data)
+
 			expD['applied picks display'].text = picked_state_text( app_data['current experiment'] )
 
 			cpsD = expD['current pick source'].data
 			for fd in cpsD:
 				cpsD[fd] = []
-			expD['current pick source'].set()
+			#expD['current pick source'].set()
+			expD['current pick source'].trigger('data',expD['current pick source'].data,
+													expD['current pick source'].data)
 
 			print('info plot', dir(expD['info']))
 
@@ -152,19 +157,17 @@ def load_file(next=False, initialize=False, reload_flag=False):
 			yscale = eeg.get_yscale(channels=scale_chans)
 			#print('updating yscale: ',yscale)
 			#print('plot dir', dir(expD['components']['plots'][0][1].y_range))
+			expD['y range'].start = yscale[0]
+			expD['y range'].trigger('start',expD['y range'].start,expD['y range'].start)
+			expD['y range'].end = yscale[1]
+			expD['y range'].trigger('end',expD['y range'].end,expD['y range'].end)
+
 			for plt_row in expD['components']['plots']:
 				for plt in plt_row:
 					if plt and 'y_range' in dir(plt):
-						#print('updating for ',plt.title)
-						plt.y_range.start = yscale[0]
-						plt.y_range.end = yscale[1]
-						plt.y_range.trigger('start',yscale[0],yscale[0])
-						plt.y_range.trigger('end',yscale[1],yscale[1])
 
 						if reload_flag or next:
-				#for plt_row in expD['components']['plots']:
-				#	for plt in plt_row:
-				#		if plt:
+
 							chan = plt.title.split(' ')[0]
 							plt.title = chan
 							plt.trigger('title',plt.title,plt.title)
@@ -292,7 +295,7 @@ chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'P2','P6','PO7','OZ','PO8'
 		 ]
 
-def make_plot(plot_setup, experiment, tool_generators):
+def make_plot(plot_setup, ranges, experiment, tool_generators):
 	PS = plot_setup
 	props = PS['props']
 	if plot_setup['show'] == False:
@@ -313,8 +316,8 @@ def make_plot(plot_setup, experiment, tool_generators):
 	plot.min_border_bottom = props['min_border']
 	plot.plot_width = props['width']
 	plot.plot_height = PS['adjusted height']
-	plot.y_range = Range1d(*props['yrange'])
-	plot.x_range = Range1d(*props['xrange'])#, name='sharedX')
+	plot.y_range = ranges[1]
+	plot.x_range = ranges[0]
 	plot.title_text_font_size = str(props['font size'])+'pt'
 	plot.outline_line_alpha = props['outline alpha']
 	plot.outline_line_width = None
@@ -732,6 +735,10 @@ def build_experiment_tab(experiment):
 				style='layout'
 				)
 
+	# Ranges
+	expD['y range'] = Range1d(*gridplots_setup[0][1]['props']['yrange'])
+	expD['x range'] = Range1d(*gridplots_setup[0][1]['props']['xrange'])#, name='sharedX')
+
 	gridplots = []
 	components['plots'] = []
 	for growS in gridplots_setup:
@@ -744,7 +751,8 @@ def build_experiment_tab(experiment):
 			else:
 				plotS['show'] = True
 
-			this_plot = make_plot( plotS, experiment, plot_tool_generators )
+			this_plot = make_plot( plotS, (expD['x range'], expD['y range']),
+								experiment, plot_tool_generators )
 			gridplots[-1].append( this_plot )
 			if plotS['show']:
 				components['plots'][-1].append( this_plot )
@@ -752,7 +760,7 @@ def build_experiment_tab(experiment):
 
 	expD['pick starts'] = {}
 	expD['pick finishes'] = {}
-	expD['case pick sources'] = {}
+	#expD['case pick sources'] = {}
 	gcount = -1
 	for gr_ind,g_row in enumerate(gridplots):
 		for gc_ind,gp in enumerate(g_row):
@@ -781,7 +789,7 @@ def build_experiment_tab(experiment):
 						# gp.add_glyph( expD['picked sources'][cspk],picked_starts)
 						# gp.add_glyph( expD['picked sources'][cspk],picked_finishes)
 
-					expD['case pick sources'][case] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
+					#expD['case pick sources'][case] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
 					case_pick_starts = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
 					line_width=1.5,line_alpha=0.95,line_color='#886308',
 					line_dash='dashed', name=case+'_limit' )
