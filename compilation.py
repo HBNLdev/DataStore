@@ -14,6 +14,8 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     'a-subjects': {'POP': 'A'},
                     'BrainDysfunction': {'POP': {'$in': ['A', 'C', 'H', 'P']},
                                          'EEG': 'x'},
+                    'BrainDysfunction-AC': {'POP': {'$in': ['A', 'C']},
+                                         'EEG': 'x'},
                     'ccGWAS': {'ccGWAS': {'$ne': np.nan}},
                     'COGA11k': {'COGA11k-fam': {'$ne': np.nan}},
                     'COGA4500': {'4500': 'x'},
@@ -201,11 +203,11 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
                     left_join_inds=['ID'], right_join_inds=['ID'], 
                     id_field='ID', drop_empty=True,
                     how='left', flatten=True, prefix=None):
-    if not prefix:
+    if not prefix and prefix != '':
         if subcoll is not None:
-            prefix = subcoll[:3]
+            prefix = subcoll[:3] + '_'
         else:
-            prefix = coll[:3]
+            prefix = coll[:3] + '_'
 
     keyDF = keyDF_in.copy()
 
@@ -223,7 +225,7 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
     newDF['ID'] = newDF[id_field]  # should be more general
 
     prepare_indices(newDF, left_join_inds)
-    newDF.columns = [prefix + '_' + c for c in newDF.columns]
+    newDF.columns = [prefix + c for c in newDF.columns]
 
     prepare_indices(keyDF, right_join_inds)
     jDF = keyDF.join(newDF, how=how)

@@ -163,7 +163,9 @@ def eeg_behavior(files_dms=None):
 		avgh1_files, datemods = zip(*files_dms)
 
 	for f in tqdm(avgh1_files):
-		fO = FH.avgh1_file(f)  # basically identical at this point
+		fO = FH.avgh1_file(f)
+		if fO.file_info['experiment'] == 'err':
+			continue # these have corrupted trial info and will overwrite ern
 		fO.parse_behav_forDB()
 		erpbeh_obj = O.EEGBehavior(fO.data)
 		erpbeh_obj.compare()
@@ -289,8 +291,8 @@ def ero_pheno_summary_bulk(csvs):
 def ero_pheno_join_bulk(csvs, start_ind=0):
     ''' join all CSVs in one terminal subdirectory together,
         then bulk_write their rows '''
-    def split_field(s, ind):
-        return s.split('_')[ind]
+    def split_field(s, ind, delim='_'):
+        return s.split(delim)[ind]
 
     fp_dict = OrderedDict()
     for fp in csvs:

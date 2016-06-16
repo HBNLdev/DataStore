@@ -110,7 +110,7 @@ def parse_filename(filename, include_full_ID=False):
         system = 'neuroscan'  # preliminary
         fam_number = subject_piece[1:5]
         subject = subject_piece[5:8]
-        if fam_number in ['0000', '0001']:
+        if fam_number in ['0000', '0001'] and subject_piece[0] in 'achp':
             site = subject_piece[0] + '-subjects'
             if fam_number == '0000':  # no family
                 family = 0
@@ -125,6 +125,8 @@ def parse_filename(filename, include_full_ID=False):
             site = site_hash[subject_piece[0].lower()]
             if not subject_piece[0].isdigit():
                 system = 'masscomp'
+                subject_piece = site_hash_rev[site_hash[subject_piece[0]]] + \
+                    subject_piece[1:]
 
     # masscomp
     else:
@@ -313,6 +315,7 @@ class avgh1_file(cnth1_file):
         s.data.update(s.file_info)
         s.data['ID'] = s.data['id']
         s.data['uID'] = s.data['ID']+'_'+s.data['session']
+        del s.data['experiment']
 
     def parse_behav(s):
         ''' main function. populates s.ev_df with the event table and
@@ -352,26 +355,31 @@ class avgh1_file(cnth1_file):
         for column in f['file/run/case/case']:
             s.case_dict.update({column[3][0]: {'code': column[-3][0].decode(),
                                          'descriptor': column[-2][0].decode(),
-                                         'corr_resp': column[4][0],
-                                         'resp_win': column[9][0]}})
-        s.type_seq = np.array([col[1][0] for col in f['file/run/event/event']])
-        s.resp_seq = np.array([col[2][0] for col in f['file/run/event/event']])
+                                          'corr_resp': column[4][0],
+                                           'resp_win': column[9][0]}})
+        s.type_seq = np.array([col[1][0]  for col in f['file/run/event/event']])
+        s.resp_seq = np.array([col[2][0]  for col in f['file/run/event/event']])
         s.time_seq = np.array([col[-1][0] for col in f['file/run/event/event']])
         
     def parse_seq(s):
         ''' parse the behavioral sequence and create a dataframe containing
             the event table '''
 
-        bad_elems = ~np.in1d(s.resp_seq, [0, 1, 2, 4, 8])
-        if np.any(bad_elems): s.resp_seq[bad_elems] = 0
+        bad_respcodes = ~np.in1d(s.resp_seq, [0, 1, 2, 4, 8])
+        if np.any(bad_respcodes):
+            s.resp_seq[bad_respcodes] = 0
+        nonresp_respcodes = (s.resp_seq!=0) & (s.type_seq!=0)
+        if np.any(nonresp_respcodes):
+            s.resp_seq[nonresp_respcodes] = 0
 
         s.ev_len = len(s.type_seq)
-        s.errant = np.zeros(s.ev_len, dtype=bool)
-        s.early = np.zeros(s.ev_len, dtype=bool)
-        s.late = np.zeros(s.ev_len, dtype=bool)
+        s.errant =  np.zeros(s.ev_len, dtype=bool)
+        s.early =   np.zeros(s.ev_len, dtype=bool)
+        s.late =    np.zeros(s.ev_len, dtype=bool)
         s.correct = np.zeros(s.ev_len, dtype=bool)
         s.type_descriptor = []
 
+        # this is the main algorithm applied to the event sequence
         s.parse_alg()
 
         event_interval_ms = np.concatenate([[0], np.diff(s.time_seq)*1000])
@@ -397,6 +405,8 @@ class avgh1_file(cnth1_file):
                     continue
                 else:
                     # catch errant responses
+                    # when previous event was also a response or
+                    # the correct response to the prvious trial was 0 or -1
                     if prev_t==0 or s.case_dict[prev_t]['corr_resp'] in [0, -1]:
                         s.type_descriptor.append('rsp_err')
                         s.errant[ev] = True
