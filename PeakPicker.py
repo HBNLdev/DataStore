@@ -154,17 +154,17 @@ def load_file(next=False, initialize=False, reload_flag=False):
 			#print('plot dir', dir(expD['components']['plots'][0][1].y_range))
 			for plt_row in expD['components']['plots']:
 				for plt in plt_row:
-					if 'y_range' in dir(plt):
+					if plt and 'y_range' in dir(plt):
 						#print('updating for ',plt.title)
 						plt.y_range.start = yscale[0]
 						plt.y_range.end = yscale[1]
 						plt.y_range.trigger('start',yscale[0],yscale[0])
 						plt.y_range.trigger('end',yscale[1],yscale[1])
 
-			if reload_flag or next:
-				for plt_row in expD['components']['plots']:
-					for plt in plt_row:
-						if plt:
+						if reload_flag or next:
+				#for plt_row in expD['components']['plots']:
+				#	for plt in plt_row:
+				#		if plt:
 							chan = plt.title.split(' ')[0]
 							plt.title = chan
 							plt.trigger('title',plt.title,plt.title)
@@ -650,7 +650,7 @@ def build_experiment_tab(experiment):
 			for chan in chans:
 				peak_sourceD.update( { fd+'_'+chan:[] for fd in ['start', 'finish', 'bots', 'tops'] } ) #, 'peak'
 						#dict( start=[], finish=[], bots=[], tops=[], peak=[] ) )
-			expD['picked sources'][case] = ColumnDataSource( data=peak_sourceD )
+		expD['picked sources'][case] = ColumnDataSource( data=peak_sourceD )
 
 	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0], 
 							'single':False, 'picked':{} }
@@ -790,6 +790,7 @@ def build_experiment_tab(experiment):
 					line_dash='dashdot', name=case+'_limit')
 					gp.add_glyph( expD['picked sources'][case], case_pick_starts )
 					gp.add_glyph( expD['picked sources'][case], case_pick_finishes )
+	#print( 'Built sources:', expD )
 
 	return components, gridplots
 
