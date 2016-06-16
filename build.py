@@ -52,9 +52,16 @@ def calc_followupcol(row):
 def erp_peaks():
     # 3 minutes
     mt_files, datemods = FH.identify_files('/processed_data/mt-files/', '*.mt')
+    add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
+    	'ant_phase4_peaks_2016']
+    for subdir in add_dirs:
+    	mt_files2, datemods2 = FH.identify_files(
+    		'/active_projects/HBNL/'+subdir+'/', '*.mt')
+    	mt_files.extend(mt_files2)
+    	datemods.extend(datemods2)
     bad_files = ['/processed_data/mt-files/ant/uconn/mc/an1a0072007.df.mt',
                  ]
-    for fp in mt_files:
+    for fp in tqdm(mt_files):
         if fp in bad_files:
             continue
         mtO = FH.mt_file(fp)

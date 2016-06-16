@@ -125,8 +125,8 @@ def parse_filename(filename, include_full_ID=False):
             site = site_hash[subject_piece[0].lower()]
             if not subject_piece[0].isdigit():
                 system = 'masscomp'
-                subject_piece = site_hash_rev[site_hash[subject_piece[0]]] + \
-                    subject_piece[1:]
+                subject_piece = site_hash_rev[site_hash[
+                    subject_piece[0].lower()]] + subject_piece[1:]
 
     # masscomp
     else:
@@ -580,7 +580,7 @@ class mt_file:
         s.data = ddict
         s.data.update(s.file_info)
         s.data['ID'] = s.data['id']
-        s.data['uID'] = s.data.apply(join_ufields, axis=1)
+        s.data['uID'] = s.data['ID']+'_'+s.data['session']
         s.data['path'] = s.fullpath
 
     def parse_file(s):
