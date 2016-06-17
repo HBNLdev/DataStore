@@ -106,7 +106,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 			return
 
 	ind = app_data['file ind']
-	
+	print('load file: #',ind, paths)
 	if ind < len(paths) or not next:
 		eeg = EEGdata.avgh1( paths[ind] )
 		experiment = eeg.file_info['experiment']
@@ -125,7 +125,9 @@ def load_file(next=False, initialize=False, reload_flag=False):
 			expD['data source'].data = data_sourceD
 			for case,D in peak_sourcesD.items():
 				expD['peak sources'][case].data = D
-				expD['peak sources'][case].set()
+				#expD['peak sources'][case].set()
+				expD['peak sources'][case].trigger('data',expD['peak sources'][case].data,
+														expD['peak sources'][case].data)
 
 				expD['applied'][case] = []
 
@@ -190,6 +192,7 @@ def start_handler():
 
 	directory = directory_chooser.value.strip()
 	files = file_chooser.value.split(' ')
+	files = [f for f in files if '.h1' in f]
 	paths = [ os.path.join(directory,f) for f in files ]
 	if len(app_data['paths input']) > 0 and paths == app_data['paths input'][-1]:
 		return
