@@ -132,6 +132,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 				expD['applied'][case] = []
 
 				pickedD = expD['picked sources'][case].data
+				expD['picked sources'][case].data = { k:[] for k in pickedD}
 				for fd in pickedD.keys():
 					pickedD[fd] = []
 				#expD['picked sources'][case].set()
@@ -140,12 +141,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 
 			expD['applied picks display'].text = picked_state_text( app_data['current experiment'] )
 
-			cpsD = expD['current pick source'].data
-			for fd in cpsD:
-				cpsD[fd] = []
-			#expD['current pick source'].set()
-			expD['current pick source'].trigger('data',expD['current pick source'].data,
-													expD['current pick source'].data)
+			reset_current_pick_source(expD)
 
 			print('info plot', dir(expD['info']))
 
@@ -388,6 +384,16 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 	return plot
 
 #########################
+##		Utilities
+#########################
+
+def reset_current_pick_source(exp):
+	limits_data = exp['current pick source'].data
+	exp['current pick source'].data = { k:[] for k in limits_data.keys() }
+	exp['current pick source'].set()
+	exp['current pick source'].trigger('data',exp['current pick source'].data,exp['current pick source'].data)
+
+#########################
 ##		Callbacks
 #########################
 
@@ -407,10 +413,7 @@ def apply_handler():
 	starts = [ limits_data['start_' + ch ] for ch in chans ]
 	fins = [ limits_data['finish_'+ch ] for ch in chans ]
 
-	# Empty current pick
-	exp['current pick source'].data = { k:[] for k in limits_data.keys() }
-	exp['current pick source'].set()
-	exp['current pick source'].trigger('data',exp['current pick source'].data,exp['current pick source'].data)
+	reset_current_pick_source(exp)
 
 	case = exp['pick state']['case']
 	peak = exp['pick state']['peak']
@@ -911,7 +914,7 @@ html = """
 			$("p").filter( function(i){ return this.textContent=='P' } ).css('background-color','#DD22DD').css('color','white')
 									.css('text-align','center').css('padding','2px')
 	
-		}, 8000 )
+		}, 2000 )
 	</script>
 </html>
 
