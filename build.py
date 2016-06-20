@@ -316,6 +316,7 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
 	            csvfileO = FH.ERO_csv(fpath)
 	            file_info = csvfileO.data_for_file()  #filename parsing to here
 	            
+	            # '''
 	            if (file_info['site']=='washu' or \
 	            	file_info['site']=='suny') and \
 					file_info['experiment']=='vp3' and \
@@ -323,7 +324,7 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
 	            	csvfileO.parameters['threshold electrodes']==9:
 	            	print(',', end='')
 	            	continue
-            	
+            	# '''
 
 	            eroFileQ = O.Mdb['EROcsv'].find({'filepath': fpath}, {'_id': 1})
 	            if eroFileQ.count() >= 1:
@@ -344,7 +345,8 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
 	                new_cols = csvfileO.data.columns.difference(joinDF.columns)
 	                if len(new_cols) > 0:
 	                    joinDF = joinDF.join(csvfileO.data, how='outer')
-	            del csvfileO
+	            # del csvfileO
+	            csvfileO = None
 
 	        if joinDF.empty:
 	            print('x', end='')
@@ -355,9 +357,11 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
 	        joinDF['experiment'] = joinDF['uID'].apply(split_field, args=[2])
 
 	        orgO = O.EROpheno(joinDF.to_dict(orient='records'), subdir)
-	        del joinDF
+	        # del joinDF
+	        joinDF = None
 	        orgO.store_joined_bulk()
-	        del orgO
+	        # del orgO
+	        orgO = None
 	        print('.', end='')
     except:
     	print(subdir)

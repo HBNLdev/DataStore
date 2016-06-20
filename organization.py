@@ -218,7 +218,7 @@ class EROpheno(Acquisition):
         for new_rec in s.data:
             if new_rec['uID'] in existing_mapper.keys():
                 # add UpdateOne
-                set_spec = unflatten_dict({k.replace('_', '.', 6): v
+                set_spec = unflatten_dict({k.replace('_', '.', 4): v
                                            for k, v in new_rec.items()})
                 set_spec.update({'update time': datetime.datetime.now()})
                 update_op = pymongo.operations.UpdateOne(
