@@ -24,22 +24,29 @@ def subjects():
 
 
 def sessions():
+	def join_ufields(row):
+            return '_'.join([row['ID'], row['session']])
     # fast
-    master_mtime = mi.load_master()
-    for char in 'abcdefghijk':
-        sessionDF = mi.master[mi.master[char + '-run'].notnull()]
-        if sessionDF.empty:
-            continue
-        else:
-            sessionDF['session'] = char
-            sessionDF['followup'] = sessionDF.apply(calc_followupcol, axis=1)
-            for col in ['raw', 'date', 'age']:
-                sessionDF[col] = sessionDF[char + '-' + col]
-            for rec in sessionDF.to_dict(orient='records'):
-                so = O.Session(rec)
-                so.storeNaTsafe()
-    sourceO = O.SourceInfo('sessions', (mi.master_path, master_mtime))
-    sourceO.store()
+	master_mtime = mi.load_master()
+	for char in 'abcdefghijk':
+	    sessionDF = mi.master[mi.master[char + '-run'].notnull()]
+	    if sessionDF.empty:
+	        continue
+	    else:
+	        sessionDF['session'] = char
+	        sessionDF['followup'] = sessionDF.apply(calc_followupcol, axis=1)
+	        for col in ['raw', 'date', 'age']:
+	            sessionDF[col] = sessionDF[char + '-' + col]
+	        sessionDF['uID'] = sessionDF.apply(join_ufields, axis=1)
+	        # drop unneeded columns ?
+	        # drop_cols = [col for col in sessionDF.columns if '-age' in col or 
+	        # 	'-date' in col or '-raw' in col or '-run' in col]
+        	# sessionDF.drop(drop_cols, axis=1, inplace=True)
+	        for rec in sessionDF.to_dict(orient='records'):
+	            so = O.Session(rec)
+	            so.storeNaTsafe()
+	sourceO = O.SourceInfo('sessions', (mi.master_path, master_mtime))
+	sourceO.store()
 
 
 def calc_followupcol(row):
