@@ -141,7 +141,7 @@ class avgh1:
 		# times = np.array(range(potentials.shape[2]))/s.samp_freq
 		start_ms = -s.exp['pre_stim_time_ms']
 		end_ms = s.exp['post_stim_time_ms']
-		times = np.linspace(start_ms, end_ms, potentials.shape[2] + 1)[:-1]
+		times = np.linspace(start_ms, end_ms, potentials.shape[2] + 1)[1:]
 
 		return times, potentials
 

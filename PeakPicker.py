@@ -144,7 +144,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 
 			reset_current_pick_source(expD)
 
-			print('info plot', dir(expD['info']))
+			#print('info plot', dir(expD['info']))
 
 			expD['info'][0].text = eeg.filename #+ '<br>'.join([ str(k)+':'+str(v) for k,v in eeg.exp.items() ])
 			details = gather_info(eeg)
@@ -272,7 +272,7 @@ def make_box_callback( experiment ):
 			        source.set('data',data)
 			        console.dir(source)
 			    """)
-	print('box_callback: ', type(box_callback))
+	#print('box_callback: ', type(box_callback))
 	return box_callback
 
 def box_gen_gen( experiment ):
@@ -405,7 +405,6 @@ def update_data( peak_data ):
 # 	pass
 
 def apply_handler():
-	print('Apply')
 	exp = app_data[app_data['current experiment']]
 	eeg = exp['eeg']
 	#print( peak_source.data )
@@ -418,6 +417,7 @@ def apply_handler():
 
 	case = exp['pick state']['case']
 	peak = exp['pick state']['peak']
+	print('Apply',case,peak)
 
 	repick = False
 	if peak in exp['applied'][case]:
@@ -442,7 +442,7 @@ def apply_handler():
 	exp['picked sources'][case].data = case_picks
 	exp['picked sources'][case].set() 
 	exp['picked sources'][case].trigger('data', exp['picked sources'][case].data, exp['picked sources'][case].data)
-	print('picked source data: ',exp['picked sources'][case].data)
+	#print('picked source data: ',exp['picked sources'][case].data)
 	
 	#if not exp['pick state']['single']:
 	pval,pms = eeg.find_peaks(case,chans,starts_ms=starts,ends_ms=fins,polarity=peak[0].lower())
@@ -451,7 +451,7 @@ def apply_handler():
 
 	# need to fill unused channels until all are implemented
 	extra_chans = set(eeg.electrodes).difference(chans)
-	print(extra_chans)
+	#print(extra_chans)
 	psData = exp['peak sources'][case].data
 	if not repick:
 		psData[ 'peaks' ].append( peak )
@@ -468,16 +468,16 @@ def apply_handler():
 
 	exp['peak sources'][case].set()
 
-	print( 'pick_state: ', exp['pick state'])
-	print( 'Values:',pval, 'Times:',pms)
-	print( 'Values:',len(pval), 'Times:',len(pms) )
+	#print( 'pick_state: ', exp['pick state'])
+	#print( 'Values:',pval, 'Times:',pms)
+	#print( 'Values:',len(pval), 'Times:',len(pms) )
 	#print( dir(peak_source) )
 	#push_session(curdoc())
 	exp['peak sources'][case].trigger('data', exp['peak sources'][case].data, 
 									exp['peak sources'][case].data)
-	print(exp['peak sources'])
-	for c in exp['peak sources'].keys():
-		print(exp['peak sources'][c].data)
+	#print(exp['peak sources'])
+	#for c in exp['peak sources'].keys():
+	#	print(exp['peak sources'][c].data)
 
 	for plt_row in exp['components']['plots']:
 		for plt in plt_row:
@@ -491,7 +491,7 @@ def apply_handler():
 	sync_current_selection()
 
 def save_handler():
-	print('Save')
+	
 	exp = app_data[app_data['current experiment']]
 	eeg = exp['eeg']
 	# get list of cases which have picks and unique peaks
@@ -536,7 +536,7 @@ def save_handler():
 
 	# build mt text (makes default output location), write to a test location
 	eeg.build_mt(cases, peaks, amps1d, lats1d)
-	print(eeg.mt)
+	#print(eeg.mt)
 	test_dir = os.path.join('/active_projects/test', app_data['user'] )
 	if not os.path.exists(test_dir):
 		os.mkdir(test_dir)
@@ -544,6 +544,8 @@ def save_handler():
 	of = open( fullpath, 'w' )
 	of.write( eeg.mt )
 	of.close()
+
+	print('Saved', fullpath)
 
 def next_handler():
 	print('Next')
