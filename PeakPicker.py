@@ -24,7 +24,8 @@ point browser to:
 # logging.basic.Config(level=logging.DEBUG)
 import os
 import sys
-repo_path = '/export/home/mike/python/mort-collab'
+repo_path = '/usr/local/DataStore'
+#'/export/home/mike/python/mort-collab'
 #repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
 	sys.path.append(repo_path)
@@ -860,7 +861,7 @@ tabs = Tabs( tabs=tab_setup )
 #print('custate: ',dir(curstate()))
 
 document = Document()
-session = push_session(document,url='http://138.5.49.214:5006')
+session = push_session(document,url='http://138.5.49.213:5006')
 
 
 html = """
@@ -919,7 +920,7 @@ html = """
 </html>
 
 
-""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.214:5006')
+""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.213:5006')
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
