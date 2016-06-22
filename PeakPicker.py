@@ -330,8 +330,8 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 		# Axes
 		xAxis = LinearAxis()#x_range_name='sharedX')
 		#xTicker = AdaptiveTicker(base=10,mantissas=[0,4],min_interval=50)
-		xTicker_0 = AdaptiveTicker(base=100,mantissas=[0,4],min_interval=400)#SingleIntervalTicker(interval=400)
-		xTicker_1 = AdaptiveTicker(base=10,mantissas=[2,5],min_interval=20,max_interval=400)
+		xTicker_0 = AdaptiveTicker(base=200,mantissas=[0,2,4],min_interval=200)#SingleIntervalTicker(interval=400)
+		xTicker_1 = AdaptiveTicker(base=20,mantissas=[2,4],min_interval=20,max_interval=400)
 		xTicker = CompositeTicker(tickers=[xTicker_0,xTicker_1])
 		xAxis.ticker = xTicker
 		xGrid = Grid(dimension=0, ticker=xTicker)
