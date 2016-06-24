@@ -183,6 +183,13 @@ def next_file():
 	load_file(next=True)
 	print( 'next file loaded' )
 
+def previous_file():
+	print('Previous')
+	if app_data['file ind'] > 0:
+		app_data['file ind'] -= 1
+		load_file(reload_flag=True)
+
+
 def start_handler():
 	#exp_path = '/processed_data/mt-files/vp3/suny/ns/a-session/vp3_3_a1_40025009_avg.h1'
 	#'/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_a1_40026180_avg.h1'
@@ -561,6 +568,10 @@ def next_handler():
 	print('Next')
 	next_file()	
 
+def previous_handler():
+	print('Previous')
+	previous_file()
+
 def reload_handler():
 	print('Reload')
 	load_file(reload_flag=True)
@@ -687,6 +698,7 @@ def build_experiment_tab(experiment):
 	apply_button = Button( label="Apply", type='default' )
 	save_button = Button( label="Save" )
 	next_button = Button( label="Next" )
+	previous_button = Button( label="Prev" )
 	reload_button = Button( label="Reload")
 	# toggle to be placed on display line
 	multi_single_pick_toggle = Toggle( label= 'all', type="success" )
@@ -703,7 +715,7 @@ def build_experiment_tab(experiment):
 	pick_title = Paragraph(height=12, width=65, text='pick: case')
 	peak_title = Paragraph(height=12, width=28, text='peak')
 	components['pick controls'] = [ pick_title, case_pick_chooser, peak_title, peak_chooser, 
-							 apply_button, save_button, next_button, reload_button]
+					apply_button, save_button, previous_button, next_button, reload_button]
 	display_title = Paragraph(height=12, width=54, text='display:')
 	# Legend
 	legend_title = Paragraph(height=12, width=44, text='legend:')
@@ -732,6 +744,7 @@ def build_experiment_tab(experiment):
 	apply_button.on_click(apply_handler)
 	save_button.on_click(save_handler)
 	next_button.on_click(next_handler)
+	previous_button.on_click(previous_handler)
 	reload_button.on_click(reload_handler)
 	multi_single_pick_toggle.on_click(multi_single_toggle_handler)
 
@@ -894,9 +907,8 @@ html = """
 							  margin-bottom: 3px !important;
 							}
 		.bk-bs-checkbox-inline{ margin-top: 4px; }
-		.bk-bs-button{ padding-left: 6px !important;
-					   padding-right: 6px !important; 
-					  }
+		.bk-bs-btn{ padding: 6px 8px 6px 8px !important;
+					}
 		.bk-bs-btn-group:first-child{ background-color: blue !important;
 							  			font-color: white !important; 
 							  		}
