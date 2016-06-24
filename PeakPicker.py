@@ -20,11 +20,14 @@ point browser to:
 
 '''
 
+# load config info
+exec( open('PeakPicker.config').read() )
+print('Loaded config:',config)
 # import logging
 # logging.basic.Config(level=logging.DEBUG)
 import os
 import sys
-repo_path = '/usr/local/DataStore'
+repo_path = config['repo path']
 #'/export/home/mike/python/mort-collab'
 #repo_path = '/export/home/mort/programs/dev'
 if repo_path not in sys.path:
@@ -69,6 +72,7 @@ init_files = [ init_files_by_exp[ ex ] for ex in experiments ]
 
 
 app_data = { expr:{} for expr in experiments }
+app_data['config'] = config
 
 #userName for store path
 if '_' in user:
@@ -886,7 +890,7 @@ tabs = Tabs( tabs=tab_setup )
 #print('custate: ',dir(curstate()))
 
 document = Document()
-session = push_session(document,url='http://138.5.49.213:5006')
+session = push_session(document,url=config['url'])
 
 
 html = """
@@ -944,7 +948,7 @@ html = """
 </html>
 
 
-""" % autoload_server(tabs, session_id=session.id, url='http://138.5.49.213:5006')
+""" % autoload_server(tabs, session_id=session.id, url=config['url'])
 #curdoc().add_root(tabs)
 document.add_root(tabs)
 
