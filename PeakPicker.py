@@ -41,7 +41,8 @@ from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
 from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
 						   Plot, GridPlot, Grid, Renderer,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
-						   LinearAxis, Range1d, AdaptiveTicker, CompositeTicker, SingleIntervalTicker,
+						   LinearAxis, Range1d, AdaptiveTicker, 
+						   CompositeTicker, SingleIntervalTicker, FixedTicker,
 				 		   PanTool, WheelZoomTool, ResizeTool,
 						   Asterisk, Segment, Line,
 						   VBox, HBox )
@@ -340,7 +341,7 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 		# yTicker_0 = AdaptiveTicker(base=10,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
 		# yTicker_1 = AdaptiveTicker(base=2,mantissas=[2],max_interval=10,min_interval=2)#SingleIntervalTicker(interval=1, max_interval=10)
 		# yTicker_2 = AdaptiveTicker(base=0.1,mantissas=[4],max_interval=4, min_interval=2)
-		yTicker_0 = AdaptiveTicker(base=5,mantissas=[1],min_interval=10)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
+		yTicker_0 = AdaptiveTicker(base=5,mantissas=[1],min_interval=20)#SingleIntervalTicker(interval=10)#desired_num_ticks=2,num_minor_ticks=1)
 		yTicker_1 = AdaptiveTicker(base=40,mantissas=[1],max_interval=50,min_interval=10)#SingleIntervalTicker(interval=1, max_interval=10)
 		yTicker_2 = AdaptiveTicker(base=100,mantissas=[1],max_interval=200, min_interval=50)
 		# yTicker_0 = SingleIntervalTicker(desired_num_ticks=1, interval=5, num_minor_ticks=0)
@@ -350,6 +351,14 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 		yTicker = CompositeTicker(tickers=[yTicker_0, yTicker_1, yTicker_2])
 		yAxis.ticker = yTicker
 		
+		y0axis = LinearAxis()
+		y0axis.visible = False
+		y0ticker = FixedTicker(ticks=[0])
+		y0grid = Grid(dimension=1,ticker=y0ticker)
+		y0grid.grid_line_alpha = props['grid alpha']
+		plot.add_layout(y0axis,'left')
+		plot.add_layout(y0grid)
+
 		xAxis.axis_label_text_font_size = str(props['font size'])+'pt'
 		xAxis.major_label_text_font_size = str(props['font size']-2)+'pt'
 		xAxis.major_label_text_align = 'right'
@@ -368,6 +377,7 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 		yAxis.major_tick_out = 0
 		yAxis.major_tick_in = 4
 		plot.add_layout(yAxis,'left')
+
 
 		for cs_ind,case in enumerate(PS['case list']):
 
