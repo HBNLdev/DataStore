@@ -227,6 +227,8 @@ for f_ind, exp in enumerate(experiments):
 	app_data['file ind'] = f_ind
 	load_file( initialize=True )
 
+start_button.on_click(start_handler)
+
 
 # ***************************** Temporary setup **********************
 #start_handler()
@@ -738,8 +740,6 @@ def build_experiment_tab(experiment):
 	display_elements.extend([repick_title, multi_single_pick_toggle])
 
 	components['display elements'] = display_elements
-
-	start_button.on_click(start_handler)
 
 	case_pick_chooser.on_click(case_toggle_handler)
 	peak_chooser.on_click(peak_toggle_handler)
