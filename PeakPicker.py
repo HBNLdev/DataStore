@@ -47,7 +47,7 @@ from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
 						   LinearAxis, Range1d, AdaptiveTicker, 
 						   CompositeTicker, SingleIntervalTicker, FixedTicker,
 				 		   PanTool, WheelZoomTool, ResizeTool,
-						   Asterisk, Segment, Line,
+						   Cross, Segment, Line,
 						   VBox, HBox )
 from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
 				RadioButtonGroup, Button, Paragraph, Toggle )
@@ -73,6 +73,12 @@ init_files = [ init_files_by_exp[ ex ] for ex in experiments ]
 
 app_data = { expr:{} for expr in experiments }
 app_data['config'] = config
+
+app_data['display props'] = {'marker size':8,
+						'pick dash':[4,1],
+						'pick width':2,
+						'current color':'#ffbc00',
+						'picked color':'#886308' }
 
 #userName for store path
 if '_' in user:
@@ -337,7 +343,7 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 	plot.outline_line_width = None
 	plot.outline_line_color = None
 
-	app_data['dummy_plot'] = Asterisk( x='dummy', y='dummy', name='dummy')
+	app_data['dummy_plot'] = Cross( x='dummy', y='dummy', name='dummy')
 	app_data['dummy_plotR'] = plot.add_glyph(app_data[experiment]['data source'], app_data['dummy_plot'])
 
 	if not dummy:
@@ -675,6 +681,7 @@ peak_choices = ['P1','P2','P3','P4','N1','N2','N3','N4']
 def build_experiment_tab(experiment):
 	print('Building tab for', experiment)
 	components = {}
+	Dprops = app_data['display props']
 	expD = app_data[ experiment ]
 	print([k for k in app_data.keys()], app_data[experiment])
 	case_choices = expD['cases']
@@ -804,11 +811,11 @@ def build_experiment_tab(experiment):
 				gcount +=1
 				chan = chans[gcount]
 				current_pick_start = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-								line_width=1.5,line_alpha=0.95,line_color='#f2b41e',
-								line_dash='dashed')
+								line_width=Dprops['pick width'],line_alpha=0.95,line_color=Dprops['current color'],
+								line_dash=Dprops['pick dash'])
 				current_pick_finish = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-								line_width=1.5,line_alpha=0.95,line_color='#f2b41e',
-								line_dash='dashdot')
+								line_width=Dprops['pick width'],line_alpha=0.95,line_color=Dprops['current color'],
+								line_dash=Dprops['pick dash'])
 				expD['pick starts'][chan] = current_pick_start
 				expD['pick finishes'][chan] = current_pick_finish
 
@@ -818,8 +825,8 @@ def build_experiment_tab(experiment):
 
 					#for peak in peak_choices:
 						#cspk = case+'_'+peak
-					marker = Asterisk( x=chan+'_time',y=chan+'_pot',
-						size=4, line_alpha=1,line_color='black',
+					marker = Cross( x=chan+'_time',y=chan+'_pot',
+						size=Dprops['marker size'], line_width=1.5, line_alpha=1,line_color='black',
 						name=case+'_marker')
 					gp.add_glyph( expD['peak sources'][case], marker)
 						# gp.add_glyph( expD['picked sources'][cspk],picked_starts)
@@ -827,11 +834,11 @@ def build_experiment_tab(experiment):
 
 					#expD['case pick sources'][case] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
 					case_pick_starts = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-					line_width=1.5,line_alpha=0.95,line_color='#886308',
-					line_dash='dashed', name=case+'_limit' )
+					line_width=Dprops['pick width'],line_alpha=0.95,line_color=Dprops['picked color'],
+					line_dash=Dprops['pick dash'], name=case+'_limit' )
 					case_pick_finishes = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
-					line_width=1.5,line_alpha=0.95,line_color='#886308',
-					line_dash='dashdot', name=case+'_limit')
+					line_width=Dprops['pick width'],line_alpha=0.95,line_color=Dprops['picked color'],
+					line_dash=Dprops['pick dash'], name=case+'_limit')
 					gp.add_glyph( expD['picked sources'][case], case_pick_starts )
 					gp.add_glyph( expD['picked sources'][case], case_pick_finishes )
 	#print( 'Built sources:', expD )
