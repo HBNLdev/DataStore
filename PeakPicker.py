@@ -226,7 +226,7 @@ def start_handler():
 
 	case_toggle_handler(0)
 	peak_toggle_handler(0)
-	checkbox_handler([ n for n in range(len(app_data[app_data['current experiment']]['peak sources']))])
+	case_check_handler([ n for n in range(len(app_data[app_data['current experiment']]['peak sources']))])
 
 # Initialize tabs
 for f_ind, exp in enumerate(experiments):
@@ -518,6 +518,7 @@ def apply_handler():
 				plt.trigger('title',plt.title,plt.title)
 
 	sync_current_selection()
+	exp['status display'].text = 'Applied pick for '+case+' '+peak
 
 def save_handler():
 	
@@ -574,19 +575,27 @@ def save_handler():
 	of.write( eeg.mt )
 	of.close()
 
+	exp['status display'].text = 'Saved .mt file to' + test_dir
 	print('Saved', fullpath)
 
 def next_handler():
+	exp = app_data[app_data['current experiment']]
 	print('Next')
 	next_file()	
+	exp['status display'].text = 'Ready to pick'
+
 
 def previous_handler():
+	exp = app_data[app_data['current experiment']]
 	print('Previous')
 	previous_file()
+	exp['status display'].text = 'Ready to pick'
 
 def reload_handler():
+	exp = app_data[app_data['current experiment']]
 	print('Reload')
 	load_file(reload_flag=True)
+	exp['status display'].text = 'Reloaded'
 
 def case_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
@@ -641,7 +650,7 @@ def update_case_peak_selection_display():
 	for case_peak in app_data[app_data['current experiment']]['picked sources'].keys():
 		pass
 
-def checkbox_handler(active):
+def case_check_handler(active):
 	exp = app_data[app_data['current experiment']]
 	for n,cs in enumerate(exp['cases']):
 		alpha = 1 if n in active else 0
@@ -656,7 +665,23 @@ def checkbox_handler(active):
 			for sel in selections:
 				#sel.fill_alpha = alpha
 				sel.line_alpha = alpha
-#				sel.visible = visible 
+#				sel.visible = visible
+
+def marks_display_toggle_handler(active):
+	exp = app_data[app_data['current experiment']]
+	limits_alpha = int(0 in active)
+	marks_alpha = int(1 in active)
+	for cs in exp['cases']:
+		lim_selections = exp['grid'].select(dict(name=cs+'_limit'))
+		for sel in lim_selections:
+			sel.line_alpha=limits_alpha
+		mark_selections = exp['grid'].select(dict(name=cs+'_marker'))
+		for sel in mark_selections:
+			sel.line_alpha=marks_alpha
+	current_lim_selections = exp['grid'].select(dict(name='current_limit'))
+	for sel in current_lim_selections:
+		sel.line_alpha=limits_alpha
+
 def multi_single_toggle_handler(state):
 	exp = app_data[app_data['current experiment']]
 	print('multi-single toggle state:', state)
@@ -705,6 +730,8 @@ def build_experiment_tab(experiment):
 
 	case_display_toggle = CheckboxGroup( labels=case_choices, inline=True,
 				active=[n for n in range(len(case_choices))] )
+	marks_display_toggle = CheckboxGroup( labels=['limits','peaks'], inline=True, 
+				active=[0,1])
 
 	peak_chooser = RadioButtonGroup( labels=peak_choices, active=0)
 
@@ -722,6 +749,7 @@ def build_experiment_tab(experiment):
 						 'save' : save_button,
 						 'reload' : reload_button,
 						 'case toggle' : case_display_toggle,
+						 'marks toggle': marks_display_toggle,
 						 'multi-single toggle': multi_single_pick_toggle
 						}
 
@@ -737,7 +765,7 @@ def build_experiment_tab(experiment):
 		display_elements.append( Paragraph(height=18, width=25, text=cc ) )
 
 	spacer = Paragraph(height=12, width=15)
-	picked_status = Paragraph(height=12, width=230, text='No picks yet')
+	picked_status = Paragraph(height=12, width=300, text='No picks yet',tags=['pick-status'])
 	display_elements.append( spacer )
 	display_elements.append( picked_status )
 	expD['applied picks display'] = picked_status
@@ -747,17 +775,23 @@ def build_experiment_tab(experiment):
 	display_elements.extend([repick_title, multi_single_pick_toggle])
 
 	components['display elements'] = display_elements
+	spacer2 = Paragraph(height=12, width=54)
+	spacer3 = Paragraph(height=12, width=100)
+	program_status = Paragraph(height=12, width=300, text='Program status')
+	expD['status display'] = program_status
+	components['display elements 2'] = [ spacer2, marks_display_toggle, spacer3, program_status]
 
 	case_pick_chooser.on_click(case_toggle_handler)
 	peak_chooser.on_click(peak_toggle_handler)
 
-	case_display_toggle.on_click(checkbox_handler)
+	case_display_toggle.on_click(case_check_handler)
 	apply_button.on_click(apply_handler)
 	save_button.on_click(save_handler)
 	next_button.on_click(next_handler)
 	previous_button.on_click(previous_handler)
 	reload_button.on_click(reload_handler)
 	multi_single_pick_toggle.on_click(multi_single_toggle_handler)
+	marks_display_toggle.on_click(marks_display_toggle_handler)
 
 	current_pickD = {}
 	for chan in chans:
@@ -812,10 +846,10 @@ def build_experiment_tab(experiment):
 				chan = chans[gcount]
 				current_pick_start = Segment(x0='start_'+chan,x1='start_'+chan,y0='bots_'+chan,y1='tops_'+chan,
 								line_width=Dprops['pick width'],line_alpha=0.95,line_color=Dprops['current color'],
-								line_dash=Dprops['pick dash'])
+								line_dash=Dprops['pick dash'], name='current_limit')
 				current_pick_finish = Segment(x0='finish_'+chan,x1='finish_'+chan,y0='bots_'+chan,y1='tops_'+chan,
 								line_width=Dprops['pick width'],line_alpha=0.95,line_color=Dprops['current color'],
-								line_dash=Dprops['pick dash'])
+								line_dash=Dprops['pick dash'], name='current_limit')
 				expD['pick starts'][chan] = current_pick_start
 				expD['pick finishes'][chan] = current_pick_finish
 
@@ -873,7 +907,8 @@ for expr in experiments:
 	expD['components'] = components 
 	pick_controls = HBox( children=components['pick controls'])
 	display = HBox( children=components['display elements'] )
-	inputs = VBox( children=[pick_controls, display])
+	display2 = HBox( children = components['display elements 2'])
+	inputs = VBox( children=[pick_controls, display, display2])
 
 	info_el = Paragraph(height=12, width=300, text='Info')#make_info_plot()
 	#info2 = PreText(text='<tr><td><font color="red">Case1</font></td><td><font color="blue">Case2</font></td></tr>')
