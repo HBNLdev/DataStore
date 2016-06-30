@@ -754,7 +754,7 @@ def build_experiment_tab(experiment):
 						}
 
 	pick_title = Paragraph(height=12, width=65, text='pick: case')
-	peak_title = Paragraph(height=12, width=28, text='peak')
+	peak_title = Paragraph(height=12, width=30, text='peak')
 	components['pick controls'] = [ pick_title, case_pick_chooser, peak_title, peak_chooser, 
 					apply_button, save_button, previous_button, next_button, reload_button]
 	display_title = Paragraph(height=12, width=54, text='display:')
@@ -764,20 +764,21 @@ def build_experiment_tab(experiment):
 	for cc in case_choices:
 		display_elements.append( Paragraph(height=18, width=25, text=cc ) )
 
-	spacer = Paragraph(height=12, width=15)
-	picked_status = Paragraph(height=12, width=300, text='No picks yet',tags=['pick-status'])
+	spacer = Paragraph(height=12, width=5)
+	status_width = 352 - (len(case_choices)-2)*50
+	picked_status = Paragraph(height=12, width=status_width, text='No picks yet',tags=['pick-status'])
 	display_elements.append( spacer )
 	display_elements.append( picked_status )
 	expD['applied picks display'] = picked_status
 
-	repick_title = Paragraph(height=15, width=35, text='repick')
+	repick_title = Paragraph(height=15, width=38, text='repick')
 
 	display_elements.extend([repick_title, multi_single_pick_toggle])
 
 	components['display elements'] = display_elements
 	spacer2 = Paragraph(height=12, width=54)
-	spacer3 = Paragraph(height=12, width=100)
-	program_status = Paragraph(height=12, width=300, text='Program status')
+	spacer3 = Paragraph(height=12, width=25)
+	program_status = Paragraph(height=12, width=400, text='Program status')
 	expD['status display'] = program_status
 	components['display elements 2'] = [ spacer2, marks_display_toggle, spacer3, program_status]
 
@@ -943,8 +944,8 @@ html = """
         %s
     </body>
     <style>
-    	p{ margin: 3px; }
-		.bk-hbox-spacer{ margin-right:5 !important }
+    	p{ margin: 1px; }
+		.bk-hbox-spacer{ margin-right:2 !important }
 		.bk-vbox > p{ margin:1 !important;
 					  font-size: 12px !important;
 					}
@@ -985,7 +986,7 @@ html = """
 			$("p").filter( function(i){ return this.textContent=='P' } ).css('background-color','#DD22DD').css('color','white')
 									.css('text-align','center').css('padding','2px')
 	
-		}, 2000 )
+		}, 15000 )
 	</script>
 </html>
 
