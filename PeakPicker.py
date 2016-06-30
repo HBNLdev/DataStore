@@ -766,30 +766,33 @@ def build_experiment_tab(experiment):
 	peak_title = Paragraph(height=12, width=30, text='peak')
 	components['pick controls'] = [ pick_title, case_pick_chooser, peak_title, peak_chooser, 
 					apply_button, save_button, previous_button, next_button, reload_button]
+	spacer0 = Paragraph(height=12, width=35)
 	display_title = Paragraph(height=12, width=54, text='display:')
+	spacer1 = Paragraph(height=12, width=5)
 	# Legend
 	legend_title = Paragraph(height=12, width=44, text='legend:')
-	display_elements = [ display_title, case_display_toggle, legend_title ]
+	display_elements = [ spacer0, display_title, case_display_toggle, spacer1, legend_title ]
 	for cc in case_choices:
 		display_elements.append( Paragraph(height=18, width=25, text=cc ) )
 
-	spacer = Paragraph(height=12, width=5)
-	status_width = 352 - (len(case_choices)-2)*50
+	spacer2 = Paragraph(height=12, width=5)
+	status_width = 395 - (len(case_choices)-2)*50
 	picked_status = Paragraph(height=12, width=status_width, text='No picks yet',tags=['pick-status'])
-	display_elements.append( spacer )
+	display_elements.append( spacer2 )
 	display_elements.append( picked_status )
 	expD['applied picks display'] = picked_status
 
 	repick_title = Paragraph(height=15, width=38, text='repick')
 
-	display_elements.extend([repick_title, multi_single_pick_toggle])
+	#display_elements.extend([repick_title, multi_single_pick_toggle])
 
 	components['display elements'] = display_elements
-	spacer2 = Paragraph(height=12, width=54)
 	spacer3 = Paragraph(height=12, width=25)
+	spacer4 = Paragraph(height=12, width=25)
 	program_status = Paragraph(height=12, width=400, text='Program status')
 	expD['status display'] = program_status
-	components['display elements 2'] = [ spacer2, marks_display_toggle, spacer3, program_status]
+	components['display elements 2'] = [ repick_title, multi_single_pick_toggle,
+								spacer3, marks_display_toggle, spacer4, program_status]
 
 	case_pick_chooser.on_click(case_toggle_handler)
 	peak_chooser.on_click(peak_toggle_handler)
