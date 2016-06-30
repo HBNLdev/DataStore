@@ -15,24 +15,26 @@ import matplotlib.pyplot as plt
 import mne
 
 # values are tuples of h5py fieldname and datatype
-opt_info = {'Coordinates file':             ('coords_file',         'text'),
+opt_info = {'Coordinates file': ('coords_file', 'text'),
 
-            'Condition labels':             ('case_label',          'cell'),
-            'Measures available':           ('measures',            'cell'),
-            'Coherence pair subset labels': ('pair_indlbls',        'cell'),
+            'Condition labels': ('case_label', 'cell'),
+            'Measures available': ('measures', 'cell'),
+            'Coherence pair subset labels': ('pair_indlbls', 'cell'),
 
-            'Sampling rate':                ('rate',                'array'),
-            '# of timepoints':              ('n_samps',             'array'),
-            'Temporal limits':              ('epoch_lims',          'array'),
-            'Frequency limits':             ('freq_lims',           'array'),
-            'TF scales':                    ('wavelet_scales',      'array'),
-            'TF time-downsample ratio':     ('tf_timedownsamp_ratio', 'array'),
-            'CSD matrix':                   ('csd_G',               'array'),
-            'Coherence pairs':              ('coherence_pairs',     'array'),
-            'Coherence pair subset index':  ('pair_inds',           'array'),
+            'Sampling rate': ('rate', 'array'),
+            '# of timepoints': ('n_samps', 'array'),
+            'Temporal limits': ('epoch_lims', 'array'),
+            'Frequency limits': ('freq_lims', 'array'),
+            'TF scales': ('wavelet_scales', 'array'),
+            'TF time-downsample ratio': ('tf_timedownsamp_ratio', 'array'),
+            'CSD matrix': ('csd_G', 'array'),
+            'Coherence pairs': ('coherence_pairs', 'array'),
+            'Coherence pair subset index': ('pair_inds', 'array'),
             }
 
 # text parsing
+
+
 def uid_frompath(fp):
     ''' given HBNL-formatted filepath, returns ID, session tuple '''
     path_pieces = fp.split('/')
@@ -40,6 +42,8 @@ def uid_frompath(fp):
     return file_pieces[3], file_pieces[2][0]
 
 # dataframe-oriented functions
+
+
 def uid_inds(df):
     ''' set ID and session as dataframe indices if they exist '''
     def_inds = ['ID', 'session']
@@ -49,6 +53,8 @@ def uid_inds(df):
             df.set_index(ind, append=do_append, inplace=True)
 
 # h5py parsing functions
+
+
 def parse_text(dset, dset_field):
     ''' parse .mat-style h5 field that contains text '''
     dset_ref = dset[dset_field]
@@ -85,18 +91,22 @@ def handle_parse(dset, dset_field, field_type):
 
 # array functions
 def baseline_amp(array, pt_lims, along_dim=-1):
+    ''' baseline array in a subtractive way '''
     return array - array.take(range(pt_lims[0], pt_lims[1]+1), axis=along_dim)\
                         .mean(axis=along_dim, keepdims=True)
 
 def baseline_tf(array, pt_lims, along_dim=-1):
-    return 10 * np.log10( array / array.take(range(pt_lims[0], pt_lims[1]+1),
-                                                axis=along_dim)\
-                                        .mean(axis=along_dim, keepdims=True) )
+    ''' baseline array in a divisive way '''
+    return 10 * np.log10(array / array.take(range(pt_lims[0], pt_lims[1] + 1),
+                                            axis=along_dim)
+                         .mean(axis=along_dim, keepdims=True))
 
 def convert_ms(time_array, ms):
+    ''' given time array, find index nearest to given time value '''
     return np.argmin(np.fabs(time_array - ms))
 
 def compound_take(a, vals, dims):
+    ''' given array, apply multiple indexing operations '''
     def apply_take(a, v, d):
         if isinstance(v, int):
             return a.take([v], d)
@@ -112,27 +122,31 @@ def compound_take(a, vals, dims):
         print(a.shape)
     return np.squeeze(a)
 
+
 # plotting functions
+
+
 def subplot_heuristic(n):
     ''' for n subplots, determine best grid layout dimensions '''
     def isprime(n):
-        for x in range(2, int(np.sqrt(n))+1):
-            if n%x==0:
+        for x in range(2, int(np.sqrt(n)) + 1):
+            if n % x == 0:
                 return False
         return True
     if n > 6 and isprime(n):
         n += 1
     num_lst, den_lst = [n], [1]
-    for x in range(2, int(np.sqrt(n))+1):
-        if n%x == 0:
+    for x in range(2, int(np.sqrt(n)) + 1):
+        if n % x == 0:
             den_lst.append(x)
-            num_lst.append(n//x)
-    ratios = np.array([a/b for a,b in zip(num_lst, den_lst)])
-    best_ind = np.argmin(ratios - 1.1618) # most golden
+            num_lst.append(n // x)
+    ratios = np.array([a / b for a, b in zip(num_lst, den_lst)])
+    best_ind = np.argmin(ratios - 1.1618)  # most golden
     if den_lst[best_ind] < num_lst[best_ind]:
-        return den_lst[best_ind], num_lst[best_ind] 
+        return den_lst[best_ind], num_lst[best_ind]
     else:
         return num_lst[best_ind], den_lst[best_ind]
+
 
 class Results:
     ''' represents HDF-compatible .mat's as dask stacks '''
@@ -166,66 +180,80 @@ class Results:
         prefix = 'opt/'
         s.params = {}
         for param, info in opt_info.items():
-            s.params.update( {param:
-                              handle_parse(s.opt, prefix + info[0], info[1])} )
+            s.params.update({param:
+                             handle_parse(s.opt, prefix + info[0], info[1])})
 
     def make_scales(s):
         ''' populate attributes describing channels and units '''
+        
+        # channels
         use_ext = '.sfp'
         path, file = os.path.split(s.params['Coordinates file'])
         fn, ext = file.split('.')
         s.montage = mne.channels.read_montage(os.path.join(path, fn) + use_ext)
 
-        # Units
+        # units and suggested limits; CSD transform or not
         if s.params['CSD matrix'].shape[0] > 2:
             s.pot_units = r'$\mu$V / $cm^2$'
+            s.pot_lims = [-.2, .2]
         else:
             s.pot_units = r'$\mu$V'
+            s.pot_lims = [-10, 16]
+        s.db_units = 'decibels (dB)'
+        s.db_lims = [-3, 3]
+
+        # ERP times
         s.srate = s.params['Sampling rate'][0][0]
+        ep_lims = s.params['Temporal limits']
+        n_timepts = s.params['# of timepoints']
+        s.time = np.linspace(ep_lims[0], ep_lims[1], n_timepts + 1)[1:]
 
-        # ERP
-        ep_lims     = s.params['Temporal limits']
-        n_timepts   = s.params['# of timepoints']
-        s.time      = np.linspace(ep_lims[0], ep_lims[1], n_timepts + 1)[1:]
-
-        # TF
+        # TF times / freqs
         n_timepts_tf = int(n_timepts / s.params['TF time-downsample ratio'])
         s.time_tf = np.linspace(ep_lims[0], ep_lims[1], n_timepts_tf + 1)[1:]
-        s.freq = np.array([2*s.srate/scale[0]
-                            for scale in s.params['TF scales']])
+        s.freq = np.array([2 * s.srate / scale[0]
+                           for scale in s.params['TF scales'][::-1]]) #rev
         s.freq_ticks_pt = range(0, len(s.freq), 2)
-        s.freq_ticks_hz = ['{0:.1f}'.format(f) for f in reversed(s.freq[1::2])]
+        s.freq_ticks_hz = ['{0:.1f}'.format(f) for f in s.freq[::2]]
 
-        s.time_ticks()
-
+        s.time_ticks() # additional helper function for ticks
 
     def time_ticks(s, interval=200):
         ''' time ticks for plots '''
-        ms_start_plot = np.round(s.time[0]/100)*100 # start at a round number
+        ms_start_plot = np.round(
+            s.time[0] / 100) * 100  # start at a round number
         first_tick = int(ms_start_plot + ms_start_plot % interval)
         time_ticks_ms = list(range(first_tick, int(s.time[-1]), interval))
 
         s.time_ticks_pt_erp = [convert_ms(s.time, ms) for ms in time_ticks_ms]
-        s.time_ticks_pt_tf = [convert_ms(s.time_tf, ms) for ms in time_ticks_ms]
-        
-        s.time_ticks_ms = [n/1000 for n in time_ticks_ms] # for display purposes
+        s.time_ticks_pt_tf = [convert_ms(s.time_tf, ms)
+                              for ms in time_ticks_ms]
 
+        # for display purposes
+        s.time_ticks_ms = [n / 1000 for n in time_ticks_ms]
 
     def load_erp(s, lp_cutoff=16, bl_window=(-100, 0)):
         ''' load, filter, and subtractively baseline ERP data '''
-        dsets = [h5py.File(fn)['erp'] for fn in s.file_df['path'].values]
+
+        if 'erp' in dir(s):
+            print('erp already loaded')
+            return
+
+        dsets = [h5py.File(fn, 'r')['erp'] for fn in s.file_df['path'].values]
         arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
         stack = da.stack(arrays, axis=-1)  # concatenate along last axis
-        stack = stack.transpose([3, 0, 1, 2]) # move subject dimension to front
-        
+        # move subject dimension to front
+        stack = stack.transpose([3, 0, 1, 2])
+
         erp = np.empty(stack.shape)
         da.store(stack, erp)
         # erp is (subjects, conditions, channels, timepoints,)
         print(erp.shape)
 
         # filter
-        erp_filt = mne.filter.low_pass_filter(erp, 
-                        s.params['Sampling rate'], lp_cutoff)
+        erp_filt = mne.filter.low_pass_filter(erp,
+                                              s.params['Sampling rate'],
+                                              lp_cutoff)
         # baseline
         erp_filt_bl = baseline_amp(erp_filt, (convert_ms(s.time, bl_window[0]),
                                               convert_ms(s.time, bl_window[1])))
@@ -233,32 +261,7 @@ class Results:
         s.erp = erp_filt_bl
         s.erp_dims = ('subject', 'condition', 'channel', 'timepoint')
         s.erp_dim_lsts = (s.file_df.index.values, s.params['Condition labels'],
-            s.montage.ch_names, s.time)
-
-    def load_power(s, bl_window=(-500, -200)):
-        ''' load and divisively baseline-normalize total power data '''
-        dsets = [h5py.File(fn)['wave_totpow']
-                    for fn in s.file_df['path'].values]
-        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
-        stack = da.stack(arrays, axis=-1)  # concatenate along last axis
-        print(stack.shape)
-        stack = stack.transpose([4, 0, 2, 1, 3]) # subject dimension to front
-
-        power = np.empty(stack.shape)
-        da.store(stack, power)
-        # power is (subjects, conditions, channels, freq, timepoints,)
-        power = power[:,:,:,::-1,:] # reverse the freq dimension
-        print(power.shape)
-
-        # baseline normalize
-        power_bl = baseline_tf(power, (convert_ms(s.time_tf, bl_window[0]),
-                                       convert_ms(s.time_tf, bl_window[1]),))
-
-        s.power = power_bl
-        s.power_dims = ('subject', 'condition', 'channel',
-                            'timepoint', 'frequency')
-        s.power_dim_lsts = (s.file_df.index.values,
-            s.params['Condition labels'], s.montage.ch_names, s.time, s.freq)
+                          s.montage.ch_names, s.time)
 
     def prepare_mne(s):
         ''' prepare an mne EvokedArray object from erp data '''
@@ -267,15 +270,75 @@ class Results:
 
         # create info
         info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
-                                    'eeg', s.montage)
+                               'eeg', s.montage)
         # EvokedArray
-        chan_erps = s.erp.mean(axis=(0,1))/1000000 # subject/condition mean
+        chan_erps = s.erp.mean(axis=(0, 1)) / 1000000  # subject/condition mean
         return mne.EvokedArray(chan_erps, info,
-                    tmin=s.params['Temporal limits'][0]/1000)
+                               tmin=s.params['Temporal limits'][0] / 1000)
+
+    def load_power(s, bl_window=[-500, -200]):
+        ''' load (total) power data and divisively baseline-normalize '''
+
+        if 'power' in dir(s):
+            print('power already loaded')
+            return
+
+        dsets = [h5py.File(fn, 'r')['wave_totpow']
+                 for fn in s.file_df['path'].values]
+        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
+        stack = da.stack(arrays, axis=-1)  # concatenate along last axis
+        print(stack.shape)
+        stack = stack.transpose([4, 0, 2, 1, 3])  # subject dimension to front
+
+        power = np.empty(stack.shape)
+        da.store(stack, power)
+        # power is (subjects, conditions, channels, freq, timepoints,)
+        power = power[:, :, :, ::-1, :]  # reverse the freq dimension
+        print(power.shape)
+
+        # baseline normalize
+        power_bl = baseline_tf(power, (convert_ms(s.time_tf, bl_window[0]),
+                                       convert_ms(s.time_tf, bl_window[1]),))
+
+        s.power = power_bl
+        s.tf_dims = ('subject', 'condition', 'channel',
+                        'frequency', 'timepoint')
+        s.tf_dim_lsts = (s.file_df.index.values,
+                            s.params['Condition labels'],
+                            s.montage.ch_names, s.freq, s.time_tf)
+
+    def load_itc(s, bl_window=[-500, -200]):
+        ''' load phase data, take absolute() of, and subtractively baseline '''
+
+        dsets = [h5py.File(fn, 'r')['wave_evknorm']
+                 for fn in s.file_df['path'].values]
+        arrays = [dset.value.view(np.complex) for dset in dsets]
+        stack = np.stack(arrays, axis=-1)  # concatenate along last axis
+        print(stack.shape)
+        # stack = stack.absolute() ?
+        stack = stack.transpose([4, 0, 2, 1, 3])  # subject dimension to front
+
+        # itc is (subjects, conditions, channels, freq, timepoints,)
+        itc = np.absolute(stack)
+        itc = itc[:, :, :, ::-1, :]  # reverse the freq dimension
+        print(itc.shape)
+
+        # baseline normalize
+        itc_bl = baseline_amp(itc, (convert_ms(s.time_tf, bl_window[0]),
+                                    convert_ms(s.time_tf, bl_window[1]),))
+
+        s.itc = itc_bl
+        s.tf_dims = ('subject', 'condition', 'channel',
+                        'frequency', 'timepoint')
+        s.tf_dim_lsts = (s.file_df.index.values,
+                            s.params['Condition labels'],
+                            s.montage.ch_names, s.freq, s.time_tf)
+
 
     def plot_erp(s, figure_by=('channel', ['FZ', 'CZ', 'PZ']),
-                    subplot_by=('group', None),
-                    glyph_by=('condition', None) ):
+                 subplot_by=('POP', None),
+                 glyph_by=('condition', None)):
+        ''' plot ERPs as lines '''
 
         if 'erp' not in dir(s):
             s.load_erp()
@@ -290,37 +353,111 @@ class Results:
         sp_dims = subplot_heuristic(len(sp_vals))
         for fi, fval in enumerate(f_vals):
             f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
-                sharex=True, sharey=True, figsize=(12, 5))
+                                    sharex=True, sharey=True, figsize=(12, 5))
             f.suptitle(f_lbls[fi])
             axarr = axarr.ravel()
             for spi, spval in enumerate(sp_vals):
                 for gi, gval in enumerate(g_vals):
                     line = compound_take(s.erp, [fval, spval, gval],
-                            [f_dim[fi], sp_dim[spi], g_dim[gi]])
+                                         [f_dim[fi], sp_dim[spi], g_dim[gi]])
                     print(line.shape)
                     while len(line.shape) > 1:
                         line = line.mean(axis=0)
                         print(line.shape)
                     axarr[spi].plot(np.arange(len(line)), line,
-                            label=g_lbls[gi])
+                                    label=g_lbls[gi])
                 axarr[spi].grid(True)
                 axarr[spi].set_title(sp_lbls[spi])
                 axarr[spi].legend()
                 axarr[spi].set_xticks(s.time_ticks_pt_erp)
                 axarr[spi].set_xticklabels(s.time_ticks_ms)
                 axarr[spi].set_xlabel('Time (s)')
-                axarr[spi].set_ylabel('Potential ('+s.pot_units+')')
+                axarr[spi].set_ylabel('Potential (' + s.pot_units + ')')
 
+    def plot_topo(s, data='erp', times=list(range(0, 501, 125)),
+                     figure_by=('POP', ['C']),
+                     row_by=('condition', None)):
+        ''' plot data as topographic maps at specific timepoints '''
 
-    def plot_ersp(s, figure_by=[('POP', None),
+        if data=='erp':
+            if 'erp' not in dir(s):
+                s.load_erp()
+            data = s.erp
+            d_dims = s.erp_dims
+            d_dimlst = s.erp_dim_lsts
+            units = s.pot_units
+            lims = s.pot_lims
+        elif data=='power':
+            if 'power' not in dir(s):
+                s.load_power()
+            data = s.power
+            d_dims = s.tf_dims
+            d_dimlst = s.tf_dim_lsts
+            units = s.db_units
+            lims = s.db_lims
+        else:
+            print('data not recognized')
+            return
+        final_dim = d_dims.index('channel')
+        final_dimlen = len(d_dimlst[final_dim])
+
+        f_dim, f_vals, f_lbls = s.interpret_by(figure_by, d_dims, d_dimlst)
+        r_dim, r_vals, r_lbls = s.interpret_by(row_by, d_dims, d_dimlst)
+        time_by = ('timepoint', times)
+        t_dim, t_vals, t_lbls = s.interpret_by(time_by, d_dims, d_dimlst)
+
+        info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
+                               'eeg', s.montage)
+
+        sp_dims = (len(r_vals), len(times))
+        for fi, fval in enumerate(f_vals):
+            f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
+                                    sharex=True, sharey=True, figsize=(12, 5))
+            f.suptitle(f_lbls[fi])
+            axarr = axarr.ravel()
+            ax_dum = -1
+            for ri, rval in enumerate(r_vals):
+                for ti, tval in enumerate(t_vals):
+                    topo = compound_take(data, [fval, rval, tval],
+                                         [f_dim[fi], r_dim[ri], t_dim[ti]])
+                    print(topo.shape)
+                    mean_dims = np.where([d!=final_dimlen for d in topo.shape])
+                    topo = topo.mean(axis=tuple(dim for dim in mean_dims[0]))
+                    print(topo.shape)
+                    ax_dum += 1
+                    im, cn = mne.viz.plot_topomap(topo, info,
+                                        vmin=lims[0], vmax=lims[1],
+                                        cmap=plt.cm.RdBu_r, axes=axarr[ax_dum],
+                                        show=False)
+                    ''' labels '''
+                    axarr[ax_dum].text(-.5, .5, t_lbls[ti])  # time label
+                    if ti == 0:
+                        axarr[ax_dum].text(-1.5, 0, r_lbls[ri])  # row label
+            ''' colorbar '''
+            plt.subplots_adjust(right=0.85)
+            cbar_ax = f.add_axes([0.9, 0.15, 0.03, 0.75])
+            cbar = plt.colorbar(im, cax=cbar_ax)
+            cbar.ax.set_ylabel(units, rotation=270)
+
+    def plot_tf(s, data='power', figure_by=[('POP', None),
                                 ('channel', ['FZ'])],
-                     subplot_by=('condition', None)):
+                  subplot_by=('condition', None)):
+        ''' plot time-frequency data as a rectangular contour image '''
 
-        if 'power' not in dir(s):
-            s.load_power()
-
-        d_dims = s.power_dims
-        d_dimlst = s.power_dim_lsts
+        if data=='power':
+            if 'power' not in dir(s):
+                s.load_power()
+            data, units, lims, cmap = s.power, s.db_units, s.db_lims, \
+                                            plt.cm.RdBu_r
+        elif data=='itc':
+            if 'itc' not in dir(s):
+                s.load_itc()
+            data, units, lims, cmap = s.itc, 'ITC', [-.06, 0.3], plt.cm.Purples
+        else:
+            print('data not recognized')
+            return
+        d_dims = s.tf_dims
+        d_dimlst = s.tf_dim_lsts
 
         f_dim, f_vals, f_lbls = s.interpret_by(figure_by, d_dims, d_dimlst)
         sp_dim, sp_vals, sp_lbls = s.interpret_by(subplot_by, d_dims, d_dimlst)
@@ -328,79 +465,93 @@ class Results:
         sp_dims = subplot_heuristic(len(sp_vals))
         for fi, fval in enumerate(f_vals):
             f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
-                sharex=True, sharey=True, figsize=(12, 5))
+                                    sharex=True, sharey=True, figsize=(12, 5))
             f.suptitle(f_lbls[fi])
             axarr = axarr.ravel()
             for spi, spval in enumerate(sp_vals):
-                rect = compound_take(s.power, [fval, spval],
-                        [f_dim[fi], sp_dim[spi]])
+                rect = compound_take(data, [fval, spval],
+                                     [f_dim[fi], sp_dim[spi]])
                 print(rect.shape)
                 while len(rect.shape) > 2:
                     rect = rect.mean(axis=0)
                     print(rect.shape)
                 ''' contour '''
-                c = axarr[spi].contourf(rect, 10, cmap=plt.cm.RdBu_r,
-                                        vmin=-4, vmax=4)
+                c = axarr[spi].contourf(rect, 8, cmap=cmap,
+                                        vmin=lims[0], vmax=lims[1])
                 # c = axarr[spi].contour(rect, cmap=plt.cm.RdBu_r,
                 #                         vmin=-4, vmax=4)
                 # plt.clabel(c, inline=1, fontsize=9)
-                ''' colorbar '''
-                plt.subplots_adjust(right=0.85)
-                cbar_ax = f.add_axes([0.88, 0.12, 0.03, 0.75])
-                cbar = plt.colorbar(c, cax=cbar_ax)
-                cbar.ax.set_ylabel('dB', rotation=270)
-                # plt.colorbar(c, ax=axarr[spi])
                 ''' ticks and grid '''
                 axarr[spi].set_xticks(s.time_ticks_pt_tf)
                 axarr[spi].set_xticklabels(s.time_ticks_ms)
                 axarr[spi].set_yticks(s.freq_ticks_pt)
                 axarr[spi].set_yticklabels(s.freq_ticks_hz)
-                # axarr[spi].set_zlabel('Potential ('+s.pot_units+')')
                 axarr[spi].grid(True)
                 ''' labels and title '''
                 axarr[spi].set_xlabel('Time (s)')
                 axarr[spi].set_ylabel('Frequency (Hz)')
                 axarr[spi].set_title(sp_lbls[spi])
+            ''' colorbar '''
+            plt.subplots_adjust(right=0.85)
+            cbar_ax = f.add_axes([0.88, 0.12, 0.03, 0.75])
+            cbar = plt.colorbar(c, cax=cbar_ax)
+            cbar.ax.set_ylabel(units, rotation=270)
+            # plt.colorbar(c, ax=axarr[spi])
 
     # plot helpers
     def interpret_by(s, by_stage, d_dims, d_dimlst):
-        ''' interpret a 'by' stage, which tells plotting functions which parts
-            of the data will be distributed across that plotting object '''
+        ''' interpret a 'by' stage, which tells a plotting functions what parts
+            of the data will be distributed across a plotting object '''
 
         def interpret_one(s, by_stage, data_dims, data_dimlst):
-            ''' sub-function '''
+            ''' by_stage: 2-tuple of variable and its levels
+                data_dims: n-tuple describing the n dimensions of the data
+                data_dimlst: n-tuple of lists describing levels of each dim '''
+
             print('by stage is', by_stage[0])
-            if by_stage[0] in data_dims: # if variable is in data dims
+            if by_stage[0] in data_dims:  # if variable is in data dims
                 dim = data_dims.index(by_stage[0])
                 print('data in dim', dim)
                 if by_stage[1]:
                     labels = by_stage[1]
-                    vals = [data_dimlst[dim].index(lbl) for lbl in labels]
+                    if isinstance(data_dimlst[dim], np.ndarray):
+                        vals = []
+                        for lbl in labels:
+                            if isinstance(lbl, list):
+                                tmp_inds = [np.argmin(np.fabs(\
+                                    data_dimlst[dim] - lp)) for lp in lbl]
+                            else:
+                                tmp_inds = np.argmin(np.fabs(\
+                                    data_dimlst[dim] - lbl))
+                            vals.append(tmp_inds)
+                    else:
+                        vals = [data_dimlst[dim].index(lbl) for lbl in labels]
                     print('vals to iterate on are', vals)
                 else:
                     labels = data_dimlst[dim]
                     vals = list(range(len(labels)))
                     print('iterate across available vals including', vals)
-            elif by_stage[0] in s.demog_df.columns: # if variable in demog dims
+            elif by_stage[0] in s.demog_df.columns:  # if variable in demog dims
                 dim = data_dims.index('subject')
                 print('demogs in', dim)
                 if by_stage[1]:
                     labels = by_stage[1]
                     vals = [np.where(s.demog_df[by_stage[0]] == lbl)[0]
-                                for lbl in labels]
+                            for lbl in labels]
                     print('vals to iterate on are', vals)
                 else:
                     labels = s.demog_df[by_stage[0]].unique()
                     vals = [np.where(s.demog_df[by_stage[0]].values == lbl)[0]
-                                for lbl in labels]
+                            for lbl in labels]
                     print('iterate across available vals including', vals)
             else:
                 print('variable not found in data or demogs')
                 raise
-            dims = [dim]*len(vals)
+            dims = [dim] * len(vals)
             return dims, vals, labels
-
-        ''' main function '''
+        
+        ''' if given a list of by_stage 2-tuples, create the list as a product
+            of the list elements '''
         if isinstance(by_stage, list):
             # create list versions of the dim, vals, and labels
             tmp_dims, tmp_vals, tmp_labels = [], [], []
@@ -416,6 +567,7 @@ class Results:
         else:
             return interpret_one(s, by_stage, d_dims, d_dimlst)
 
+
 class ERP:
 
     def __init__(s, results_obj):
@@ -424,5 +576,5 @@ class ERP:
         s.montage = results_obj
 
     def plot_erp(s, channels=['FZ', 'CZ', 'PZ'],
-            line_by='group', subplot_by='condition', figure_by='channel'):
+                 line_by='group', subplot_by='condition', figure_by='channel'):
         pass
