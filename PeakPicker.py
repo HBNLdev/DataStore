@@ -228,6 +228,8 @@ def start_handler():
 	peak_toggle_handler(0)
 	case_check_handler([ n for n in range(len(app_data[app_data['current experiment']]['peak sources']))])
 
+	app_data[app_data['current experiment']]['status display'].text = 'Ready to pick'
+
 # Initialize tabs
 for f_ind, exp in enumerate(experiments):
 	app_data['file ind'] = f_ind
@@ -652,6 +654,7 @@ def update_case_peak_selection_display():
 
 def case_check_handler(active):
 	exp = app_data[app_data['current experiment']]
+	exp['case display choices'] = active
 	for n,cs in enumerate(exp['cases']):
 		alpha = 1 if n in active else 0
 #		visible = True if n in active else False
@@ -671,13 +674,17 @@ def marks_display_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
 	limits_alpha = int(0 in active)
 	marks_alpha = int(1 in active)
-	for cs in exp['cases']:
+	for ind, cs in enumerate(exp['cases']):
+		cs_lim_alpha = limits_alpha
+		cs_mark_alpha = marks_alpha
+		if ind not in exp['case display choices']:
+			cs_lim_alpha = cs_mark_alpha = 0
 		lim_selections = exp['grid'].select(dict(name=cs+'_limit'))
 		for sel in lim_selections:
-			sel.line_alpha=limits_alpha
+			sel.line_alpha=cs_lim_alpha
 		mark_selections = exp['grid'].select(dict(name=cs+'_marker'))
 		for sel in mark_selections:
-			sel.line_alpha=marks_alpha
+			sel.line_alpha=cs_mark_alpha
 	current_lim_selections = exp['grid'].select(dict(name='current_limit'))
 	for sel in current_lim_selections:
 		sel.line_alpha=limits_alpha
@@ -728,8 +735,10 @@ def build_experiment_tab(experiment):
 
 	case_pick_chooser = RadioButtonGroup( labels=case_choices, active=0 )
 
+	expD['case display choices'] = [n for n in range(len(case_choices))]
 	case_display_toggle = CheckboxGroup( labels=case_choices, inline=True,
-				active=[n for n in range(len(case_choices))] )
+				active= expD['case display choices'])
+
 	marks_display_toggle = CheckboxGroup( labels=['limits','peaks'], inline=True, 
 				active=[0,1])
 
