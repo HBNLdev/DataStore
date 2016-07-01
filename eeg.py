@@ -16,6 +16,7 @@ import mne
 
 # values are tuples of h5py fieldname and datatype
 opt_info = {'Coordinates file': ('coords_file', 'text'),
+            'Batch ID': ('batch_id', 'text'),
 
             'Condition labels': ('case_label', 'cell'),
             'Measures available': ('measures', 'cell'),
@@ -201,6 +202,7 @@ class Results:
             s.pot_lims = [-10, 16]
         s.db_units = 'decibels (dB)'
         s.db_lims = [-3, 3]
+        s.itc_lims = [-.06, 0.3]
 
         # ERP times
         s.srate = s.params['Sampling rate'][0][0]
@@ -232,23 +234,28 @@ class Results:
         # for display purposes
         s.time_ticks_ms = [n / 1000 for n in time_ticks_ms]
 
-    def load_erp(s, lp_cutoff=16, bl_window=(-100, 0)):
-        ''' load, filter, and subtractively baseline ERP data '''
-
-        if 'erp' in dir(s):
-            print('erp already loaded')
+    def load(s, measure, dset_name, transpose_lst):
+        # need to know: name of h5 dataset, transpose list
+        if measure in dir(s):
+            print(measure, 'already loaded')
             return
 
-        dsets = [h5py.File(fn, 'r')['erp'] for fn in s.file_df['path'].values]
+        dsets = [h5py.File(fn, 'r')[dset_name]
+                    for fn in s.demog_df['path'].values]
         arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
         stack = da.stack(arrays, axis=-1)  # concatenate along last axis
-        # move subject dimension to front
-        stack = stack.transpose([3, 0, 1, 2])
+        stack = stack.transpose(transpose_lst) # do transposition
+        data = np.empty(stack.shape)
+        da.store(stack, data)
+        print(data.shape)
+        return data
 
-        erp = np.empty(stack.shape)
-        da.store(stack, erp)
+
+    def load_erp(s, lp_cutoff=16, bl_window=[-100, 0]):
+        ''' load, filter, and subtractively baseline ERP data '''
+
+        erp = s.load('erp', 'erp', [3, 0, 1, 2])
         # erp is (subjects, conditions, channels, timepoints,)
-        print(erp.shape)
 
         # filter
         erp_filt = mne.filter.low_pass_filter(erp,
@@ -260,7 +267,7 @@ class Results:
 
         s.erp = erp_filt_bl
         s.erp_dims = ('subject', 'condition', 'channel', 'timepoint')
-        s.erp_dim_lsts = (s.file_df.index.values, s.params['Condition labels'],
+        s.erp_dim_lsts = (s.demog_df.index.values, s.params['Condition labels'],
                           s.montage.ch_names, s.time)
 
     def prepare_mne(s):
@@ -272,38 +279,25 @@ class Results:
         info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
                                'eeg', s.montage)
         # EvokedArray
-        chan_erps = s.erp.mean(axis=(0, 1)) / 1000000  # subject/condition mean
+        chan_erps = s.erp.mean(axis=(0, 1)) / 1e6  # subject/condition mean
         return mne.EvokedArray(chan_erps, info,
                                tmin=s.params['Temporal limits'][0] / 1000)
 
     def load_power(s, bl_window=[-500, -200]):
         ''' load (total) power data and divisively baseline-normalize '''
 
-        if 'power' in dir(s):
-            print('power already loaded')
-            return
-
-        dsets = [h5py.File(fn, 'r')['wave_totpow']
-                 for fn in s.file_df['path'].values]
-        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
-        stack = da.stack(arrays, axis=-1)  # concatenate along last axis
-        print(stack.shape)
-        stack = stack.transpose([4, 0, 2, 1, 3])  # subject dimension to front
-
-        power = np.empty(stack.shape)
-        da.store(stack, power)
-        # power is (subjects, conditions, channels, freq, timepoints,)
+        power = s.load('power', 'wave_totpow', [4, 0, 2, 1, 3])
         power = power[:, :, :, ::-1, :]  # reverse the freq dimension
-        print(power.shape)
+        # power is (subjects, conditions, channels, freq, timepoints,)
 
-        # baseline normalize
+        # divisively baseline normalize
         power_bl = baseline_tf(power, (convert_ms(s.time_tf, bl_window[0]),
                                        convert_ms(s.time_tf, bl_window[1]),))
 
         s.power = power_bl
         s.tf_dims = ('subject', 'condition', 'channel',
                         'frequency', 'timepoint')
-        s.tf_dim_lsts = (s.file_df.index.values,
+        s.tf_dim_lsts = (s.demog_df.index.values,
                             s.params['Condition labels'],
                             s.montage.ch_names, s.freq, s.time_tf)
 
@@ -311,11 +305,10 @@ class Results:
         ''' load phase data, take absolute() of, and subtractively baseline '''
 
         dsets = [h5py.File(fn, 'r')['wave_evknorm']
-                 for fn in s.file_df['path'].values]
+                 for fn in s.demog_df['path'].values]
         arrays = [dset.value.view(np.complex) for dset in dsets]
         stack = np.stack(arrays, axis=-1)  # concatenate along last axis
         print(stack.shape)
-        # stack = stack.absolute() ?
         stack = stack.transpose([4, 0, 2, 1, 3])  # subject dimension to front
 
         # itc is (subjects, conditions, channels, freq, timepoints,)
@@ -330,25 +323,27 @@ class Results:
         s.itc = itc_bl
         s.tf_dims = ('subject', 'condition', 'channel',
                         'frequency', 'timepoint')
-        s.tf_dim_lsts = (s.file_df.index.values,
+        s.tf_dim_lsts = (s.demog_df.index.values,
                             s.params['Condition labels'],
                             s.montage.ch_names, s.freq, s.time_tf)
 
 
     def plot_erp(s, figure_by=('channel', ['FZ', 'CZ', 'PZ']),
                  subplot_by=('POP', None),
-                 glyph_by=('condition', None)):
+                 glyph_by=('condition', None),
+                 savedir=None):
         ''' plot ERPs as lines '''
+        ptype = 'line'
+        measure = 'erp'
 
         if 'erp' not in dir(s):
             s.load_erp()
-
         d_dims = s.erp_dims
         d_dimlst = s.erp_dim_lsts
 
-        f_dim, f_vals, f_lbls = s.interpret_by(figure_by, d_dims, d_dimlst)
-        sp_dim, sp_vals, sp_lbls = s.interpret_by(subplot_by, d_dims, d_dimlst)
-        g_dim, g_vals, g_lbls = s.interpret_by(glyph_by, d_dims, d_dimlst)
+        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlst)
+        sp_dim, sp_vals, sp_lbls = s.handle_by(subplot_by, d_dims, d_dimlst)
+        g_dim, g_vals, g_lbls = s.handle_by(glyph_by, d_dims, d_dimlst)
 
         sp_dims = subplot_heuristic(len(sp_vals))
         for fi, fval in enumerate(f_vals):
@@ -368,46 +363,34 @@ class Results:
                                     label=g_lbls[gi])
                 axarr[spi].grid(True)
                 axarr[spi].set_title(sp_lbls[spi])
-                axarr[spi].legend()
+                axarr[spi].legend(loc='upper left')
                 axarr[spi].set_xticks(s.time_ticks_pt_erp)
                 axarr[spi].set_xticklabels(s.time_ticks_ms)
                 axarr[spi].set_xlabel('Time (s)')
                 axarr[spi].set_ylabel('Potential (' + s.pot_units + ')')
+            if savedir:
+                s.save_fig(savedir, ptype, measure, f_lbls[fi])
 
     def plot_topo(s, data='erp', times=list(range(0, 501, 125)),
                      figure_by=('POP', ['C']),
                      row_by=('condition', None)):
         ''' plot data as topographic maps at specific timepoints '''
 
-        if data=='erp':
-            if 'erp' not in dir(s):
-                s.load_erp()
-            data = s.erp
-            d_dims = s.erp_dims
-            d_dimlst = s.erp_dim_lsts
-            units = s.pot_units
-            lims = s.pot_lims
-        elif data=='power':
-            if 'power' not in dir(s):
-                s.load_power()
-            data = s.power
-            d_dims = s.tf_dims
-            d_dimlst = s.tf_dim_lsts
-            units = s.db_units
-            lims = s.db_lims
+        if data in ['erp', 'power', 'itc']:
+            data, d_dims, d_dimlst, units, lims, cmap = s.get_plotparams(data)
         else:
             print('data not recognized')
             return
+
         final_dim = d_dims.index('channel')
         final_dimlen = len(d_dimlst[final_dim])
-
-        f_dim, f_vals, f_lbls = s.interpret_by(figure_by, d_dims, d_dimlst)
-        r_dim, r_vals, r_lbls = s.interpret_by(row_by, d_dims, d_dimlst)
-        time_by = ('timepoint', times)
-        t_dim, t_vals, t_lbls = s.interpret_by(time_by, d_dims, d_dimlst)
-
         info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
                                'eeg', s.montage)
+
+        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlst)
+        r_dim, r_vals, r_lbls = s.handle_by(row_by, d_dims, d_dimlst)
+        time_by = ('timepoint', times)
+        t_dim, t_vals, t_lbls = s.handle_by(time_by, d_dims, d_dimlst)
 
         sp_dims = (len(r_vals), len(times))
         for fi, fval in enumerate(f_vals):
@@ -427,7 +410,7 @@ class Results:
                     ax_dum += 1
                     im, cn = mne.viz.plot_topomap(topo, info,
                                         vmin=lims[0], vmax=lims[1],
-                                        cmap=plt.cm.RdBu_r, axes=axarr[ax_dum],
+                                        cmap=cmap, axes=axarr[ax_dum],
                                         show=False)
                     ''' labels '''
                     axarr[ax_dum].text(-.5, .5, t_lbls[ti])  # time label
@@ -439,28 +422,18 @@ class Results:
             cbar = plt.colorbar(im, cax=cbar_ax)
             cbar.ax.set_ylabel(units, rotation=270)
 
-    def plot_tf(s, data='power', figure_by=[('POP', None),
-                                ('channel', ['FZ'])],
-                  subplot_by=('condition', None)):
+    def plot_tf(s, data='power', figure_by=[('POP', None), ('channel', ['FZ'])],
+                                 subplot_by=('condition', None)):
         ''' plot time-frequency data as a rectangular contour image '''
 
-        if data=='power':
-            if 'power' not in dir(s):
-                s.load_power()
-            data, units, lims, cmap = s.power, s.db_units, s.db_lims, \
-                                            plt.cm.RdBu_r
-        elif data=='itc':
-            if 'itc' not in dir(s):
-                s.load_itc()
-            data, units, lims, cmap = s.itc, 'ITC', [-.06, 0.3], plt.cm.Purples
+        if data in ['power', 'itc']:
+            data, d_dims, d_dimlst, units, lims, cmap = s.get_plotparams(data)
         else:
             print('data not recognized')
             return
-        d_dims = s.tf_dims
-        d_dimlst = s.tf_dim_lsts
 
-        f_dim, f_vals, f_lbls = s.interpret_by(figure_by, d_dims, d_dimlst)
-        sp_dim, sp_vals, sp_lbls = s.interpret_by(subplot_by, d_dims, d_dimlst)
+        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlst)
+        sp_dim, sp_vals, sp_lbls = s.handle_by(subplot_by, d_dims, d_dimlst)
 
         sp_dims = subplot_heuristic(len(sp_vals))
         for fi, fval in enumerate(f_vals):
@@ -498,65 +471,54 @@ class Results:
             cbar.ax.set_ylabel(units, rotation=270)
             # plt.colorbar(c, ax=axarr[spi])
 
-    # plot helpers
-    def interpret_by(s, by_stage, d_dims, d_dimlst):
-        ''' interpret a 'by' stage, which tells a plotting functions what parts
-            of the data will be distributed across a plotting object '''
+    # plot assistance
+    ''' dictionary mapping measures to their object info '''
+    measure_pps = {'erp':   {'data': 'erp', 'd_dims': 'erp_dims',
+                             'd_dimlst': 'erp_dim_lsts', 'units': 'pot_units',
+                             'lims': 'pot_lims', 'cmap': plt.cm.RdBu_r,
+                             'load': 'load_erp'},
+                   'power': {'data': 'power', 'd_dims': 'tf_dims',
+                             'd_dimlst': 'tf_dim_lsts', 'units': 'db_units',
+                             'lims': 'db_lims', 'cmap': plt.cm.RdBu_r,
+                             'load': 'load_power'},
+                   'itc':   {'data': 'itc', 'd_dims': 'tf_dims',
+                             'd_dimlst': 'tf_dim_lsts', 'units': 'ITC',
+                             'lims': 'itc_lims', 'cmap': plt.cm.Purples,
+                             'load': 'load_itc'}
+                   }
+    
+    def get_plotparams(s, measure):
+        ''' given a measure, retrieve its data and plot info '''
 
-        def interpret_one(s, by_stage, data_dims, data_dimlst):
-            ''' by_stage: 2-tuple of variable and its levels
-                data_dims: n-tuple describing the n dimensions of the data
-                data_dimlst: n-tuple of lists describing levels of each dim '''
+        measure_d = s.measure_pps[measure]
+        if measure_d['data'] not in dir(s):
+            getattr(s, measure_d['load'])()
+        data = getattr(s, measure_d['data'])
+        d_dims = getattr(s, measure_d['d_dims'])
+        d_dimlst = getattr(s, measure_d['d_dimlst'])
+        units = getattr(s, measure_d['units'])
+        lims = getattr(s, measure_d['lims'])
+        cmap = measure_d['cmap']
+        return data, d_dims, d_dimlst, units, lims, cmap
 
-            print('by stage is', by_stage[0])
-            if by_stage[0] in data_dims:  # if variable is in data dims
-                dim = data_dims.index(by_stage[0])
-                print('data in dim', dim)
-                if by_stage[1]:
-                    labels = by_stage[1]
-                    if isinstance(data_dimlst[dim], np.ndarray):
-                        vals = []
-                        for lbl in labels:
-                            if isinstance(lbl, list):
-                                tmp_inds = [np.argmin(np.fabs(\
-                                    data_dimlst[dim] - lp)) for lp in lbl]
-                            else:
-                                tmp_inds = np.argmin(np.fabs(\
-                                    data_dimlst[dim] - lbl))
-                            vals.append(tmp_inds)
-                    else:
-                        vals = [data_dimlst[dim].index(lbl) for lbl in labels]
-                    print('vals to iterate on are', vals)
-                else:
-                    labels = data_dimlst[dim]
-                    vals = list(range(len(labels)))
-                    print('iterate across available vals including', vals)
-            elif by_stage[0] in s.demog_df.columns:  # if variable in demog dims
-                dim = data_dims.index('subject')
-                print('demogs in', dim)
-                if by_stage[1]:
-                    labels = by_stage[1]
-                    vals = [np.where(s.demog_df[by_stage[0]] == lbl)[0]
-                            for lbl in labels]
-                    print('vals to iterate on are', vals)
-                else:
-                    labels = s.demog_df[by_stage[0]].unique()
-                    vals = [np.where(s.demog_df[by_stage[0]].values == lbl)[0]
-                            for lbl in labels]
-                    print('iterate across available vals including', vals)
-            else:
-                print('variable not found in data or demogs')
-                raise
-            dims = [dim] * len(vals)
-            return dims, vals, labels
-        
-        ''' if given a list of by_stage 2-tuples, create the list as a product
-            of the list elements '''
+    def save_fig(s, savedir, ptype, measure, label, form='svg'):
+        figname = s.gen_figname(ptype, measure, label)+'.'+form
+        outpath = os.path.join(savedir, figname)
+        plt.savefig(outpath, format=form, dpi=1000)
+
+    def gen_figname(s, ptype, measure, label):
+        return '_'.join([s.params['Batch ID'], ptype, measure, label])
+
+    def handle_by(s, by_stage, d_dims, d_dimlst):
+        ''' handle a 'by' argument, which tells a plotting functions what parts
+            of the data will be distributed across a plotting object.
+            returns lists of the dimension, indices, and labels requested.
+            if given a list, create above lists as products of requests '''
         if isinstance(by_stage, list):
             # create list versions of the dim, vals, and labels
             tmp_dims, tmp_vals, tmp_labels = [], [], []
             for bs in by_stage:
-                dims, vals, labels = interpret_one(s, bs, d_dims, d_dimlst)
+                dims, vals, labels = s.interpret_by(bs, d_dims, d_dimlst)
                 tmp_dims.append(dims)
                 tmp_vals.append(vals)
                 tmp_labels.append(labels)
@@ -565,16 +527,57 @@ class Results:
             all_labels = list(itertools.product(*tmp_labels))
             return all_dims, all_vals, all_labels
         else:
-            return interpret_one(s, by_stage, d_dims, d_dimlst)
+            return s.interpret_by(by_stage, d_dims, d_dimlst)
 
+    def interpret_by(s, by_stage, data_dims, data_dimlst):
+        ''' by_stage: 2-tuple of variable name and levels
+            data_dims: n-tuple describing the n dimensions of the data
+            data_dimlst: n-tuple of lists describing levels of each dim '''
 
-class ERP:
-
-    def __init__(s, results_obj):
-        s.data = results_obj.erp
-        s.dims = results_obj.erp_dims
-        s.montage = results_obj
-
-    def plot_erp(s, channels=['FZ', 'CZ', 'PZ'],
-                 line_by='group', subplot_by='condition', figure_by='channel'):
-        pass
+        print('by stage is', by_stage[0])
+        if by_stage[0] in data_dims:  # if variable is in data dims
+            dim = data_dims.index(by_stage[0])
+            print('data in dim', dim)
+            if by_stage[1]:
+                labels = by_stage[1]
+                if isinstance(data_dimlst[dim], np.ndarray):
+                    vals = []
+                    for lbl in labels:
+                        if isinstance(lbl, list):
+                            if len(lbl) == 2:
+                                tmp_inds = range(np.argmin(np.fabs(\
+                                    data_dimlst[dim] - lbl[0])),
+                                                np.argmin(np.fabs(\
+                                    data_dimlst[dim] - lbl[1]))+1)
+                            else:
+                                tmp_inds = [np.argmin(np.fabs(\
+                                    data_dimlst[dim] - lp)) for lp in lbl]
+                        else:
+                            tmp_inds = np.argmin(np.fabs(\
+                                data_dimlst[dim] - lbl))
+                        vals.append(tmp_inds)
+                else:
+                    vals = [data_dimlst[dim].index(lbl) for lbl in labels]
+                print('vals to iterate on are', vals)
+            else:
+                labels = data_dimlst[dim]
+                vals = list(range(len(labels)))
+                print('iterate across available vals including', vals)
+        elif by_stage[0] in s.demog_df.columns:  # if variable in demog dims
+            dim = data_dims.index('subject')
+            print('demogs in', dim)
+            if by_stage[1]:
+                labels = by_stage[1]
+                vals = [np.where(s.demog_df[by_stage[0]] == lbl)[0]
+                        for lbl in labels]
+                print('vals to iterate on are', vals)
+            else:
+                labels = s.demog_df[by_stage[0]].unique()
+                vals = [np.where(s.demog_df[by_stage[0]].values == lbl)[0]
+                        for lbl in labels]
+                print('iterate across available vals including', vals)
+        else:
+            print('variable not found in data or demogs')
+            raise
+        dims = [dim] * len(vals)
+        return dims, vals, labels
