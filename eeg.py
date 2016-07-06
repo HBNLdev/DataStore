@@ -9,28 +9,29 @@ import h5py
 import dask.array as da
 
 import numpy as np
+import scipy.stats as ss
 import pandas as pd
 import matplotlib.pyplot as plt
 
 import mne
 
 # values are tuples of h5py fieldname and datatype
-opt_info = {'Coordinates file': ('coords_file', 'text'),
-            'Batch ID': ('batch_id', 'text'),
+opt_info = {'Coordinates file':                 ('coords_file', 'text'),
+            'Batch ID':                         ('batch_id', 'text'),
 
-            'Condition labels': ('case_label', 'cell'),
-            'Measures available': ('measures', 'cell'),
-            'Coherence pair subset labels': ('pair_indlbls', 'cell'),
+            'Condition labels':                 ('case_label', 'cell'),
+            'Measures available':               ('measures', 'cell'),
+            'Coherence pair subset labels':     ('pair_indlbls', 'cell'),
 
-            'Sampling rate': ('rate', 'array'),
-            '# of timepoints': ('n_samps', 'array'),
-            'Temporal limits': ('epoch_lims', 'array'),
-            'Frequency limits': ('freq_lims', 'array'),
-            'TF scales': ('wavelet_scales', 'array'),
-            'TF time-downsample ratio': ('tf_timedownsamp_ratio', 'array'),
-            'CSD matrix': ('csd_G', 'array'),
-            'Coherence pairs': ('coherence_pairs', 'array'),
-            'Coherence pair subset index': ('pair_inds', 'array'),
+            'Sampling rate':                    ('rate', 'array'),
+            '# of timepoints':                  ('n_samps', 'array'),
+            'Temporal limits':                  ('epoch_lims', 'array'),
+            'Frequency limits':                 ('freq_lims', 'array'),
+            'TF scales':                        ('wavelet_scales', 'array'),
+            'TF time-downsample ratio':     ('tf_timedownsamp_ratio', 'array'),
+            'CSD matrix':                       ('csd_G', 'array'),
+            'Coherence pairs':                  ('coherence_pairs', 'array'),
+            'Coherence pair subset index':      ('pair_inds', 'array'),
             }
 
 # text parsing
@@ -115,9 +116,17 @@ def compound_take(a, vals, dims):
             return a.take(v, d)
     print(a.shape)
     for v, d in zip(vals, dims):
-        if isinstance(v, tuple):
-            for v_stage, d_stage in zip(v, d):
-                a = apply_take(a, v_stage, d_stage)
+        if isinstance(v, tuple): # reserved for itertools.product-takes
+            for vp, dp in zip(v, d):
+                if isinstance(vp, list):
+                    if '-' in vp:
+                        a = apply_take(a, vp[0], dp) - apply_take(a, vp[2], dp)
+                        print('got here')
+                else:
+                    a = apply_take(a, vp, dp)
+        elif isinstance(v, list): # reserved for operation-takes (subtractions)
+            if '-' in v:
+                a = apply_take(a, v[0], d) - apply_take(a, v[2], d)
         else:
             a = apply_take(a, v, d)
         print(a.shape)
@@ -154,10 +163,11 @@ class Results:
 
     def __init__(s, optpath, csvpath=None):
         s.opt = h5py.File(optpath)
+        s.get_params()
         s.init_filedf()
+        s.add_rejinfo()
         if csvpath:
             s.add_demogs(csvpath)
-        s.get_params()
         s.make_scales()
 
     def init_filedf(s):
@@ -169,6 +179,20 @@ class Results:
         uid_index = pd.MultiIndex.from_tuples(
             uid_fromfiles, names=['ID', 'session'])
         s.file_df = pd.DataFrame({'path': pd.Series(files, index=uid_index)})
+
+    def add_rejinfo(s):
+        ''' for each file, get # of accepted trials and interpolated chans '''
+        trials = s.load('trials', 'n_trials', [2, 0, 1], 'file_df')
+        trial_df = pd.DataFrame(trials.squeeze(),
+            columns=['trials_'+cond for cond in s.params['Condition labels']],
+            index=s.file_df.index)
+        s.file_df = s.file_df.join(trial_df)
+        interpchans = s.load('interpchans', 'n_interpchans',
+                                              [2, 0, 1], 'file_df')
+        interpchan_df = pd.DataFrame(interpchans.squeeze(),
+            columns=['# of interpolated channels'],
+            index=s.file_df.index)
+        s.file_df = s.file_df.join(interpchan_df)
 
     def add_demogs(s, csvpath):
         ''' read demographics, set ID+session as index, join to files '''
@@ -202,17 +226,22 @@ class Results:
             s.pot_lims = [-10, 16]
         s.db_units = 'decibels (dB)'
         s.db_lims = [-3, 3]
+        s.itc_units = 'ITC'
         s.itc_lims = [-.06, 0.3]
+        s.phi_units = 'Radians'
+        s.phi_lims = [-np.pi, np.pi]
 
         # ERP times
         s.srate = s.params['Sampling rate'][0][0]
         ep_lims = s.params['Temporal limits']
         n_timepts = s.params['# of timepoints']
         s.time = np.linspace(ep_lims[0], ep_lims[1], n_timepts + 1)[1:]
+        s.zero = convert_ms(s.time, 0)
 
         # TF times / freqs
         n_timepts_tf = int(n_timepts / s.params['TF time-downsample ratio'])
         s.time_tf = np.linspace(ep_lims[0], ep_lims[1], n_timepts_tf + 1)[1:]
+        s.zero_tf = convert_ms(s.time_tf, 0)
         s.freq = np.array([2 * s.srate / scale[0]
                            for scale in s.params['TF scales'][::-1]]) #rev
         s.freq_ticks_pt = range(0, len(s.freq), 2)
@@ -234,14 +263,14 @@ class Results:
         # for display purposes
         s.time_ticks_ms = [n / 1000 for n in time_ticks_ms]
 
-    def load(s, measure, dset_name, transpose_lst):
-        # need to know: name of h5 dataset, transpose list
+    def load(s, measure, dset_name, transpose_lst, df_attr='demog_df'):
+        ''' given measure, h5 dataset name, and a transpose list: load data '''
         if measure in dir(s):
             print(measure, 'already loaded')
             return
-
+        df = getattr(s, df_attr)
         dsets = [h5py.File(fn, 'r')[dset_name]
-                    for fn in s.demog_df['path'].values]
+                    for fn in df['path'].values]
         arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
         stack = da.stack(arrays, axis=-1)  # concatenate along last axis
         stack = stack.transpose(transpose_lst) # do transposition
@@ -250,7 +279,6 @@ class Results:
         print(data.shape)
         return data
 
-
     def load_erp(s, lp_cutoff=16, bl_window=[-100, 0]):
         ''' load, filter, and subtractively baseline ERP data '''
 
@@ -258,17 +286,18 @@ class Results:
         # erp is (subjects, conditions, channels, timepoints,)
 
         # filter
-        erp_filt = mne.filter.low_pass_filter(erp,
-                                              s.params['Sampling rate'],
-                                              lp_cutoff)
+        erp_filt = mne.filter.low_pass_filter(erp, s.params['Sampling rate'],
+                                                   lp_cutoff)
         # baseline
         erp_filt_bl = baseline_amp(erp_filt, (convert_ms(s.time, bl_window[0]),
                                               convert_ms(s.time, bl_window[1])))
 
         s.erp = erp_filt_bl
         s.erp_dims = ('subject', 'condition', 'channel', 'timepoint')
-        s.erp_dim_lsts = (s.demog_df.index.values, s.params['Condition labels'],
-                          s.montage.ch_names, s.time)
+        s.erp_dim_lsts = (s.demog_df.index.values,
+                          np.array(s.params['Condition labels'], dtype=object),
+                          np.array(s.montage.ch_names, dtype=object),
+                          s.time)
 
     def prepare_mne(s):
         ''' prepare an mne EvokedArray object from erp data '''
@@ -298,8 +327,9 @@ class Results:
         s.tf_dims = ('subject', 'condition', 'channel',
                         'frequency', 'timepoint')
         s.tf_dim_lsts = (s.demog_df.index.values,
-                            s.params['Condition labels'],
-                            s.montage.ch_names, s.freq, s.time_tf)
+                        np.array(s.params['Condition labels'], dtype=object),
+                        np.array(s.montage.ch_names, dtype=object),
+                        s.freq, s.time_tf)
 
     def load_itc(s, bl_window=[-500, -200]):
         ''' load phase data, take absolute() of, and subtractively baseline '''
@@ -312,8 +342,8 @@ class Results:
         stack = stack.transpose([4, 0, 2, 1, 3])  # subject dimension to front
 
         # itc is (subjects, conditions, channels, freq, timepoints,)
+        stack = stack[:, :, :, ::-1, :] # reverse the freq dimension
         itc = np.absolute(stack)
-        itc = itc[:, :, :, ::-1, :]  # reverse the freq dimension
         print(itc.shape)
 
         # baseline normalize
@@ -324,8 +354,32 @@ class Results:
         s.tf_dims = ('subject', 'condition', 'channel',
                         'frequency', 'timepoint')
         s.tf_dim_lsts = (s.demog_df.index.values,
-                            s.params['Condition labels'],
-                            s.montage.ch_names, s.freq, s.time_tf)
+                        np.array(s.params['Condition labels'], dtype=object),
+                        np.array(s.montage.ch_names, dtype=object),
+                        s.freq, s.time_tf)
+
+    def load_phi(s, bl_window=[-500, -200]):
+        ''' load phase data, take absolute() of, and subtractively baseline '''
+
+        dsets = [h5py.File(fn, 'r')['wave_evknorm']
+                 for fn in s.demog_df['path'].values]
+        arrays = [dset.value.view(np.complex) for dset in dsets]
+        stack = np.stack(arrays, axis=-1)  # concatenate along last axis
+        print(stack.shape)
+        stack = stack.transpose([4, 0, 2, 1, 3])  # subject dimension to front
+
+        # itc is (subjects, conditions, channels, freq, timepoints,)
+        stack = stack[:, :, :, ::-1, :] # reverse the freq dimension
+        phi = np.angle(stack)
+        print(phi.shape)
+
+        s.phi = phi
+        s.tf_dims = ('subject', 'condition', 'channel',
+                        'frequency', 'timepoint')
+        s.tf_dim_lsts = (s.demog_df.index.values,
+                        np.array(s.params['Condition labels'], dtype=object),
+                        np.array(s.montage.ch_names, dtype=object),
+                        s.freq, s.time_tf)
 
 
     def plot_erp(s, figure_by=('channel', ['FZ', 'CZ', 'PZ']),
@@ -339,11 +393,11 @@ class Results:
         if 'erp' not in dir(s):
             s.load_erp()
         d_dims = s.erp_dims
-        d_dimlst = s.erp_dim_lsts
+        d_dimlvls = s.erp_dim_lsts
 
-        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlst)
-        sp_dim, sp_vals, sp_lbls = s.handle_by(subplot_by, d_dims, d_dimlst)
-        g_dim, g_vals, g_lbls = s.handle_by(glyph_by, d_dims, d_dimlst)
+        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlvls)
+        sp_dim, sp_vals, sp_lbls = s.handle_by(subplot_by, d_dims, d_dimlvls)
+        g_dim, g_vals, g_lbls = s.handle_by(glyph_by, d_dims, d_dimlvls)
 
         sp_dims = subplot_heuristic(len(sp_vals))
         for fi, fval in enumerate(f_vals):
@@ -358,9 +412,15 @@ class Results:
                     print(line.shape)
                     while len(line.shape) > 1:
                         line = line.mean(axis=0)
+                        err = ss.sem(line, axis=0)
+                        # err = np.std(line, axis=0, ddof=1)
                         print(line.shape)
-                    axarr[spi].plot(np.arange(len(line)), line,
+                    l, = axarr[spi].plot(np.arange(len(line)), line,
                                     label=g_lbls[gi])
+                    axarr[spi].fill_between(np.arange(len(line)),
+                                    line - err, line + err,
+                                    alpha=0.5, linewidth=0,
+                                    facecolor=l.get_color())
                 axarr[spi].grid(True)
                 axarr[spi].set_title(sp_lbls[spi])
                 axarr[spi].legend(loc='upper left')
@@ -368,6 +428,8 @@ class Results:
                 axarr[spi].set_xticklabels(s.time_ticks_ms)
                 axarr[spi].set_xlabel('Time (s)')
                 axarr[spi].set_ylabel('Potential (' + s.pot_units + ')')
+                axarr[spi].axhline(0, color='k', linestyle='--')
+                axarr[spi].axvline(s.zero, color='k', linestyle='--')
             if savedir:
                 s.save_fig(savedir, ptype, measure, f_lbls[fi])
 
@@ -376,21 +438,21 @@ class Results:
                      row_by=('condition', None)):
         ''' plot data as topographic maps at specific timepoints '''
 
-        if data in ['erp', 'power', 'itc']:
-            data, d_dims, d_dimlst, units, lims, cmap = s.get_plotparams(data)
+        if data in ['erp', 'power', 'itc', 'phi']:
+            data, d_dims, d_dimlvls, units, lims, cmap = s.get_plotparams(data)
         else:
             print('data not recognized')
             return
 
         final_dim = d_dims.index('channel')
-        final_dimlen = len(d_dimlst[final_dim])
+        final_dimlen = len(d_dimlvls[final_dim])
         info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
                                'eeg', s.montage)
 
-        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlst)
-        r_dim, r_vals, r_lbls = s.handle_by(row_by, d_dims, d_dimlst)
+        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlvls)
+        r_dim, r_vals, r_lbls = s.handle_by(row_by, d_dims, d_dimlvls)
         time_by = ('timepoint', times)
-        t_dim, t_vals, t_lbls = s.handle_by(time_by, d_dims, d_dimlst)
+        t_dim, t_vals, t_lbls = s.handle_by(time_by, d_dims, d_dimlvls)
 
         sp_dims = (len(r_vals), len(times))
         for fi, fval in enumerate(f_vals):
@@ -426,14 +488,14 @@ class Results:
                                  subplot_by=('condition', None)):
         ''' plot time-frequency data as a rectangular contour image '''
 
-        if data in ['power', 'itc']:
-            data, d_dims, d_dimlst, units, lims, cmap = s.get_plotparams(data)
+        if data in ['power', 'itc', 'phi']:
+            data, d_dims, d_dimlvls, units, lims, cmap = s.get_plotparams(data)
         else:
             print('data not recognized')
             return
 
-        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlst)
-        sp_dim, sp_vals, sp_lbls = s.handle_by(subplot_by, d_dims, d_dimlst)
+        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlvls)
+        sp_dim, sp_vals, sp_lbls = s.handle_by(subplot_by, d_dims, d_dimlvls)
 
         sp_dims = subplot_heuristic(len(sp_vals))
         for fi, fval in enumerate(f_vals):
@@ -454,52 +516,59 @@ class Results:
                 # c = axarr[spi].contour(rect, cmap=plt.cm.RdBu_r,
                 #                         vmin=-4, vmax=4)
                 # plt.clabel(c, inline=1, fontsize=9)
+                cbar = plt.colorbar(c, ax=axarr[spi])
+                cbar.ax.set_ylabel(units, rotation=270)
                 ''' ticks and grid '''
                 axarr[spi].set_xticks(s.time_ticks_pt_tf)
                 axarr[spi].set_xticklabels(s.time_ticks_ms)
                 axarr[spi].set_yticks(s.freq_ticks_pt)
                 axarr[spi].set_yticklabels(s.freq_ticks_hz)
                 axarr[spi].grid(True)
+                axarr[spi].axvline(s.zero_tf, color='k', linestyle='--')
                 ''' labels and title '''
                 axarr[spi].set_xlabel('Time (s)')
                 axarr[spi].set_ylabel('Frequency (Hz)')
                 axarr[spi].set_title(sp_lbls[spi])
             ''' colorbar '''
-            plt.subplots_adjust(right=0.85)
-            cbar_ax = f.add_axes([0.88, 0.12, 0.03, 0.75])
-            cbar = plt.colorbar(c, cax=cbar_ax)
-            cbar.ax.set_ylabel(units, rotation=270)
+            # plt.subplots_adjust(right=0.85)
+            # cbar_ax = f.add_axes([0.88, 0.12, 0.03, 0.75])
+            # cbar = plt.colorbar(c, cax=cbar_ax)
+            # cbar.ax.set_ylabel(units, rotation=270)
             # plt.colorbar(c, ax=axarr[spi])
 
     # plot assistance
     ''' dictionary mapping measures to their object info '''
     measure_pps = {'erp':   {'data': 'erp', 'd_dims': 'erp_dims',
-                             'd_dimlst': 'erp_dim_lsts', 'units': 'pot_units',
+                             'd_dimlvls': 'erp_dim_lsts', 'units': 'pot_units',
                              'lims': 'pot_lims', 'cmap': plt.cm.RdBu_r,
                              'load': 'load_erp'},
                    'power': {'data': 'power', 'd_dims': 'tf_dims',
-                             'd_dimlst': 'tf_dim_lsts', 'units': 'db_units',
+                             'd_dimlvls': 'tf_dim_lsts', 'units': 'db_units',
                              'lims': 'db_lims', 'cmap': plt.cm.RdBu_r,
                              'load': 'load_power'},
                    'itc':   {'data': 'itc', 'd_dims': 'tf_dims',
-                             'd_dimlst': 'tf_dim_lsts', 'units': 'ITC',
+                             'd_dimlvls': 'tf_dim_lsts', 'units': 'itc_units',
                              'lims': 'itc_lims', 'cmap': plt.cm.Purples,
-                             'load': 'load_itc'}
+                             'load': 'load_itc'},
+                   'phi':   {'data': 'phi', 'd_dims': 'tf_dims',
+                             'd_dimlvls': 'tf_dim_lsts', 'units': 'phi_units',
+                             'lims': 'phi_lims', 'cmap': plt.cm.Purples,
+                             'load': 'load_phi'},
                    }
     
     def get_plotparams(s, measure):
-        ''' given a measure, retrieve its data and plot info '''
+        ''' given a measure, retrieve data and get plotting info '''
 
         measure_d = s.measure_pps[measure]
         if measure_d['data'] not in dir(s):
             getattr(s, measure_d['load'])()
         data = getattr(s, measure_d['data'])
         d_dims = getattr(s, measure_d['d_dims'])
-        d_dimlst = getattr(s, measure_d['d_dimlst'])
+        d_dimlvls = getattr(s, measure_d['d_dimlvls'])
         units = getattr(s, measure_d['units'])
         lims = getattr(s, measure_d['lims'])
         cmap = measure_d['cmap']
-        return data, d_dims, d_dimlst, units, lims, cmap
+        return data, d_dims, d_dimlvls, units, lims, cmap
 
     def save_fig(s, savedir, ptype, measure, label, form='svg'):
         figname = s.gen_figname(ptype, measure, label)+'.'+form
@@ -509,7 +578,7 @@ class Results:
     def gen_figname(s, ptype, measure, label):
         return '_'.join([s.params['Batch ID'], ptype, measure, label])
 
-    def handle_by(s, by_stage, d_dims, d_dimlst):
+    def handle_by(s, by_stage, d_dims, d_dimlvls):
         ''' handle a 'by' argument, which tells a plotting functions what parts
             of the data will be distributed across a plotting object.
             returns lists of the dimension, indices, and labels requested.
@@ -518,7 +587,7 @@ class Results:
             # create list versions of the dim, vals, and labels
             tmp_dims, tmp_vals, tmp_labels = [], [], []
             for bs in by_stage:
-                dims, vals, labels = s.interpret_by(bs, d_dims, d_dimlst)
+                dims, vals, labels = s.interpret_by(bs, d_dims, d_dimlvls)
                 tmp_dims.append(dims)
                 tmp_vals.append(vals)
                 tmp_labels.append(labels)
@@ -527,12 +596,12 @@ class Results:
             all_labels = list(itertools.product(*tmp_labels))
             return all_dims, all_vals, all_labels
         else:
-            return s.interpret_by(by_stage, d_dims, d_dimlst)
+            return s.interpret_by(by_stage, d_dims, d_dimlvls)
 
-    def interpret_by(s, by_stage, data_dims, data_dimlst):
+    def interpret_by(s, by_stage, data_dims, data_dimlvls):
         ''' by_stage: 2-tuple of variable name and levels
             data_dims: n-tuple describing the n dimensions of the data
-            data_dimlst: n-tuple of lists describing levels of each dim '''
+            data_dimlvls: n-tuple of lists describing levels of each dim '''
 
         print('by stage is', by_stage[0])
         if by_stage[0] in data_dims:  # if variable is in data dims
@@ -540,27 +609,34 @@ class Results:
             print('data in dim', dim)
             if by_stage[1]:
                 labels = by_stage[1]
-                if isinstance(data_dimlst[dim], np.ndarray):
+                if data_dimlvls[dim].dtype == np.float64: # if array data
                     vals = []
                     for lbl in labels:
                         if isinstance(lbl, list):
                             if len(lbl) == 2:
                                 tmp_inds = range(np.argmin(np.fabs(\
-                                    data_dimlst[dim] - lbl[0])),
+                                    data_dimlvls[dim] - lbl[0])),
                                                 np.argmin(np.fabs(\
-                                    data_dimlst[dim] - lbl[1]))+1)
+                                    data_dimlvls[dim] - lbl[1]))+1)
                             else:
                                 tmp_inds = [np.argmin(np.fabs(\
-                                    data_dimlst[dim] - lp)) for lp in lbl]
+                                    data_dimlvls[dim] - lp)) for lp in lbl]
                         else:
                             tmp_inds = np.argmin(np.fabs(\
-                                data_dimlst[dim] - lbl))
+                                data_dimlvls[dim] - lbl))
                         vals.append(tmp_inds)
                 else:
-                    vals = [data_dimlst[dim].index(lbl) for lbl in labels]
+                    vals = []
+                    for lbl in labels:
+                        if '-' in lbl:
+                            vals.append([np.where(data_dimlvls[dim]==lbl[0])[0],
+                                        '-',
+                                        np.where(data_dimlvls[dim]==lbl[2])[0]])
+                        else:
+                            vals.append(np.where(data_dimlvls[dim]==lbl)[0])
                 print('vals to iterate on are', vals)
             else:
-                labels = data_dimlst[dim]
+                labels = data_dimlvls[dim]
                 vals = list(range(len(labels)))
                 print('iterate across available vals including', vals)
         elif by_stage[0] in s.demog_df.columns:  # if variable in demog dims
