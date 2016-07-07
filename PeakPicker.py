@@ -226,7 +226,7 @@ def start_handler():
 
 	case_toggle_handler(0)
 	peak_toggle_handler(0)
-	case_check_handler([ n for n in range(len(app_data[app_data['current experiment']]['peak sources']))])
+	case_display_check_handler([ n for n in range(len(app_data[app_data['current experiment']]['peak sources']))])
 
 	app_data[app_data['current experiment']]['status display'].text = 'Ready to pick'
 
@@ -603,6 +603,12 @@ def case_toggle_handler(active):
 	exp = app_data[app_data['current experiment']]
 	chosen_case = exp['cases'][active]
 	exp['pick state']['case'] = chosen_case
+	display_ch = exp['case display choices']
+	print()
+	if active not in display_ch:
+		new_display_ch = sorted(display_ch+[active])
+		exp['case display choices'] = new_display_ch
+		exp['controls']['case display'].active = new_display_ch
 	for case in exp['cases']:
 		width = 2.5 if case == chosen_case else 1.5
 		selections = exp['grid'].select(dict(name=case+'_line'))
@@ -652,7 +658,8 @@ def update_case_peak_selection_display():
 	for case_peak in app_data[app_data['current experiment']]['picked sources'].keys():
 		pass
 
-def case_check_handler(active):
+def case_display_check_handler(active):
+	#print('case display check handler, active:', active)
 	exp = app_data[app_data['current experiment']]
 	exp['case display choices'] = active
 	for n,cs in enumerate(exp['cases']):
@@ -757,8 +764,8 @@ def build_experiment_tab(experiment):
 						 'apply' : apply_button,
 						 'save' : save_button,
 						 'reload' : reload_button,
-						 'case toggle' : case_display_toggle,
-						 'marks toggle': marks_display_toggle,
+						 'case display' : case_display_toggle,
+						 'marks display': marks_display_toggle,
 						 'multi-single toggle': multi_single_pick_toggle
 						}
 
@@ -797,7 +804,7 @@ def build_experiment_tab(experiment):
 	case_pick_chooser.on_click(case_toggle_handler)
 	peak_chooser.on_click(peak_toggle_handler)
 
-	case_display_toggle.on_click(case_check_handler)
+	case_display_toggle.on_click(case_display_check_handler)
 	apply_button.on_click(apply_handler)
 	save_button.on_click(save_handler)
 	next_button.on_click(next_handler)
