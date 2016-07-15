@@ -42,13 +42,14 @@ from bokeh.embed import autoload_server
 from bokeh.document import Document
 from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
 from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
-						   Plot, GridPlot, Grid, Renderer,
+						   Plot, Grid, Renderer,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
 						   LinearAxis, Range1d, AdaptiveTicker, 
 						   CompositeTicker, SingleIntervalTicker, FixedTicker,
 				 		   PanTool, WheelZoomTool, ResizeTool,
 						   Cross, Segment, Line,
 						   VBox, HBox )
+from bokeh.layouts import gridplot
 from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
 				RadioButtonGroup, Button, Paragraph, Toggle )
 from bokeh.client import push_session
@@ -178,9 +179,9 @@ def load_file(next=False, initialize=False, reload_flag=False):
 
 						if reload_flag or next:
 
-							chan = plt.title.split(' ')[0]
-							plt.title = chan
-							plt.trigger('title',plt.title,plt.title)
+							chan = plt.title.text.split(' ')[0]
+							plt.title.text = chan
+							plt.trigger('title.text',plt.title.text,plt.title.text)
 
 		text.value = paths[ind]
 
@@ -328,10 +329,11 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 		title = PS['electrode']
 		# alpha = props['outline alpha']
 
-	plot = Plot( title=title, tools=PS['tools'])
-	plot.title_standoff = 0
-	plot.title_text_align='center'
-	plot.title_text_baseline='top'
+	plot = Plot( tools=PS['tools'])
+	plot.title.text = title
+	plot.title.offset = 0
+	plot.title.align='center'
+	#plot.title_text_baseline='top'
 	plot.min_border_left = props['min_border']
 	plot.min_border_right = props['min_border']
 	plot.min_border_top = props['min_border']
@@ -340,7 +342,7 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 	plot.plot_height = PS['adjusted height']
 	plot.y_range = ranges[1]
 	plot.x_range = ranges[0]
-	plot.title_text_font_size = str(props['font size'])+'pt'
+	plot.title.text_font_size = str(props['font size'])+'pt'
 	plot.outline_line_alpha = props['outline alpha']
 	plot.outline_line_width = None
 	plot.outline_line_color = None
@@ -513,11 +515,11 @@ def apply_handler():
 	for plt_row in exp['components']['plots']:
 		for plt in plt_row:
 			if plt:
-				chan = plt.title.split(' ')[0]
+				chan = plt.title.text.split(' ')[0]
 				latency = exp['peak sources'][case].data[chan+'_time'][-1]
 				potential = exp['peak sources'][case].data[chan+'_pot'][-1]
-				plt.title = chan + ' - lat: '+'{:3.1f}'.format(latency)+' amp: '+'{:4.3f}'.format(potential)
-				plt.trigger('title',plt.title,plt.title)
+				plt.title.text = chan + ' - lat: '+'{:3.1f}'.format(latency)+' amp: '+'{:4.3f}'.format(potential)
+				plt.trigger('title.text',plt.title.text,plt.title.text)
 
 	sync_current_selection()
 	exp['status display'].text = 'Applied pick for '+case+' '+peak
@@ -751,13 +753,13 @@ def build_experiment_tab(experiment):
 
 	peak_chooser = RadioButtonGroup( labels=peak_choices, active=0)
 
-	apply_button = Button( label="Apply", type='default' )
+	apply_button = Button( label="Apply", button_type='default' )
 	save_button = Button( label="Save" )
 	next_button = Button( label="Next" )
 	previous_button = Button( label="Prev" )
 	reload_button = Button( label="Reload")
 	# toggle to be placed on display line
-	multi_single_pick_toggle = Toggle( label= 'all', type="success" )
+	multi_single_pick_toggle = Toggle( label= 'all', button_type="success" )
 
 	expD['controls'] = { 'case' : case_pick_chooser,
 						 'peak' : peak_chooser,
@@ -941,7 +943,7 @@ for expr in experiments:
 	inputsNinfo = HBox(children=[inputs, info])#GridPlot(children=[[info]])])
 	# need to add css: bk-hbox-spacer{ margin-right:0 }
 
-	grid = GridPlot( children=grid_display )
+	grid = gridplot( children=grid_display )
 	expD['grid'] = grid
 	page = VBox( children=[inputsNinfo, grid])
 

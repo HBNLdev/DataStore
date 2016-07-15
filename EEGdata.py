@@ -19,7 +19,7 @@ class avgh1:
 		s.file_info = FH.parse_filename(s.filename)
 		# s.cases = SI.experiments_parts[s.file_info['experiment']]
 		s.loaded = h5py.File(s.filepath,'r')
-		s.electrodes = [ s.decode() for s in list(s.loaded['file']['run']['run'])[0][-2] ]
+		s.electrodes = [ st.decode() for st in list(s.loaded['file']['run']['run'])[0][-2] ]
 		s.electrodes_61	= s.electrodes[0:31]+s.electrodes[32:62]
 		s.samp_freq = 256
 		# s.peak = OrderedDict()
@@ -235,6 +235,7 @@ class avgh1:
 		if channels == None:
 			channels = s.electrodes
 		ind_lst = []
+		#print('electrodes:', s.filepath, s.electrodes)
 		for chan in channels:
 			ind_lst.append( s.electrodes.index(chan) )
 
