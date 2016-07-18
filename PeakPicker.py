@@ -41,17 +41,17 @@ import EEGdata
 from bokeh.embed import autoload_server
 from bokeh.document import Document
 from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
-from bokeh.models import ( Panel, Tabs, ColumnDataSource, CustomJS,
+from bokeh.models import ( ColumnDataSource, CustomJS,
 						   Plot, Grid, Renderer,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
 						   LinearAxis, Range1d, AdaptiveTicker, 
 						   CompositeTicker, SingleIntervalTicker, FixedTicker,
 				 		   PanTool, WheelZoomTool, ResizeTool,
-						   Cross, Segment, Line,
-						   VBox, HBox )
-from bokeh.layouts import gridplot
+						   Cross, Segment, Line )
+from bokeh.layouts import gridplot, layout
+from bokeh.models.layouts import WidgetBox, Column, Row
 from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
-				RadioButtonGroup, Button, Paragraph, Toggle )
+				RadioButtonGroup, Button, Paragraph, Toggle, Panel, Tabs )
 from bokeh.client import push_session
 from bokeh.io import curdoc, curstate, set_curdoc
 
@@ -99,12 +99,12 @@ dir_paths_by_exp = { 'ant':['/processed_data/avg-h1-files/ant/l8-h003-t75-b125/s
 					}
 
 directory_chooser = TextInput( title="directory", name='directory_chooser',
-						value=dir_paths_by_exp[experiments[0]][0] )
+						value=dir_paths_by_exp[experiments[0]][0], width=1000 )
 file_chooser = TextInput( title="files", name='file_chooser',
-				 value=dir_paths_by_exp[experiments[0]][1])
-start_button = Button( label="Start" )
+				 value=dir_paths_by_exp[experiments[0]][1], width= 1000)
+start_button = Button( label="Start", width=100)
 
-text = TextInput( title="file", name='file', value='')
+#text = TextInput( title="file", name='file', value='')
 
 
 def load_file(next=False, initialize=False, reload_flag=False):
@@ -183,7 +183,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 							plt.title.text = chan
 							plt.trigger('title.text',plt.title.text,plt.title.text)
 
-		text.value = paths[ind]
+		#text.value = paths[ind]
 
 		expD['data source'].trigger('data',expD['data source'].data,
 										expD['data source'].data)
@@ -752,12 +752,12 @@ def build_experiment_tab(experiment):
 				active=[0,1])
 
 	peak_chooser = RadioButtonGroup( labels=peak_choices, active=0)
-
-	apply_button = Button( label="Apply", button_type='default' )
-	save_button = Button( label="Save" )
-	next_button = Button( label="Next" )
-	previous_button = Button( label="Prev" )
-	reload_button = Button( label="Reload")
+	button_width=50
+	apply_button = Button( label="Apply", button_type='default', width=button_width)
+	save_button = Button( label="Save", width=button_width )
+	next_button = Button( label="Next", width=button_width )
+	previous_button = Button( label="Prev", width=button_width )
+	reload_button = Button( label="Reload", width=button_width )
 	# toggle to be placed on display line
 	multi_single_pick_toggle = Toggle( label= 'all', button_type="success" )
 
@@ -901,7 +901,7 @@ def build_experiment_tab(experiment):
 
 	return components, gridplots
 
-files_setup = VBox(children=[ directory_chooser, file_chooser, start_button ])
+files_setup = WidgetBox(children=[ directory_chooser, file_chooser, start_button ],sizing_mode='scale_width')
 # LAYOUT
 navigation = Panel( child=files_setup, title='Navigate' )
 
@@ -927,29 +927,35 @@ for expr in experiments:
 	expD = app_data[expr]
 	components, grid_display = build_experiment_tab(expr)
 	expD['components'] = components 
-	pick_controls = HBox( children=components['pick controls'])
-	display = HBox( children=components['display elements'] )
-	display2 = HBox( children = components['display elements 2'])
-	inputs = VBox( children=[pick_controls, display, display2])
+	pick_controls = Row( children=components['pick controls'], sizing_mode='fixed')
+	display = Row( children=components['display elements'], sizing_mode='fixed')
+	display2 = Row( children = components['display elements 2'], sizing_mode='fixed')
+	inputs = Column( children=[pick_controls, display, display2], sizing_mode='fixed')
+
 
 	info_el = Paragraph(height=12, width=300, text='Info')#make_info_plot()
-	#info2 = PreText(text='<tr><td><font color="red">Case1</font></td><td><font color="blue">Case2</font></td></tr>')
 	info_ch = [info_el]
 	proc_info = gather_info(expD['eeg'])
-	for text_line in proc_info:
+	for text_line in proc_info: 
 		info_ch.append( Paragraph( height=11, width=300, text='' ) )
 	expD['info'] = info_ch
-	info = VBox(children=info_ch)
-	inputsNinfo = HBox(children=[inputs, info])#GridPlot(children=[[info]])])
+	info = Column(children=info_ch, sizing_mode='fixed')
+	#info = layout( [ [ch] for ch in info_ch ] )
+	#inputsNinfo = Row(children=[inputs, info])#GridPlot(children=[[info]])])
+
 	# need to add css: bk-hbox-spacer{ margin-right:0 }
 
-	grid = gridplot( children=grid_display )
+	# grid = gridplot( children=grid_display )
+	grid = Paragraph(text='grid here')
 	expD['grid'] = grid
-	page = VBox( children=[inputsNinfo, grid])
 
+	page = layout( [ [inputs,info], [grid] ])
+
+
+	#page= Column(children=[info_el] )
 	tab_setup.append( Panel( child=page, title='pick '+expr ) )
 
-
+print('tab setup: ', tab_setup)
 tabs = Tabs( tabs=tab_setup )
 #print('custate: ',dir(curstate()))
 
@@ -961,8 +967,10 @@ html = """
 <html>
     <head></head>
     <body>
-    	<h3> HBNL Peak Picker </h3>
-        %s
+    	<div class="bk-root bokeh-container">
+	    	<h3> HBNL Peak Picker </h3>
+	        %s
+        </div>
     </body>
     <style>
     	p{ margin: 1px; }
