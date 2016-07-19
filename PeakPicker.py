@@ -40,7 +40,7 @@ import EEGdata
 
 from bokeh.embed import autoload_server
 from bokeh.document import Document
-from bokeh.plotting import Figure, gridplot, hplot, vplot, output_server
+from bokeh.plotting import Figure, hplot, vplot, output_server
 from bokeh.models import ( ColumnDataSource, CustomJS,
 						   Plot, Grid, Renderer,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
@@ -49,7 +49,7 @@ from bokeh.models import ( ColumnDataSource, CustomJS,
 				 		   PanTool, WheelZoomTool, ResizeTool,
 						   Cross, Segment, Line )
 from bokeh.layouts import gridplot, layout
-from bokeh.models.layouts import WidgetBox, Column, Row
+from bokeh.layouts import column, row, widgetbox, gridplot
 from bokeh.models.widgets import ( Slider, TextInput, Select, CheckboxGroup,
 				RadioButtonGroup, Button, Paragraph, Toggle, Panel, Tabs )
 from bokeh.client import push_session
@@ -181,7 +181,7 @@ def load_file(next=False, initialize=False, reload_flag=False):
 
 							chan = plt.title.text.split(' ')[0]
 							plt.title.text = chan
-							plt.trigger('title.text',plt.title.text,plt.title.text)
+							plt.title.trigger('text',plt.title.text,plt.title.text)
 
 		#text.value = paths[ind]
 
@@ -317,6 +317,7 @@ chans = ['FP1', 'Y',  'FP2', 'X', 'F7', 'AF1', 'AF2', 'F8', 'F3', 'FZ',  'F4',
 		 'C5','C1','C2','C6','TP7','CP3','CPZ','CP4','TP8','P5','P1','POZ',
 		 'P2','P6','PO7','OZ','PO8'
 		 ]
+dummy_source = ColumnDataSource({'dummy':[]})
 
 def make_plot(plot_setup, ranges, experiment, tool_generators):
 	PS = plot_setup
@@ -324,6 +325,7 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 	if plot_setup['show'] == False:
 		dummy = True#return None#dummy_plot(tool_generators)
 		title = ''
+		#return None
 	else: 
 		dummy = False
 		title = PS['electrode']
@@ -348,7 +350,7 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 	plot.outline_line_color = None
 
 	app_data['dummy_plot'] = Cross( x='dummy', y='dummy', name='dummy')
-	app_data['dummy_plotR'] = plot.add_glyph(app_data[experiment]['data source'], app_data['dummy_plot'])
+	app_data['dummy_plotR'] = plot.add_glyph(dummy_source, app_data['dummy_plot'])
 
 	if not dummy:
 		# Axes
@@ -519,7 +521,7 @@ def apply_handler():
 				latency = exp['peak sources'][case].data[chan+'_time'][-1]
 				potential = exp['peak sources'][case].data[chan+'_pot'][-1]
 				plt.title.text = chan + ' - lat: '+'{:3.1f}'.format(latency)+' amp: '+'{:4.3f}'.format(potential)
-				plt.trigger('title.text',plt.title.text,plt.title.text)
+				plt.title.trigger('text',plt.title.text,plt.title.text)
 
 	sync_current_selection()
 	exp['status display'].text = 'Applied pick for '+case+' '+peak
@@ -726,6 +728,7 @@ def build_experiment_tab(experiment):
 	expD = app_data[ experiment ]
 	print([k for k in app_data.keys()], app_data[experiment])
 	case_choices = expD['cases']
+	Ncases = len(case_choices)
 
 	#expD['current pick source'] = ColumnDataSource( data= dict( start=[], finish=[], bots=[], tops=[] ) )
 
@@ -742,14 +745,14 @@ def build_experiment_tab(experiment):
 	expD['pick state'] =  {'case':case_choices[0], 'peak':peak_choices[0], 
 							'single':False, 'picked':{} }
 
-	case_pick_chooser = RadioButtonGroup( labels=case_choices, active=0 )
+	case_pick_chooser = RadioButtonGroup( labels=case_choices, active=0, width=35*Ncases)
 
-	expD['case display choices'] = [n for n in range(len(case_choices))]
+	expD['case display choices'] = [n for n in range(Ncases)]
 	case_display_toggle = CheckboxGroup( labels=case_choices, inline=True,
-				active= expD['case display choices'])
+				active= expD['case display choices'], width=40*(1+Ncases) )
 
 	marks_display_toggle = CheckboxGroup( labels=['limits','peaks'], inline=True, 
-				active=[0,1])
+				active=[0,1], width=160)
 
 	peak_chooser = RadioButtonGroup( labels=peak_choices, active=0)
 	button_width=50
@@ -759,7 +762,7 @@ def build_experiment_tab(experiment):
 	previous_button = Button( label="Prev", width=button_width )
 	reload_button = Button( label="Reload", width=button_width )
 	# toggle to be placed on display line
-	multi_single_pick_toggle = Toggle( label= 'all', button_type="success" )
+	multi_single_pick_toggle = Toggle( label= 'all', button_type="success", width=30 )
 
 	expD['controls'] = { 'case' : case_pick_chooser,
 						 'peak' : peak_chooser,
@@ -771,34 +774,36 @@ def build_experiment_tab(experiment):
 						 'multi-single toggle': multi_single_pick_toggle
 						}
 
-	pick_title = Paragraph(height=12, width=65, text='pick: case')
-	peak_title = Paragraph(height=12, width=30, text='peak')
+	pick_title = Paragraph( width=65, text='pick: case')
+	peak_title = Paragraph( width=30, text='peak')
 	components['pick controls'] = [ pick_title, case_pick_chooser, peak_title, peak_chooser, 
 					apply_button, save_button, previous_button, next_button, reload_button]
-	spacer0 = Paragraph(height=12, width=35)
-	display_title = Paragraph(height=12, width=54, text='display:')
-	spacer1 = Paragraph(height=12, width=5)
+	spacer0 = Paragraph( width=35)
+	display_title = Paragraph( width=54, text='display:')
+	#spacer1 = Paragraph( width=5)
 	# Legend
-	legend_title = Paragraph(height=12, width=44, text='legend:')
-	display_elements = [ spacer0, display_title, case_display_toggle, spacer1, legend_title ]
+	legend_title = Paragraph( width=44, text='legend:')
+	legend_comp = [legend_title]
 	for cc in case_choices:
-		display_elements.append( Paragraph(height=18, width=25, text=cc ) )
+		legend_comp.append( Paragraph( height=18, width=25, text=cc ) )
+	#legend = row( children = legend_comp, sizing_mode='fixed')
 
-	spacer2 = Paragraph(height=12, width=5)
-	status_width = 395 - (len(case_choices)-2)*50
-	picked_status = Paragraph(height=12, width=status_width, text='No picks yet',tags=['pick-status'])
-	display_elements.append( spacer2 )
-	display_elements.append( picked_status )
+	#spacer2 = Paragraph( width=5)
+	status_width = 395 - (len(case_choices)-2)*20#50
+	picked_status = Paragraph( width=status_width, text='No picks yet',tags=['pick-status'])
 	expD['applied picks display'] = picked_status
 
-	repick_title = Paragraph(height=15, width=38, text='repick')
+	display_elements = [ spacer0, display_title, case_display_toggle] \
+							+ legend_comp+ [ picked_status ]
+
+	repick_title = Paragraph( width=38, text='repick')
 
 	#display_elements.extend([repick_title, multi_single_pick_toggle])
 
 	components['display elements'] = display_elements
-	spacer3 = Paragraph(height=12, width=25)
-	spacer4 = Paragraph(height=12, width=25)
-	program_status = Paragraph(height=12, width=400, text='Program status')
+	spacer3 = Paragraph( width=25)
+	spacer4 = Paragraph( width=25)
+	program_status = Paragraph( width=400, text='Program status')
 	expD['status display'] = program_status
 	components['display elements 2'] = [ repick_title, multi_single_pick_toggle,
 								spacer3, marks_display_toggle, spacer4, program_status]
@@ -901,7 +906,7 @@ def build_experiment_tab(experiment):
 
 	return components, gridplots
 
-files_setup = WidgetBox(children=[ directory_chooser, file_chooser, start_button ],sizing_mode='scale_width')
+files_setup = widgetbox(children=[ directory_chooser, file_chooser, start_button ],sizing_mode='scale_width')
 # LAYOUT
 navigation = Panel( child=files_setup, title='Navigate' )
 
@@ -927,29 +932,32 @@ for expr in experiments:
 	expD = app_data[expr]
 	components, grid_display = build_experiment_tab(expr)
 	expD['components'] = components 
-	pick_controls = Row( children=components['pick controls'], sizing_mode='fixed')
-	display = Row( children=components['display elements'], sizing_mode='fixed')
-	display2 = Row( children = components['display elements 2'], sizing_mode='fixed')
-	inputs = Column( children=[pick_controls, display, display2], sizing_mode='fixed')
+	pick_controls = row( children=components['pick controls'], sizing_mode='fixed')
+	display = row( children=components['display elements'], sizing_mode='fixed')
+	display2 = row( children = components['display elements 2'], sizing_mode='fixed')
+	inputs = column( children=[pick_controls, display, display2], sizing_mode='fixed')
 
 
-	info_el = Paragraph(height=12, width=300, text='Info')#make_info_plot()
+	info_el = Paragraph( width=300, text='Info')#make_info_plot()
 	info_ch = [info_el]
 	proc_info = gather_info(expD['eeg'])
 	for text_line in proc_info: 
 		info_ch.append( Paragraph( height=11, width=300, text='' ) )
 	expD['info'] = info_ch
-	info = Column(children=info_ch, sizing_mode='fixed')
+	info = column(children=info_ch, sizing_mode='fixed')
 	#info = layout( [ [ch] for ch in info_ch ] )
-	#inputsNinfo = Row(children=[inputs, info])#GridPlot(children=[[info]])])
+	inputsNinfo = row(children=[inputs, info])#GridPlot(children=[[info]])])
 
 	# need to add css: bk-hbox-spacer{ margin-right:0 }
 
-	# grid = gridplot( children=grid_display )
-	grid = Paragraph(text='grid here')
+	grid = gridplot( children=grid_display, toolbar_location='left')
+	#print(grid_display[1][0])
+	#grid = grid_display[1][0]
+	#grid = gridplot( [[Figure()],[Figure()]] )
+	#grid = Paragraph(text='grid here')
 	expD['grid'] = grid
 
-	page = layout( [ [inputs,info], [grid] ])
+	page = column(  children=[ inputsNinfo, grid], sizing_mode='fixed' )
 
 
 	#page= Column(children=[info_el] )
