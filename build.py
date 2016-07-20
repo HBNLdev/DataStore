@@ -177,16 +177,19 @@ def eeg_behavior(files_dms=None):
 		avgh1_files, datemods = zip(*files_dms)
 
 	for f in tqdm(avgh1_files):
-		fO = FH.avgh1_file(f)
-		if fO.file_info['experiment'] == 'err':
-			continue # these have corrupted trial info and will overwrite ern
-		fO.parse_behav_forDB()
-		erpbeh_obj = O.EEGBehavior(fO.data)
-		erpbeh_obj.compare()
-		if erpbeh_obj.new:
-			erpbeh_obj.store()
-		else:
-			erpbeh_obj.update()
+		try:
+			fO = FH.avgh1_file(f)
+			if fO.file_info['experiment'] == 'err':
+				continue # these have corrupted trial info and will overwrite ern
+			fO.parse_behav_forDB()
+			erpbeh_obj = O.EEGBehavior(fO.data)
+			erpbeh_obj.compare()
+			if erpbeh_obj.new:
+				erpbeh_obj.store()
+			else:
+				erpbeh_obj.update()
+		except:
+			print(f, 'failed')
 	sourceO = O.SourceInfo('EEGbehavior', list(zip(avgh1_files, datemods)))
 	sourceO.store()
 
