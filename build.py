@@ -24,29 +24,29 @@ def subjects():
 
 
 def sessions():
-	def join_ufields(row):
+    def join_ufields(row):
             return '_'.join([row['ID'], row['session']])
     # fast
-	master_mtime = mi.load_master()
-	for char in 'abcdefghijk':
-	    sessionDF = mi.master[mi.master[char + '-run'].notnull()]
-	    if sessionDF.empty:
-	        continue
-	    else:
-	        sessionDF['session'] = char
-	        sessionDF['followup'] = sessionDF.apply(calc_followupcol, axis=1)
-	        for col in ['raw', 'date', 'age']:
-	            sessionDF[col] = sessionDF[char + '-' + col]
-	        sessionDF['uID'] = sessionDF.apply(join_ufields, axis=1)
-	        # drop unneeded columns ?
-	        # drop_cols = [col for col in sessionDF.columns if '-age' in col or 
-	        # 	'-date' in col or '-raw' in col or '-run' in col]
-        	# sessionDF.drop(drop_cols, axis=1, inplace=True)
-	        for rec in sessionDF.to_dict(orient='records'):
-	            so = O.Session(rec)
-	            so.storeNaTsafe()
-	sourceO = O.SourceInfo('sessions', (mi.master_path, master_mtime))
-	sourceO.store()
+    master_mtime = mi.load_master()
+    for char in 'abcdefghijk':
+        sessionDF = mi.master[mi.master[char + '-run'].notnull()]
+        if sessionDF.empty:
+            continue
+        else:
+            sessionDF['session'] = char
+            sessionDF['followup'] = sessionDF.apply(calc_followupcol, axis=1)
+            for col in ['raw', 'date', 'age']:
+                sessionDF[col] = sessionDF[char + '-' + col]
+            sessionDF['uID'] = sessionDF.apply(join_ufields, axis=1)
+            # drop unneeded columns ?
+            # drop_cols = [col for col in sessionDF.columns if '-age' in col or 
+            #   '-date' in col or '-raw' in col or '-run' in col]
+            # sessionDF.drop(drop_cols, axis=1, inplace=True)
+            for rec in sessionDF.to_dict(orient='records'):
+                so = O.Session(rec)
+                so.storeNaTsafe()
+    sourceO = O.SourceInfo('sessions', (mi.master_path, master_mtime))
+    sourceO.store()
 
 
 def calc_followupcol(row):
@@ -60,12 +60,12 @@ def erp_peaks():
     # 3 minutes
     mt_files, datemods = FH.identify_files('/processed_data/mt-files/', '*.mt')
     add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
-    	'ant_phase4_peaks_2016']
+        'ant_phase4_peaks_2016']
     for subdir in add_dirs:
-    	mt_files2, datemods2 = FH.identify_files(
-    		'/active_projects/HBNL/'+subdir+'/', '*.mt')
-    	mt_files.extend(mt_files2)
-    	datemods.extend(datemods2)
+        mt_files2, datemods2 = FH.identify_files(
+            '/active_projects/HBNL/'+subdir+'/', '*.mt')
+        mt_files.extend(mt_files2)
+        datemods.extend(datemods2)
     bad_files = ['/processed_data/mt-files/ant/uconn/mc/an1a0072007.df.mt',
                  ]
     for fp in tqdm(mt_files):
@@ -116,6 +116,27 @@ def neuropsych_CBST():
     sourceO.store()
 
 
+def questionnaires():
+    ''' import all session-based questionnaire info '''
+    # takes  ~20 seconds per questionnaire
+    # non-SSAGA
+    for qname in qi.knowledge.keys():
+        print(qname)
+        qi.import_questfolder(qname)
+        qi.match_fups2sessions(qname, qi.knowledge, 'questionnaires')
+
+def ssaga():
+    ''' import all session-based questionnaire info related to SSAGA '''
+    # SSAGA
+    for qname in qi.knowledge_ssaga.keys():
+        print(qname)
+        qi.import_questfolder_ssaga(qname)
+        qi.match_fups2sessions(qname, qi.knowledge_ssaga, 'ssaga')
+
+# so far, subject-based questionnaire info each has its own build method
+# have so far: core, internalizing
+# missing: fams, fham4, ph4master, rels, vcuext
+
 def core():
     # fast
     folder = '/active_projects/mike/zork-ph4-65-bl/subject/core/'
@@ -129,13 +150,19 @@ def core():
     sourceO = O.SourceInfo('core', (path, datemod))
     sourceO.store()
 
+def internalizing():
+    folder = '/active_projects/mike/zork-ph4-65-bl/subject/internalizing/'
+    file = 'INT_Scale_JK_Scores_n11271.csv'
+    path = folder + file
+    datemod = datetime.fromtimestamp(os.path.getmtime(path))
+    df = qi.df_fromcsv(path, 'IND_ID')
+    for drec in tqdm(df.to_dict(orient='records')):
+        ro = O.Internalizing(drec)
+        ro.store()
+    sourceO = O.SourceInfo('internalizing', (path, datemod))
+    sourceO.store()
 
-def questionnaires():
-    # takes  ~20 seconds per questionnaire
-    for qname in qi.knowledge.keys():
-        qi.import_questfolder(qname)
-        qi.match_fups2sessions(qname)
-
+# end subject-based questionnaire stuff
 
 def eeg_data():
     # ~2 mins?
@@ -168,30 +195,30 @@ def erp_data():
 def eeg_behavior(files_dms=None):
     # ~8 hours total to parse all *.avg.h1's for behavior
     # files_dms = pickle.load( open(
-    #	 '/active_projects/mike/pickles/avgh1s_dates.p', 'rb')  )
-	if not files_dms:
-		start_dir = '/processed_data/avg-h1-files/'
-		glob_expr = '*avg.h1'
-		avgh1_files, datemods = FH.identify_files(start_dir, glob_expr)
-	else:
-		avgh1_files, datemods = zip(*files_dms)
+    #    '/active_projects/mike/pickles/avgh1s_dates.p', 'rb')  )
+    if not files_dms:
+        start_dir = '/processed_data/avg-h1-files/'
+        glob_expr = '*avg.h1'
+        avgh1_files, datemods = FH.identify_files(start_dir, glob_expr)
+    else:
+        avgh1_files, datemods = zip(*files_dms)
 
-	for f in tqdm(avgh1_files):
-		try:
-			fO = FH.avgh1_file(f)
-			if fO.file_info['experiment'] == 'err':
-				continue # these have corrupted trial info and will overwrite ern
-			fO.parse_behav_forDB()
-			erpbeh_obj = O.EEGBehavior(fO.data)
-			erpbeh_obj.compare()
-			if erpbeh_obj.new:
-				erpbeh_obj.store()
-			else:
-				erpbeh_obj.update()
-		except:
-			print(f, 'failed')
-	sourceO = O.SourceInfo('EEGbehavior', list(zip(avgh1_files, datemods)))
-	sourceO.store()
+    for f in tqdm(avgh1_files):
+        try:
+            fO = FH.avgh1_file(f)
+            if fO.file_info['experiment'] == 'err':
+                continue # these have corrupted trial info and will overwrite ern
+            fO.parse_behav_forDB()
+            erpbeh_obj = O.EEGBehavior(fO.data)
+            erpbeh_obj.compare()
+            if erpbeh_obj.new:
+                erpbeh_obj.store()
+            else:
+                erpbeh_obj.update()
+        except:
+            print(f, 'failed')
+    sourceO = O.SourceInfo('EEGbehavior', list(zip(avgh1_files, datemods)))
+    sourceO.store()
 
 
 def ero_pheno(files_dates=None,debug=False):
@@ -319,61 +346,61 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
         fp_dict[subdir].append(file)
 
     try:
-	    for subdir, file_list in list(fp_dict.items())[start_ind:]:
-	        joinDF = pd.DataFrame()
-	        for filename in file_list:
-	            fpath = os.path.join(subdir, filename)
-	            csvfileO = FH.ERO_csv(fpath)
-	            file_info = csvfileO.data_for_file()  #filename parsing to here
-	            
-	            # '''
-	            if (file_info['site']=='washu' or \
-	            	file_info['site']=='suny') and \
-					file_info['experiment']=='vp3' and \
-	            	'threshold electrodes' in csvfileO.parameters and \
-	            	csvfileO.parameters['threshold electrodes']==9:
-	            	print(',', end='')
-	            	continue
-            	# '''
+        for subdir, file_list in list(fp_dict.items())[start_ind:]:
+            joinDF = pd.DataFrame()
+            for filename in file_list:
+                fpath = os.path.join(subdir, filename)
+                csvfileO = FH.ERO_csv(fpath)
+                file_info = csvfileO.data_for_file()  #filename parsing to here
+                
+                # '''
+                if (file_info['site']=='washu' or \
+                    file_info['site']=='suny') and \
+                    file_info['experiment']=='vp3' and \
+                    'threshold electrodes' in csvfileO.parameters and \
+                    csvfileO.parameters['threshold electrodes']==9:
+                    print(',', end='')
+                    continue
+                # '''
 
-	            eroFileQ = O.Mdb['EROcsv'].find({'filepath': fpath}, {'_id': 1})
-	            if eroFileQ.count() >= 1:
-	                # print('Repeat for ' + fpath)
-	                continue
-	            else:
-	                csvorgO = O.EROcsv(fpath, file_info)
-	                csvorgO.store_track()
+                eroFileQ = O.Mdb['EROcsv'].find({'filepath': fpath}, {'_id': 1})
+                if eroFileQ.count() >= 1:
+                    # print('Repeat for ' + fpath)
+                    continue
+                else:
+                    csvorgO = O.EROcsv(fpath, file_info)
+                    csvorgO.store_track()
 
-	            csvfileO.data_forjoin()  # here CSV actually gets read
-	            if csvfileO.data.empty:
-	                print(fpath, 'was empty')
-	                continue
-	            if joinDF.empty:
-	                joinDF = csvfileO.data
-	            else:
-	                # check if the columns already exist in the joinDF
-	                new_cols = csvfileO.data.columns.difference(joinDF.columns)
-	                if len(new_cols) > 0:
-	                    joinDF = joinDF.join(csvfileO.data, how='outer')
-	            # del csvfileO
-	            csvfileO = None
+                csvfileO.data_forjoin()  # here CSV actually gets read
+                if csvfileO.data.empty:
+                    print(fpath, 'was empty')
+                    continue
+                if joinDF.empty:
+                    joinDF = csvfileO.data
+                else:
+                    # check if the columns already exist in the joinDF
+                    new_cols = csvfileO.data.columns.difference(joinDF.columns)
+                    if len(new_cols) > 0:
+                        joinDF = joinDF.join(csvfileO.data, how='outer')
+                # del csvfileO
+                csvfileO = None
 
-	        if joinDF.empty:
-	            print('x', end='')
-	            continue
-	        joinDF.reset_index(inplace=True)
-	        joinDF['ID'] = joinDF['uID'].apply(split_field, args=[0])
-	        joinDF['session'] = joinDF['uID'].apply(split_field, args=[1])
-	        joinDF['experiment'] = joinDF['uID'].apply(split_field, args=[2])
+            if joinDF.empty:
+                print('x', end='')
+                continue
+            joinDF.reset_index(inplace=True)
+            joinDF['ID'] = joinDF['uID'].apply(split_field, args=[0])
+            joinDF['session'] = joinDF['uID'].apply(split_field, args=[1])
+            joinDF['experiment'] = joinDF['uID'].apply(split_field, args=[2])
 
-	        orgO = O.EROpheno(joinDF.to_dict(orient='records'), subdir)
-	        # del joinDF
-	        joinDF = None
-	        orgO.store_joined_bulk()
-	        # del orgO
-	        orgO = None
-	        print('.', end='')
+            orgO = O.EROpheno(joinDF.to_dict(orient='records'), subdir)
+            # del joinDF
+            joinDF = None
+            orgO.store_joined_bulk()
+            # del orgO
+            orgO = None
+            print('.', end='')
     except:
-    	print(subdir)
-    	print(filename)
-    	raise
+        print(subdir)
+        print(filename)
+        raise
