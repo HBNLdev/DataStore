@@ -12,7 +12,7 @@ import numpy as np
 import scipy.stats as ss
 import pandas as pd
 import matplotlib.pyplot as plt
-from plot import MidpointNormalize
+from plot import MidpointNormalize, blank_topo, plot_arcs, ordinalize_one
 
 import mne
 
@@ -122,15 +122,18 @@ def compound_take(a, vals, dims):
     for v, d in zip(vals, dims):
         if isinstance(v, tuple): # reserved for itertools.product-takes
             for vp, dp in zip(v, d):
-                if isinstance(vp, list):
-                    if '-' in vp:
-                        a = apply_take(a, vp[0], dp) - apply_take(a, vp[2], dp)
+                if isinstance(vp, dict): # reserved for operation-takes
+                    (op, lvls), = vp.items()
+                    if op == 'minus':
+                        a = apply_take(a, lvls[0], dp) - \
+                            apply_take(a, lvls[1], dp)
                         # print('level subtraction')
                 else:
                     a = apply_take(a, vp, dp)
-        elif isinstance(v, list): # reserved for operation-takes (subtractions)
-            if '-' in v:
-                a = apply_take(a, v[0], d) - apply_take(a, v[2], d)
+        elif isinstance(v, dict): # reserved for operation-takes
+            (op, lvls), = v.items()
+            if op == 'minus':
+                a = apply_take(a, lvls[0], d) - apply_take(a, lvls[1], d)
                 # print('level subtraction')
         else:
             a = apply_take(a, v, d)
@@ -138,10 +141,10 @@ def compound_take(a, vals, dims):
     return a
 
 def basic_slice(a, in_dimval_tups):
-    ''' given array a and list of (dim, val) tuples, basic-slice '''
+    ''' given array a and list of (dim, val) tuples, basic-slice a '''
     slicer = [slice(None)]*len(a.shape) # initialize slicer
     
-    # if the elements of the tuples are tuples, unpack them
+    # if the elements of the tuples are tuples, unpack and put in series
     dimval_tups = []
     for dvt in in_dimval_tups:
         if isinstance(dvt[0], tuple):
@@ -157,10 +160,11 @@ def basic_slice(a, in_dimval_tups):
             v[1] # for non-singleton vals
             slicer[d] = v
         except: # for singleton vals
+            print('singleton dim', d)
             slicer[d] = v
             slicer.insert(d+1, np.newaxis)
     
-    # print(slicer)
+    print(slicer)
     return a[tuple(slicer)]
 
 # plotting functions
@@ -189,7 +193,7 @@ def subplot_heuristic(n):
 
 def figsize_heuristic(sp_dims):
     ''' given subplot dims (rows, columns), return (width, height) of figure '''
-    max_width, max_height = 16, 10
+    max_width, max_height = 15, 10
     r = sp_dims[1] / sp_dims[0]
     phi = 1.618
     if r >= phi:
@@ -322,15 +326,21 @@ class Results:
                                         for ms in time_plotlims_ms]
 
         # coherence pairs
+        s.cohpair_inds = [ [int(chan_num)-1 for chan_num in pair]
+                                for pair in s.params['Coherence pairs'].T ]
         if len(s.params['Coherence pairs'].shape) > 1:
-            s.cohpair_lbls = ['~'.join([s.montage.ch_names[int(chan_num)-1]
-                                for chan_num in pair])
-                                    for pair in s.params['Coherence pairs'].T]
+            s.cohpair_lbls = ['~'.join([s.montage.ch_names[chan_ind]
+                                        for chan_ind in pair])
+                                            for pair in s.cohpair_inds]
+            s.cohpair_sets = {}
+            for pind, pset in enumerate(s.params['Coherence pair subsets']):
+                setpairs = [s.cohpair_lbls[pair] for pair in np.where(\
+                    s.params['Coherence pair subset index']==pind+1)[1]]
+                s.cohpair_sets[pset] = setpairs
 
     def time_ticks(s, interval=200):
         ''' time ticks for plots '''
-        ms_start_plot = np.round(
-            s.time[0] / 100) * 100  # start at a round number
+        ms_start_plot = np.round(s.time[0] / 100) * 100  # start at round number
         first_tick = int(ms_start_plot + ms_start_plot % interval)
         time_ticks_ms = list(range(first_tick, int(s.time[-1]), interval))
 
@@ -351,7 +361,7 @@ class Results:
             if df.shape[0] != getattr(s, measure).shape[0]:
                 print('shape of loaded data does not match demogs, reloading')
             else:
-                return
+                return 'loaded already'
 
         dsets = [h5py.File(fn, 'r')[dset_name] for fn in df['path'].values]
         arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
@@ -367,6 +377,8 @@ class Results:
         ''' load, filter, and subtractively baseline ERP data '''
 
         erp = s.load('erp', 'erp', [3, 0, 1, 2])
+        if erp == 'loaded already':
+            return
         # erp is now (subjects, conditions, channels, timepoints,)
 
         # filter
@@ -400,6 +412,8 @@ class Results:
         ''' load (total) power data and divisively baseline-normalize '''
 
         power = s.load('power', 'wave_totpow', [4, 0, 2, 1, 3])
+        if power == 'loaded already':
+            return
         power = power[:, :, :, ::-1, :]  # reverse the freq dimension
         # power is (subjects, conditions, channels, freq, timepoints,)
 
@@ -491,9 +505,9 @@ class Results:
                         s.freq, s.time_tf)
 
 
-    def plot_erp(s, figure_by=('channel', ['FZ', 'CZ', 'PZ']),
-                    subplot_by=('POP', None),
-                    glyph_by=('condition', None),
+    def plot_erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
+                    subplot_by={'POP': None},
+                    glyph_by={'condition': None},
                     savedir=None):
         ''' plot ERPs as lines '''
         ptype = 'line'
@@ -551,10 +565,105 @@ class Results:
             if savedir:
                 s.save_fig(savedir, ptype, measure, f_lbls[fi])
 
+    def plot_tf(s, measure='power',
+                   figure_by={'POP': None, 'channel': ['FZ']},
+                   subplot_by={'condition': None},
+                   lims='absmax', cmap_override=None,
+                   savedir=None):
+        ''' plot time-frequency data as a rectangular contour image '''
+        ptype = 'tf'
+
+        if measure in ['power', 'itc', 'phi', 'coh']:
+            data, d_dims, d_dimlvls, units, lims, cmap = \
+                s.get_plotparams(measure, lims, cmap_override)
+        else:
+            print('data not recognized')
+            return
+
+        f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlvls)
+        sp_dim, sp_vals, sp_lbls = s.handle_by(subplot_by, d_dims, d_dimlvls)
+
+        sp_dims = subplot_heuristic(len(sp_vals))
+        figsize = figsize_heuristic(sp_dims)
+        for fi, fval in enumerate(f_vals):
+            f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
+                                    sharex=True, sharey=True, figsize=figsize)
+            f.suptitle(f_lbls[fi])
+            axarr = axarr.ravel()
+            rect_lst = []
+            c_lst = []
+            for spi, spval in enumerate(sp_vals):
+                vals = [fval, spval]
+                dims = [f_dim[fi], sp_dim[spi]]
+                try:
+                    dimval_tups = [(d,v) for d,v in zip(dims, vals)]
+                    print(dimval_tups)
+                    rect = basic_slice(data, dimval_tups)
+                    print('slice')
+                    print(rect.shape)
+                except:
+                    rect = compound_take(data, vals, dims)
+                    print('done compound take')
+                while len(rect.shape) > 2:
+                    rect = rect.mean(axis=0)
+                    print(rect.shape)
+                ''' contour '''
+                c = axarr[spi].contourf(rect, 8, cmap=cmap)
+                                        # vmin=lims[0], vmax=lims[1])
+                c_lst.append(c)
+                rect_lst.append(rect)
+                # c = axarr[spi].contour(rect, cmap=plt.cm.RdBu_r,
+                #                         vmin=-4, vmax=4)
+                # plt.clabel(c, inline=1, fontsize=9)
+                # cbar = plt.colorbar(c, ax=axarr[spi])
+                # cbar.ax.set_ylabel(units, rotation=270)
+                ''' ticks and grid '''
+                axarr[spi].set_xticks(s.time_ticks_pt_tf)
+                axarr[spi].set_xticklabels(s.time_ticks_ms)
+                axarr[spi].set_yticks(s.freq_ticks_pt)
+                axarr[spi].set_yticklabels(s.freq_ticks_hz)
+                axarr[spi].grid(True)
+                axarr[spi].axvline(s.zero_tf, color='k', linestyle='--')
+                axarr[spi].set_xlim(s.time_tf_plotlims)
+                ''' labels and title '''
+                axarr[spi].set_xlabel('Time (s)')
+                axarr[spi].set_ylabel('Frequency (Hz)')
+                axarr[spi].set_title(sp_lbls[spi])
+
+            norm = None
+            rects = np.stack(rect_lst, axis=-1)
+            if lims == 'absmax':
+                vmax = np.max(np.fabs(rects))
+                vmin = -vmax
+            elif lims == 'minmax':
+                vmax, vmin = np.max(rects), np.min(rects)
+            else:
+                vmax, vmin = lims[1], lims[0]
+            
+            if vmin != -vmax:
+                norm = MidpointNormalize(vmin, vmax, 0)
+            print('vmin', vmin, 'vmax', vmax)
+
+            for c, spi in zip(c_lst, range(len(sp_vals))):
+                c.set_clim(vmin, vmax)
+                if norm:
+                    c.set_norm(norm)
+                cbar = plt.colorbar(c, ax=axarr[spi])
+                cbar.ax.set_ylabel(units, rotation=270)
+
+            ''' colorbar '''
+            # plt.subplots_adjust(right=0.85)
+            # cbar_ax = f.add_axes([0.88, 0.12, 0.03, 0.75])
+            # cbar = plt.colorbar(c, cax=cbar_ax)
+            # cbar.ax.set_ylabel(units, rotation=270)
+            # plt.colorbar(c, ax=axarr[spi])
+            if savedir:
+                s.save_fig(savedir, ptype, measure, f_lbls[fi])
+
 
     def plot_topo(s, measure='erp', times=list(range(0, 501, 125)),
-                     figure_by=('POP', ['C']),
-                     row_by=('condition', None),
+                     figure_by={'POP': ['C']},
+                     row_by={'condition': None},
                      lims='absmax', cmap_override=None,
                      savedir=None):
         ''' plot data as topographic maps at specific timepoints '''
@@ -573,7 +682,7 @@ class Results:
 
         f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlvls)
         r_dim, r_vals, r_lbls = s.handle_by(row_by, d_dims, d_dimlvls)
-        time_by = ('timepoint', times)
+        time_by = {'timepoint': times}
         t_dim, t_vals, t_lbls = s.handle_by(time_by, d_dims, d_dimlvls)
 
         sp_dims = (len(r_vals), len(times))
@@ -640,96 +749,90 @@ class Results:
                 s.save_fig(savedir, ptype, measure, f_lbls[fi])
 
 
-    def plot_tf(s, measure='power',
-                   figure_by=[('POP', None), ('channel', ['FZ'])],
-                   subplot_by=('condition', None),
-                   lims='absmax', cmap_override=None,
-                   savedir=None):
-        ''' plot time-frequency data as a rectangular contour image '''
-        ptype = 'tf'
+    def plot_arctopo(s, measure='coh', times=list(range(0, 501, 125)),
+                     figure_by={'POP': ['C']},
+                     row_by={'condition': None},
+                     lims='minmax', cmap_override=None,
+                     savedir=None):
+        ''' plot data as topographic maps at specific timepoints '''
+        ptype = 'arctopo'
+        final_dim = 'pair'
 
-        if measure in ['power', 'itc', 'phi', 'coh']:
-            data, d_dims, d_dimlvls, units, lims, cmap = \
-                s.get_plotparams(measure, lims, cmap_override)
-        else:
-            print('data not recognized')
-            return
+        data, d_dims, d_dimlvls, units, lims, cmap = \
+            s.get_plotparams(measure, lims, cmap_override)
+
+        info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
+                               'eeg', s.montage)
 
         f_dim, f_vals, f_lbls = s.handle_by(figure_by, d_dims, d_dimlvls)
-        sp_dim, sp_vals, sp_lbls = s.handle_by(subplot_by, d_dims, d_dimlvls)
+        r_dim, r_vals, r_lbls = s.handle_by(row_by, d_dims, d_dimlvls)
+        time_by = {'timepoint': times}
+        t_dim, t_vals, t_lbls = s.handle_by(time_by, d_dims, d_dimlvls)
 
-        sp_dims = subplot_heuristic(len(sp_vals))
+        sp_dims = (len(r_vals), len(times))
         figsize = figsize_heuristic(sp_dims)
         for fi, fval in enumerate(f_vals):
             f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
                                     sharex=True, sharey=True, figsize=figsize)
             f.suptitle(f_lbls[fi])
             axarr = axarr.ravel()
-            rect_lst = []
-            c_lst = []
-            for spi, spval in enumerate(sp_vals):
-                vals = [fval, spval]
-                dims = [f_dim[fi], sp_dim[spi]]
-                try:
+            ax_dum = -1
+            arcs_lst = []
+            arch_lst = []
+            for ri, rval in enumerate(r_vals):
+                for ti, tval in enumerate(t_vals):
+                    vals = [fval, rval, tval]
+                    dims = [f_dim[fi], r_dim[ri], t_dim[ti]]
+                    # try:
                     dimval_tups = [(d,v) for d,v in zip(dims, vals)]
-                    rect = basic_slice(data, dimval_tups)
-                    print('slice')
-                except:
-                    rect = compound_take(data, vals, dims)
-                    print('done compound take')
-                while len(rect.shape) > 2:
-                    rect = rect.mean(axis=0)
-                    print(rect.shape)
-                ''' contour '''
-                c = axarr[spi].contourf(rect, 8, cmap=cmap)
-                                        # vmin=lims[0], vmax=lims[1])
-                c_lst.append(c)
-                rect_lst.append(rect)
-                # c = axarr[spi].contour(rect, cmap=plt.cm.RdBu_r,
-                #                         vmin=-4, vmax=4)
-                # plt.clabel(c, inline=1, fontsize=9)
-                # cbar = plt.colorbar(c, ax=axarr[spi])
-                # cbar.ax.set_ylabel(units, rotation=270)
-                ''' ticks and grid '''
-                axarr[spi].set_xticks(s.time_ticks_pt_tf)
-                axarr[spi].set_xticklabels(s.time_ticks_ms)
-                axarr[spi].set_yticks(s.freq_ticks_pt)
-                axarr[spi].set_yticklabels(s.freq_ticks_hz)
-                axarr[spi].grid(True)
-                axarr[spi].axvline(s.zero_tf, color='k', linestyle='--')
-                axarr[spi].set_xlim(s.time_tf_plotlims)
-                ''' labels and title '''
-                axarr[spi].set_xlabel('Time (s)')
-                axarr[spi].set_ylabel('Frequency (Hz)')
-                axarr[spi].set_title(sp_lbls[spi])
-
-            norm = None
-            rects = np.stack(rect_lst, axis=-1)
+                    try:
+                        arcs = basic_slice(data, dimval_tups)
+                        print('slice')
+                    except:
+                        arcs = compound_take(data, vals, dims)
+                        print('compound take')
+                    mean_dims = np.where([d!=final_dim for d in d_dims])
+                    arcs = arcs.mean(axis=tuple(mean_dims[0]))
+                    print(arcs.shape)
+                    ax_dum += 1
+                    ax, im, cn, pos_x, pos_y = blank_topo(axarr[ax_dum], info)
+                    arches = plot_arcs(arcs, ax, s.cohpair_inds,
+                                            pos_x, pos_y, cmap=cmap)
+                    arcs_lst.append(arcs)
+                    arch_lst.extend(arches)
+                    ''' labels '''
+                    axarr[ax_dum].text(-.5, .5, t_lbls[ti])  # time label
+                    if ti == 0:
+                        axarr[ax_dum].text(-1.5, 0, r_lbls[ri])  # row label
+            
+            arcs_stack = np.stack(arcs_lst, axis=-1)
             if lims == 'absmax':
-                vmax = np.max(np.fabs(rects))
+                vmax = np.max(np.fabs(arcs_stack))
                 vmin = -vmax
-            elif lims == 'minmax':
-                vmax, vmin = np.max(rects), np.min(rects)
+                midval = 0
+            elif lims == 'minmax': # won't work with 2color asymmetric cmap
+                vmax, vmin = np.max(arcs_stack), np.min(arcs_stack)
+                midval = vmin
             else:
                 vmax, vmin = lims[1], lims[0]
+                midval = vmin
             
-            if vmin != -vmax:
-                norm = MidpointNormalize(vmin, vmax, 0)
             print('vmin', vmin, 'vmax', vmax)
 
-            for c, spi in zip(c_lst, range(len(sp_vals))):
-                c.set_clim(vmin, vmax)
-                if norm:
-                    c.set_norm(norm)
-                cbar = plt.colorbar(c, ax=axarr[spi])
-                cbar.ax.set_ylabel(units, rotation=270)
+            cmap_array = cmap(range(cmap.N))
+            for arch in arch_lst:
+                val, arc_h = arch
+                color_ind = ordinalize_one(val, size=cmap.N, lims=[vmin, vmax])
+                # alpha_amt = np.fabs(val - midval) / 
+                arc_h.set_color(cmap_array[color_ind, :3])
 
             ''' colorbar '''
-            # plt.subplots_adjust(right=0.85)
-            # cbar_ax = f.add_axes([0.88, 0.12, 0.03, 0.75])
-            # cbar = plt.colorbar(c, cax=cbar_ax)
-            # cbar.ax.set_ylabel(units, rotation=270)
-            # plt.colorbar(c, ax=axarr[spi])
+            plt.subplots_adjust(right=0.85)
+            cbar_ax = f.add_axes([0.9, 0.15, 0.03, 0.75])
+            mapper = plt.cm.ScalarMappable(cmap=cmap)
+            mapper.set_array([vmin, vmax])
+            cbar = plt.colorbar(mapper, cax=cbar_ax)
+            cbar.ax.set_ylabel(units, rotation=270)
             if savedir:
                 s.save_fig(savedir, ptype, measure, f_lbls[fi])
 
@@ -826,12 +929,11 @@ class Results:
             data_dims: n-tuple describing the n dimensions of the data
             data_dimlvls: n-tuple of lists describing levels of each dim '''
 
-        print('by stage is', by_stage)
         print('by stage is', by_stage[0])
         if by_stage[0] in data_dims:  # if variable is in data dims
             dim = data_dims.index(by_stage[0])
             print('data in dim', dim)
-            if by_stage[1]:
+            if by_stage[1]: # if levels are specified
                 labels = by_stage[1]
                 if data_dimlvls[dim].dtype == np.float64: # if array data
                     vals = []
@@ -849,17 +951,20 @@ class Results:
                             tmp_inds = np.argmin(np.fabs(\
                                 data_dimlvls[dim] - lbl))
                         vals.append(tmp_inds)
-                else:
+                else: # if non-array data (labeled, like conditions)
                     vals = []
                     for lbl in labels:
-                        if '-' in lbl:
-                            vals.append([np.where(data_dimlvls[dim]==lbl[0])[0],
-                                        '-',
-                                        np.where(data_dimlvls[dim]==lbl[2])[0]])
+                        if isinstance(lbl, dict):
+                            (op, lvls), = lbl.items()
+                            vals.append({op: [np.where(data_dimlvls[dim]==l)[0]
+                                                        for l in lvls]})
+                        elif isinstance(lbl, list):
+                            vals.append([np.where(data_dimlvls[dim]==lb)[0][0]
+                                                        for lb in lbl])
                         else:
                             vals.append(np.where(data_dimlvls[dim]==lbl)[0])
                 print('vals to iterate on are', vals)
-            else:
+            else: # if levels were not specified, iterate across all available
                 labels = data_dimlvls[dim]
                 vals = list(range(len(labels)))
                 print('iterate across available vals including', vals)
