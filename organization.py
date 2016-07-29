@@ -104,13 +104,21 @@ class Acquisition(MongoBacked):
     repeat_name = 'repeat'
 
     def __init__(s, info={}):
-        I = Acquisition.def_info.copy()
+        I = s.def_info.copy()
         I.update(info)
         s.site = I['site']
         s.date = I['date']
         s.subject = I['subject']
         s.data = I
 
+class Calculation(MongoBacked):
+    def_info = {'data type':'calculation'}
+    collection = 'Calculation'
+
+    def __init__(s,info={}):
+        I = Calculation.def_info.copy()
+        I.update(info)
+        s.data = I
 
 class EROcsv(MongoBacked):
 
@@ -310,6 +318,15 @@ class ElectrophysiologyCalculations(Acquisition):
         I.update(info)
         Acquisition.__init__(s, I)
 
+class STransformInverseMats(Calculation):
+
+    def_info = {}
+    collection='STinverseMats'
+
+    def __init__(s,info={}):
+        I = s.def_info.copy()
+        I.update(info)
+        Calculation.__init__(s,I)
 
 class EEGBehavior(Acquisition):
     def_info = {'technique': 'EEG Tasks'}

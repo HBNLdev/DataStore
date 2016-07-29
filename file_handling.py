@@ -190,6 +190,17 @@ def parse_filename_tester():
                 (info['session'] != case[6]) or (int(info['run']) != case[7])):
             print(info, ' mismatch for case: ', case)
 
+def parse_mt_name(file_or_path):
+    if os.path.sep in file_or_path:
+        name = os.path.split(file_or_path)[1]
+    else:
+        name = file_or_path
+    base_ext = name.split('.')
+    
+    parts = parse_filename(base_ext[0])
+    parts['case'] = base_ext[2]
+    
+    return parts
 
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
     file_list = []

@@ -143,6 +143,23 @@ def eeg_data():
     sourceO = O.SourceInfo('EEGdata', list(zip(cnth1_files, datemods)))
     sourceO.store()
 
+def mat_st_inv_data():
+    start_base = '/processed_data/mat-files-v'
+    start_fins = ['40','60']
+    glob_expr = '*st.mat'
+    mat_files = []
+    dates = []
+    for fin in start_fins:
+        f_mats, f_dates = FH.identify_files(start_base+fin,glob_expr)
+        mat_files.extend(f_mats)
+        dates.extend(f_dates)
+    for f in mat_files:
+        infoD = FH.parse_mt_name(f)
+        infoD['path'] = f
+        infoD['prc_ver'] = f.split(os.path.sep)[2][-2]
+        matO = O.STransformInverseMats(infoD)
+        matO.store()
+
 
 def erp_data():
     # ~2 mins?
