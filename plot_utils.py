@@ -65,29 +65,6 @@ def nested_strjoin(obj, delim='_'):
             js += str(thing) + delim
     return js
 
-class MidpointNormalize(colors.Normalize):
-    ''' create asymmetric norm '''
-
-    def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
-        self.midpoint = midpoint
-        colors.Normalize.__init__(self, vmin, vmax, clip)
-
-    def __call__(self, value, clip=None):
-        # I'm ignoring masked values and all kinds of edge cases to make a
-        # simple example...
-        x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
-        return np.ma.masked_array(np.interp(value, x, y))
-
-class ImageFollower(object):
-    ''' update image in response to changes in clim or cmap on another image '''
-
-    def __init__(self, follower):
-        self.follower = follower
-
-    def __call__(self, leader):
-        self.follower.set_cmap(leader.get_cmap())
-        self.follower.set_clim(leader.get_clim())
-
 def blank_topo(in_ax, info):
     ''' create a blank headplot '''
     topo = np.empty(61)
@@ -124,25 +101,21 @@ def ordinalize_one(num, size, lims, mid=None):
     ''' given datum, ordinalize it to a given index size '''
     
     vmin, vmax = lims
-    if mid:
-        mid_prop = (mid - vmin) / (vmax - vmin)
-        mid_prop_ind = int(round(mid_prop * (size-1)))
-        if num > mid:
-            datum_prop = (num - mid) / (vmax - mid)
-            side_len = size - mid_prop_ind
+
+    data_prop = (num - vmin) / (vmax -  vmin)
+    data_prop_ind = int(round(data_prop * (size-1)))
+
+    if mid is not None:
+        if num < 0:
+            abs_prop = np.fabs( (num - mid) / vmin )
         else:
-            datum_prop = - (num - mid) / (vmin - mid)
-            side_len = mid_prop_ind - 1
-        data_prop_ind = int(round( mid_prop_ind + (datum_prop * side_len) ))
-    else:
-        data_prop = (num - vmin) / (vmax -  vmin)
-        data_prop_ind = int(round(data_prop * (size-1)))
+            abs_prop = np.fabs( (num - mid) / vmax )
 
     if data_prop_ind < 0:
         data_prop_ind = 0
     elif data_prop_ind > size - 1:
         data_prop_ind = size - 1
-    return data_prop_ind
+    return data_prop_ind, abs_prop
 
 def plot_arcs(arcs, ax, pair_inds, pos_x, pos_y, cmap, lims=[0, 0.25]):
     ''' given 1d array of connection strengths, plot as colored arcs '''
@@ -154,13 +127,34 @@ def plot_arcs(arcs, ax, pair_inds, pos_x, pos_y, cmap, lims=[0, 0.25]):
         ch1, ch2 = pair
         pt1 = pos_x[ch1], pos_y[ch1]
         pt2 = pos_x[ch2], pos_y[ch2]
-        arc = create_arc(pt1, pt2, cmap_array[arc_inds[pind], :3]) #, linewidth, alpha)
+        arc = create_arc(pt1, pt2, cmap_array[arc_inds[pind], :3])
         arch = ax.add_patch(arc)
         arch_lst.append((arcs[pind], arch))
-    # mapper = plt.cm.ScalarMappable(cmap=cmap)
-    # mapper.set_array(lims)
-    # plt.colorbar(mapper, ax=ax)
     return arch_lst
+
+class MidpointNormalize(colors.Normalize):
+    ''' create asymmetric norm '''
+
+    def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
+        self.midpoint = midpoint
+        colors.Normalize.__init__(self, vmin, vmax, clip)
+
+    def __call__(self, value, clip=None):
+        # I'm ignoring masked values and all kinds of edge cases to make a
+        # simple example...
+        x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
+        return np.ma.masked_array(np.interp(value, x, y))
+
+class ImageFollower(object):
+    ''' update image in response to changes in clim or cmap on another image '''
+
+    def __init__(self, follower):
+        self.follower = follower
+
+    def __call__(self, leader):
+        self.follower.set_cmap(leader.get_cmap())
+        self.follower.set_clim(leader.get_clim())
+
 
 def plot_topomap(data, pos, vmin=None, vmax=None, cmap=None, sensors=True,
                  res=64, axes=None, names=None, show_names=False, mask=None,

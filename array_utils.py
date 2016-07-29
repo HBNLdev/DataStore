@@ -76,6 +76,17 @@ def basic_slice(a, in_dimval_tups):
     return a[tuple(slicer)]
 
 
+def handle_pairs(s, pairs_arg):
+    if isinstance(pairs_arg, list):
+        return list(map(s.cohpair_lbls.index, pairs_arg))
+    elif pairs_arg == 'all':
+        return list(range(len(s.cohpair_inds)))
+    elif pairs_arg in s.cohpair_sets:
+        return list(map(s.cohpair_lbls.index, s.cohpair_sets[pairs_arg]))
+    else:
+        print('pairs incorrectly specified')
+        raise
+
 def handle_by(s, by_stage, d_dims, d_dimlvls):
     ''' handle a 'by' argument, which tells a plotting functions what parts
         of the data will be distributed across a plotting object.

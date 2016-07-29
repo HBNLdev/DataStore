@@ -71,17 +71,6 @@ def parse_cell(dset, dset_field):
     except:
         return []
 
-def parse_array(dset, dset_field):
-    ''' parse .mat-style h5 field that contains a numerical array.
-        not in use yet. '''
-    contents = dset[dset_field][:]
-    if contents.shape == (1, 1):
-        return contents[0][0]
-    elif contents == np.array([0, 0], dtype=np.uint64):
-        return None
-    else:
-        return contents
-
 ftypes_funcs = {'text': parse_text, 'cell': parse_cell, 'array': None}
 
 def handle_parse(dset, dset_field, field_type):

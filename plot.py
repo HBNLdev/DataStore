@@ -3,14 +3,23 @@
 import os
 
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import scipy.stats as ss
 import mne
 
-from array_utils import basic_slice, compound_take, handle_by
+from array_utils import basic_slice, compound_take, handle_by, handle_pairs
 from plot_utils import (subplot_heuristic, figsize_heuristic,
                     is_nonstr_sequence, nested_strjoin,
-                    MidpointNormalize, blank_topo, plot_arcs, ordinalize_one)
+                    MidpointNormalize,
+                    blank_topo, plot_arcs, ordinalize_one)
+
+# print(mpl.matplotlib_fname())
+mpl.rcParams['svg.fonttype'] = 'none' # none, path, or svgfont
+# mpl.rcParams['font.family'] = 'sans-serif'
+# mpl.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Helvetica', 'Verdana',
+#     'Bitstream Vera Sans', 'Lucida Grande', 'Geneva', 'Lucid',
+#     'Arial', 'Avant Garde', 'sans-serif']
 
 ''' dictionary mapping measures to their object info '''
 measure_pps = {'erp':   {'data': 'erp', 'd_dims': 'erp_dims',
@@ -68,10 +77,11 @@ def get_plotparams(s, measure, lims=None, cmap_override=None):
 
     return data, d_dims, d_dimlvls, units, lims, cmap
 
-def save_fig(s, savedir, ptype, measure, label, form='eps'):
-    ''' name and save the current figure to a target directory '''
+def save_fig(s, savedir, ptype, measure, label, form='svg'):
+    ''' name and save the current figure to a target directory
+        by default, we use SVG because it typically works the best '''
 
-    figname = s.gen_figname(ptype, measure, label)+'.'+form
+    figname = gen_figname(s, ptype, measure, label)+'.'+form
     outpath = os.path.expanduser(os.path.join(savedir, figname))
     plt.savefig(outpath, format=form, dpi=1000)
 
@@ -114,7 +124,7 @@ def erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
     for fi, fval in enumerate(f_vals):
         f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
                                 sharex=True, sharey=True, figsize=figsize)
-        f.suptitle(f_lbls[fi])
+        f.suptitle(f_lbls[fi], fontsize=16, fontweight='bold')
         try:
             axarr = axarr.ravel()
         except:
@@ -142,17 +152,19 @@ def erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
                                 alpha=0.5, linewidth=0,
                                 facecolor=l.get_color())
             axarr[spi].grid(True)
-            axarr[spi].set_title(sp_lbls[spi])
+            axarr[spi].set_title(sp_lbls[spi], fontweight='bold')
             axarr[spi].legend(loc='upper left')
             axarr[spi].set_xticks(s.time_ticks_pt_erp)
             axarr[spi].set_xticklabels(s.time_ticks_ms)
-            axarr[spi].set_xlabel('Time (s)')
-            axarr[spi].set_ylabel('Potential (' + s.pot_units + ')')
+            axarr[spi].set_xlabel('Time (s)', fontweight='bold')
+            if spi % sp_dims[1] == 0:
+                axarr[spi].set_ylabel('Potential (' + s.pot_units + ')',
+                                                fontweight='bold')
             axarr[spi].axhline(0, color='k', linestyle='--')
             axarr[spi].axvline(s.zero, color='k', linestyle='--')
             axarr[spi].set_xlim(s.time_plotlims)
         if savedir:
-            s.save_fig(savedir, ptype, measure, f_lbls[fi])
+            save_fig(s, savedir, ptype, measure, f_lbls[fi])
 
 def tf(s, measure='power',
           figure_by={'POP': None, 'channel': ['FZ']},
@@ -177,7 +189,7 @@ def tf(s, measure='power',
     for fi, fval in enumerate(f_vals):
         f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
                                 sharex=True, sharey=True, figsize=figsize)
-        f.suptitle(f_lbls[fi])
+        f.suptitle(f_lbls[fi], fontsize=16, fontweight='bold')
         try:
             axarr = axarr.ravel()
         except:
@@ -201,7 +213,10 @@ def tf(s, measure='power',
                 print(rect.shape)
             ''' contour '''
             c = axarr[spi].contourf(rect, 8, cmap=cmap)
-                                    # vmin=lims[0], vmax=lims[1])
+            # c = axarr[spi].imshow(rect, aspect='auto', origin='lower',
+            #                             cmap=cmap,
+            #                             interpolation='sinc')
+            # decent interpolations include none and sinc
             c_lst.append(c)
             rect_lst.append(rect)
             # c = axarr[spi].contour(rect, cmap=plt.cm.RdBu_r,
@@ -218,9 +233,10 @@ def tf(s, measure='power',
             axarr[spi].axvline(s.zero_tf, color='k', linestyle='--')
             axarr[spi].set_xlim(s.time_tf_plotlims)
             ''' labels and title '''
-            axarr[spi].set_xlabel('Time (s)')
-            axarr[spi].set_ylabel('Frequency (Hz)')
-            axarr[spi].set_title(sp_lbls[spi])
+            axarr[spi].set_xlabel('Time (s)', fontweight='bold')
+            if spi % sp_dims[1] == 0:
+                axarr[spi].set_ylabel('Frequency (Hz)', fontweight='bold')
+            axarr[spi].set_title(sp_lbls[spi], fontweight='bold')
 
         norm = None
         rects = np.stack(rect_lst, axis=-1)
@@ -241,7 +257,9 @@ def tf(s, measure='power',
             if norm:
                 c.set_norm(norm)
             cbar = plt.colorbar(c, ax=axarr[spi])
-            cbar.ax.set_ylabel(units, rotation=270)
+            if spi % sp_dims[1] == sp_dims[1] - 1:
+                cbar.ax.set_ylabel(units, rotation=270, va='bottom',
+                                        fontweight='bold')
 
         ''' colorbar '''
         # plt.subplots_adjust(right=0.85)
@@ -250,7 +268,7 @@ def tf(s, measure='power',
         # cbar.ax.set_ylabel(units, rotation=270)
         # plt.colorbar(c, ax=axarr[spi])
         if savedir:
-            s.save_fig(savedir, ptype, measure, f_lbls[fi])
+            save_fig(s, savedir, ptype, measure, f_lbls[fi])
 
 
 def topo(s, measure='erp', times=list(range(0, 501, 125)),
@@ -282,7 +300,7 @@ def topo(s, measure='erp', times=list(range(0, 501, 125)),
     for fi, fval in enumerate(f_vals):
         f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
                                 sharex=True, sharey=True, figsize=figsize)
-        f.suptitle(f_lbls[fi])
+        f.suptitle(f_lbls[fi], fontsize=16, fontweight='bold')
         try:
             axarr = axarr.ravel()
         except:
@@ -308,7 +326,7 @@ def topo(s, measure='erp', times=list(range(0, 501, 125)),
                 ax_dum += 1
                 im, cn = mne.viz.plot_topomap(topo, info,
                                     cmap=cmap, axes=axarr[ax_dum],
-                                    show=False)
+                                    contours=0, show=False)
                 topo_lst.append(topo)
                 im_lst.append(im)
                 ''' labels '''
@@ -339,12 +357,13 @@ def topo(s, measure='erp', times=list(range(0, 501, 125)),
         plt.subplots_adjust(right=0.85)
         cbar_ax = f.add_axes([0.9, 0.15, 0.03, 0.75])
         cbar = plt.colorbar(im, cax=cbar_ax)
-        cbar.ax.set_ylabel(units, rotation=270)
+        cbar.ax.set_ylabel(units, rotation=270, fontweight='bold')
         if savedir:
-            s.save_fig(savedir, ptype, measure, f_lbls[fi])
+            save_fig(s, savedir, ptype, measure, f_lbls[fi])
 
 
-def arctopo(s, times=list(range(0, 501, 125)),
+def arctopo(s, pairs='all',
+               times=list(range(0, 501, 125)),
                figure_by={'POP': ['C']},
                row_by={'condition': None},
                lims='absmax', cmap_override=None,
@@ -364,13 +383,19 @@ def arctopo(s, times=list(range(0, 501, 125)),
     r_dim, r_vals, r_lbls = handle_by(s, row_by, d_dims, d_dimlvls)
     time_by = {'timepoint': times}
     t_dim, t_vals, t_lbls = handle_by(s, time_by, d_dims, d_dimlvls)
+    
+    pair_inds = handle_pairs(s, pairs)
+    pair_chaninds = [s.cohpair_inds[pi] for pi in pair_inds]
+    pair_dim = d_dims.index('pair')
+    data = basic_slice(data, [(pair_dim, pair_inds)])
+
 
     sp_dims = (len(r_vals), len(times))
     figsize = figsize_heuristic(sp_dims)
     for fi, fval in enumerate(f_vals):
         f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
                                 sharex=True, sharey=True, figsize=figsize)
-        f.suptitle(f_lbls[fi])
+        f.suptitle(f_lbls[fi], fontsize=16, fontweight='bold')
         try:
             axarr = axarr.ravel()
         except:
@@ -395,8 +420,8 @@ def arctopo(s, times=list(range(0, 501, 125)),
                 print(arcs.shape)
                 ax_dum += 1
                 ax, im, cn, pos_x, pos_y = blank_topo(axarr[ax_dum], info)
-                arches = plot_arcs(arcs, ax, s.cohpair_inds,
-                                        pos_x, pos_y, cmap=cmap)
+                arches = plot_arcs(arcs, ax, pair_chaninds,
+                                    pos_x, pos_y, cmap=cmap)
                 arcs_lst.append(arcs)
                 arch_lst.extend(arches)
                 ''' labels '''
@@ -405,7 +430,6 @@ def arctopo(s, times=list(range(0, 501, 125)),
                     axarr[ax_dum].text(-1.5, 0, r_lbls[ri])  # row label
         
         arcs_stack = np.stack(arcs_lst, axis=-1)
-        mid = None
         if lims == 'absmax':
             vmax = np.max(np.fabs(arcs_stack))
             vmin = -vmax
@@ -414,17 +438,21 @@ def arctopo(s, times=list(range(0, 501, 125)),
         else:
             vmax, vmin = lims[1], lims[0]
         
-        # if vmin < 0 and vmax > 0:
-        #     mid = 0
+        if vmin < 0 and vmax > 0:
+            mid = 0
+        else:
+            mid = None
         
         print('vmin', vmin, 'vmax', vmax)
 
         cmap_array = cmap(range(cmap.N))
         for arch in arch_lst:
             val, arc_h = arch
-            color_ind = ordinalize_one(val, size=cmap.N, lims=[vmin, vmax],
-                                        mid=mid)
+            color_ind, abs_prop = ordinalize_one(val, size=cmap.N,
+                                                lims=[vmin, vmax], mid=mid)
             arc_h.set_color(cmap_array[color_ind, :3])
+            # arc_h.set_alpha((abs_prop+1)/2)
+            arc_h.set_alpha(abs_prop)
 
         ''' colorbar '''
         plt.subplots_adjust(right=0.85)
@@ -432,6 +460,6 @@ def arctopo(s, times=list(range(0, 501, 125)),
         mapper = plt.cm.ScalarMappable(cmap=cmap)
         mapper.set_array([vmin, vmax])
         cbar = plt.colorbar(mapper, cax=cbar_ax)
-        cbar.ax.set_ylabel(units, rotation=270)
+        cbar.ax.set_ylabel(units, rotation=270, fontweight='bold')
         if savedir:
-            s.save_fig(savedir, ptype, measure, f_lbls[fi])
+            save_fig(s, savedir, ptype, measure, f_lbls[fi])
