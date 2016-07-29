@@ -341,7 +341,7 @@ class avgh1_file(cnth1_file):
         for t, t_attrs in s.case_dict.items():
             nm = t_attrs['code']
             stmevs = s.ev_df['type_seq'] == t
-            if t_attrs['corr_resp'] in [0, -1]: # no response required
+            if t_attrs['corr_resp'] == 0: # no response required
                 correct = s.ev_df.loc[stmevs, 'correct']
                 results[nm+'_acc'] = np.sum(correct) / np.sum(stmevs)
                 continue
@@ -355,6 +355,13 @@ class avgh1_file(cnth1_file):
             results[nm+'_medianrt'] = s.ev_df.loc[correct, 'rt'].median()
             results[nm+'_medianrtwithlate'] = \
                 s.ev_df.loc[correct_late, 'rt'].median()
+
+            # for certain experiments, keep track of non-resp info
+            if s.file_info['experiment'] in ['ant', 'ern', 'stp']:
+                noresp = s.ev_df.loc[stmevs, 'noresp']
+                results[nm+'_noresp'] = np.sum(noresp) / np.sum(stmevs)
+                results[nm+'_accwithresp'] = np.sum(correct) / \
+                    (np.sum(stmevs) - np.sum(noresp))
 
         s.results = results
 
@@ -376,7 +383,7 @@ class avgh1_file(cnth1_file):
         ''' parse the behavioral sequence and create a dataframe containing
             the event table '''
 
-        bad_respcodes = ~np.in1d(s.resp_seq, [0, 1, 2, 4, 8])
+        bad_respcodes = ~np.in1d(s.resp_seq, list(range(0,9)))
         if np.any(bad_respcodes):
             s.resp_seq[bad_respcodes] = 0
         nonresp_respcodes = (s.resp_seq!=0) & (s.type_seq!=0)
@@ -388,6 +395,7 @@ class avgh1_file(cnth1_file):
         s.early =   np.zeros(s.ev_len, dtype=bool)
         s.late =    np.zeros(s.ev_len, dtype=bool)
         s.correct = np.zeros(s.ev_len, dtype=bool)
+        s.noresp  = np.zeros(s.ev_len, dtype=bool)
         s.type_descriptor = []
 
         # this is the main algorithm applied to the event sequence
@@ -400,29 +408,32 @@ class avgh1_file(cnth1_file):
         s.type_descriptor = np.array(s.type_descriptor, dtype=np.object_)
         dd = {'type_seq': s.type_seq, 'type_descriptor': s.type_descriptor,
             'correct': s.correct, 'rt': rt, 'resp_seq': s.resp_seq,
+            'noresp': s.noresp,
             'errant': s.errant, 'early': s.early, 'late': s.late,
-            'time_seq': s.time_seq, 'event_interval_ms': event_interval_ms}
-        s.ev_df = pd.DataFrame(dd)
+            'time_seq': s.time_seq, 'event_intrvl_ms': event_interval_ms}
+        ev_df = pd.DataFrame(dd)
+
+        # reorder columns
+        col_order = ['type_seq', 'type_descriptor', 'correct', 'rt', 'resp_seq',
+            'noresp', 'errant', 'early', 'late', 'time_seq', 'event_intrvl_ms']
+        ev_df = ev_df[col_order]
+        s.ev_df = ev_df
 
     def parse_alg(s):
-        ''' algorithm applied to event structure '''
+        ''' algorithm applied to event structure. the underlying philosophy is:
+            each descriptive of an event is false unless proven true '''
         for ev, t in enumerate(s.type_seq):
             if t == 0: # some kind of response
                 prev_t = s.type_seq[ev-1]
                 if ev == 0 or prev_t not in s.case_dict:
-                    # first type code is response
-                    s.type_descriptor.append('rsp_unknown')
+                    # first code is response, previous event is also response,
+                    # or previous event is unrecognized
+                    s.type_descriptor.append('rsp_err')
                     s.errant[ev] = True
                     continue
                 else:
-                    # catch errant responses
-                    # when previous event was also a response or
-                    # the correct response to the prvious trial was 0 or -1
-                    if prev_t==0 or s.case_dict[prev_t]['corr_resp'] in [0, -1]:
-                        s.type_descriptor.append('rsp_err')
-                        s.errant[ev] = True
-                        continue
-                    # catch early responses
+                    # early / late responses
+                    # early is considered incorrect, while late can be correct
                     tmp_rt = (s.time_seq[ev] - s.time_seq[ev-1]) * 1000
                     if tmp_rt > s.case_dict[prev_t]['resp_win']:
                         s.late[ev] = True
@@ -437,7 +448,6 @@ class avgh1_file(cnth1_file):
                         continue
                     else:
                         s.type_descriptor.append('rsp_incorrect')
-                        s.correct[ev] = False
                         continue
             else: # some kind of stimulus
                 if t in s.case_dict:
@@ -445,12 +455,16 @@ class avgh1_file(cnth1_file):
                     # interpret correctness
                     if ev+1 == s.ev_len: # if the last event
                         # only correct if correct resp is no response
-                        s.correct[ev] = True if s.case_dict[t]['corr_resp'] \
-                            in [0, -1] else False
+                        if s.case_dict[t]['corr_resp'] == 0:
+                            s.correct[ev] = True
                     else:  # if not the last event
-                        # only correct if following resp was correct
-                        s.correct[ev] = True if s.resp_seq[ev+1] == \
-                            s.case_dict[t]['corr_resp'] else False
+                        # only considered correct if following resp was correct
+                        if s.resp_seq[ev+1] == s.case_dict[t]['corr_resp']:
+                            s.correct[ev] = True
+                        # if incorrect, note if due to response omission
+                        elif s.case_dict[t]['corr_resp'] != 0 and \
+                            s.resp_seq[ev+1] == 0:
+                            s.noresp[ev] = True
                 else:
                     s.type_descriptor.append('stm_unknown')
 

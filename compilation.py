@@ -41,6 +41,7 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     }
 
 subcoll_fnames = {'questionnaires': 'questname',
+                  'ssaga': 'questname',
                   'neuropsych': 'testname',
                   }
 

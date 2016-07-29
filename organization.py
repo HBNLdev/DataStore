@@ -4,7 +4,6 @@
 import datetime
 import pymongo
 import pandas as pd
-import file_handling as FH
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 Mdb = MongoConn['COGAt']
@@ -341,9 +340,9 @@ class EEGBehavior(Acquisition):
         Acquisition.__init__(s, I)
 
 
-class SSAGA(Acquisition):
+class Core(Acquisition):
     def_info = {'technique': 'interview'}
-    collection = 'SSAGA'
+    collection = 'core'
 
     part_name = 'question'
     repeat_name = 'followup'
@@ -354,11 +353,11 @@ class SSAGA(Acquisition):
         Acquisition.__init__(s, I)
 
 
-class Core(Acquisition):
-    def_info = {'technique': 'interview'}
-    collection = 'core'
+class Internalizing(Acquisition):
+    def_info = {'technique': 'score'}
+    collection = 'internalizing'
 
-    part_name = 'question'
+    part_name = 'score'
     repeat_name = 'followup'
 
     def __init__(s, info={}):
@@ -374,12 +373,19 @@ class Questionnaire(Acquisition):
     part_name = 'question'
     repeat_name = 'followup'
 
-    def __init__(s, questname, followup, info={}):
+    def __init__(s, questname, followup, session=None, info={}):
         I = s.def_info.copy()
         I.update({'questname': questname})
         I.update({'followup': followup})
+        if session:
+            I.update({'session': session})
         I.update(info)
         Acquisition.__init__(s, I)
+
+
+class SSAGA(Questionnaire):
+
+    collection = 'ssaga'
 
 
 class Subject(MongoBacked):
