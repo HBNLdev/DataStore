@@ -24,22 +24,29 @@ def subjects():
 
 
 def sessions():
+	def join_ufields(row):
+            return '_'.join([row['ID'], row['session']])
     # fast
-    master_mtime = mi.load_master()
-    for char in 'abcdefghijk':
-        sessionDF = mi.master[mi.master[char + '-run'].notnull()]
-        if sessionDF.empty:
-            continue
-        else:
-            sessionDF['session'] = char
-            sessionDF['followup'] = sessionDF.apply(calc_followupcol, axis=1)
-            for col in ['raw', 'date', 'age']:
-                sessionDF[col] = sessionDF[char + '-' + col]
-            for rec in sessionDF.to_dict(orient='records'):
-                so = O.Session(rec)
-                so.storeNaTsafe()
-    sourceO = O.SourceInfo('sessions', (mi.master_path, master_mtime))
-    sourceO.store()
+	master_mtime = mi.load_master()
+	for char in 'abcdefghijk':
+	    sessionDF = mi.master[mi.master[char + '-run'].notnull()]
+	    if sessionDF.empty:
+	        continue
+	    else:
+	        sessionDF['session'] = char
+	        sessionDF['followup'] = sessionDF.apply(calc_followupcol, axis=1)
+	        for col in ['raw', 'date', 'age']:
+	            sessionDF[col] = sessionDF[char + '-' + col]
+	        sessionDF['uID'] = sessionDF.apply(join_ufields, axis=1)
+	        # drop unneeded columns ?
+	        # drop_cols = [col for col in sessionDF.columns if '-age' in col or 
+	        # 	'-date' in col or '-raw' in col or '-run' in col]
+        	# sessionDF.drop(drop_cols, axis=1, inplace=True)
+	        for rec in sessionDF.to_dict(orient='records'):
+	            so = O.Session(rec)
+	            so.storeNaTsafe()
+	sourceO = O.SourceInfo('sessions', (mi.master_path, master_mtime))
+	sourceO.store()
 
 
 def calc_followupcol(row):
@@ -333,6 +340,7 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
 	            csvfileO = FH.ERO_csv(fpath)
 	            file_info = csvfileO.data_for_file()  #filename parsing to here
 	            
+	            # '''
 	            if (file_info['site']=='washu' or \
 	            	file_info['site']=='suny') and \
 					file_info['experiment']=='vp3' and \
@@ -340,7 +348,7 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
 	            	csvfileO.parameters['threshold electrodes']==9:
 	            	print(',', end='')
 	            	continue
-            	
+            	# '''
 
 	            eroFileQ = O.Mdb['EROcsv'].find({'filepath': fpath}, {'_id': 1})
 	            if eroFileQ.count() >= 1:
@@ -361,7 +369,8 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
 	                new_cols = csvfileO.data.columns.difference(joinDF.columns)
 	                if len(new_cols) > 0:
 	                    joinDF = joinDF.join(csvfileO.data, how='outer')
-	            del csvfileO
+	            # del csvfileO
+	            csvfileO = None
 
 	        if joinDF.empty:
 	            print('x', end='')
@@ -372,9 +381,11 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
 	        joinDF['experiment'] = joinDF['uID'].apply(split_field, args=[2])
 
 	        orgO = O.EROpheno(joinDF.to_dict(orient='records'), subdir)
-	        del joinDF
+	        # del joinDF
+	        joinDF = None
 	        orgO.store_joined_bulk()
-	        del orgO
+	        # del orgO
+	        orgO = None
 	        print('.', end='')
     except:
     	print(subdir)

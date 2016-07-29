@@ -194,8 +194,9 @@ def format_EROprojection(conds, freqs, times, chans,
     times = [[str(int(lim)) for lim in lims] for lims in times]
 
     proj = default_EROfields.copy()
-    proj.update({'.'.join([c, m, cond, f[0], f[1], t[0], t[1], 'data', chan]): 1
-                 for c in calc_types for m in measures for cond in conds for f in freqs for t in times for chan in chans})
+    proj.update({'.'.join(['data', c, m, cond, f[0], f[1], t[0], t[1], chan]): 1
+                 for c in calc_types for m in measures for cond in conds
+                 for f in freqs for t in times for chan in chans})
     return proj
 
 

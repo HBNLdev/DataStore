@@ -577,7 +577,7 @@ class mt_file:
     def parse_fileDB(s):
         s.parse_file()
         exp = s.file_info['experiment']
-        ddict = {}
+        ddict = {'data': {} }
         for k in s.data:
             case_convdict = s.case_nums2names[exp]
             case = case_convdict[int(k[0])]
@@ -587,7 +587,7 @@ class mt_file:
                 if type(amp_lat) is tuple:  # if amp / lat tuple
                     inner_ddict.update(
                         {chan: {'amp': amp_lat[0], 'lat': amp_lat[1]}})
-            ddict.update({case + '_' + peak: inner_ddict})
+            ddict['data'].update({case + '_' + peak: inner_ddict})
         s.data = ddict
         s.data.update(s.file_info)
         s.data['ID'] = s.data['id']
@@ -802,6 +802,7 @@ class ERO_csv:
                                                          unknown=s.parameters['unknown']))
 
         s.parameters['unknown'] = list(s.parameters['unknown'])
+        s.parameters['version'] = calc_version
         pwr_type = file_parts[-4].split('-')[0]
         date = file_parts[-1].split('.')[0]
         mod_date = datetime.fromtimestamp(os.path.getmtime(s.filepath))
@@ -817,8 +818,9 @@ class ERO_csv:
                        'frequency min': freq_min,
                        'frequency max': freq_max,
                        'time min': time_min,
-                       'time max': time_max,
-                       'version': calc_version}
+                       'time max': time_max}
+
+
 
     def read_data(s):
         ''' prepare the data field for the database object '''
@@ -861,19 +863,22 @@ class ERO_csv:
         drop_rows = [uID for uID in s.data.index.values if uID in bad_list]
         s.data.drop(drop_rows, inplace=True)
 
-        if 'threshold electrodes' in s.parameters:
-            thresh_str = str(s.parameters['threshold electrodes'])
-        else:
-            thresh_str = 'all'
+        param_str = ''
+        if 'version' in s.parameters:
+            param_str += s.parameters['version']
+        if 'electrodes' in s.parameters:
+            param_str += '-' + str(s.parameters['electrodes'])
+        if 'threshold min time' in s.parameters:
+            param_str += '-' + str(s.parameters['threshold min time'])
 
-        rename_dict = {col: '_'.join([s.phenotype['version']+'-'+thresh_str,
+        rename_dict = {col: '_'.join(['data',
+                          param_str,
                           s.phenotype['power type'],
                           s.exp_info['case'],
                           str(s.phenotype['frequency min']).replace('.','p'),
                           str(s.phenotype['frequency max']).replace('.','p'),
                           str(s.phenotype['time min']),
                           str(s.phenotype['time max']),
-                          'data',
                           col])
                    		for col in s.data.columns}
         s.data.rename(columns=rename_dict, inplace=True)
