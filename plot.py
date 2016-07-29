@@ -216,12 +216,13 @@ def tf(s, measure='power',
             # c = axarr[spi].imshow(rect, aspect='auto', origin='lower',
             #                             cmap=cmap,
             #                             interpolation='sinc')
-            # decent interpolations include none and sinc
-            c_lst.append(c)
-            rect_lst.append(rect)
             # c = axarr[spi].contour(rect, cmap=plt.cm.RdBu_r,
             #                         vmin=-4, vmax=4)
             # plt.clabel(c, inline=1, fontsize=9)
+            # decent interpolations include none and sinc
+            c_lst.append(c)
+            rect_lst.append(rect)
+            
             # cbar = plt.colorbar(c, ax=axarr[spi])
             # cbar.ax.set_ylabel(units, rotation=270)
             ''' ticks and grid '''
@@ -326,7 +327,7 @@ def topo(s, measure='erp', times=list(range(0, 501, 125)),
                 ax_dum += 1
                 im, cn = mne.viz.plot_topomap(topo, info,
                                     cmap=cmap, axes=axarr[ax_dum],
-                                    contours=0, show=False)
+                                    contours=8, show=False)
                 topo_lst.append(topo)
                 im_lst.append(im)
                 ''' labels '''

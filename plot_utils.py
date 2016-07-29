@@ -65,6 +65,8 @@ def nested_strjoin(obj, delim='_'):
             js += str(thing) + delim
     return js
 
+# plot utilities
+
 def blank_topo(in_ax, info):
     ''' create a blank headplot '''
     topo = np.empty(61)
@@ -132,6 +134,9 @@ def plot_arcs(arcs, ax, pair_inds, pos_x, pos_y, cmap, lims=[0, 0.25]):
         arch_lst.append((arcs[pind], arch))
     return arch_lst
 
+
+# colormap utilities
+
 class MidpointNormalize(colors.Normalize):
     ''' create asymmetric norm '''
 
@@ -155,6 +160,8 @@ class ImageFollower(object):
         self.follower.set_cmap(leader.get_cmap())
         self.follower.set_clim(leader.get_clim())
 
+
+# borrowed code
 
 def plot_topomap(data, pos, vmin=None, vmax=None, cmap=None, sensors=True,
                  res=64, axes=None, names=None, show_names=False, mask=None,

@@ -1,4 +1,4 @@
-''' utils for slicing arrays to aid plotting '''
+''' utils for manipulating and slicing arrays to aid plotting '''
 
 import numpy as np
 import itertools
@@ -77,6 +77,7 @@ def basic_slice(a, in_dimval_tups):
 
 
 def handle_pairs(s, pairs_arg):
+    ''' handle a pairs argument for plot.arctopo '''
     if isinstance(pairs_arg, list):
         return list(map(s.cohpair_lbls.index, pairs_arg))
     elif pairs_arg == 'all':
@@ -92,6 +93,7 @@ def handle_by(s, by_stage, d_dims, d_dimlvls):
         of the data will be distributed across a plotting object.
         returns lists of the dimension, indices, and labels requested.
         if given a list, create above lists as products of requests '''
+
     if len(by_stage) > 1:
         # create list versions of the dim, vals, and labels
         tmp_dims, tmp_vals, tmp_labels = [], [], []
