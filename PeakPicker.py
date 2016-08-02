@@ -40,7 +40,7 @@ import EEGdata
 
 from bokeh.embed import autoload_server
 from bokeh.document import Document
-from bokeh.plotting import Figure, hplot, vplot, output_server
+from bokeh.plotting import figure, hplot, vplot, output_server
 from bokeh.models import ( ColumnDataSource, CustomJS,
 						   Plot, Grid, Renderer,
 						   BoxSelectTool, TapTool, BoxZoomTool, ResetTool,
@@ -79,7 +79,9 @@ app_data['display props'] = {'marker size':8,
 						'pick dash':[4,1],
 						'pick width':2,
 						'current color':'#ffbc00',
-						'picked color':'#886308' }
+						'picked color':'#886308',
+						'time range':[-10,850]
+ }
 
 #userName for store path
 if '_' in user:
@@ -127,7 +129,8 @@ def load_file(next=False, initialize=False, reload_flag=False):
 		app_data['current experiment'] = experiment
 		expD = app_data[experiment]
 		expD['eeg'] =  eeg
-		data_sourceD, peak_sourcesD = expD['eeg'].make_data_sources(empty_flag=initialize)
+		data_sourceD, peak_sourcesD = expD['eeg'].make_data_sources(empty_flag=initialize, 
+														time_range=app_data['display props']['time range'])
 
 		if initialize: # initialize
 			expD['peak sources'] = { case:ColumnDataSource( data = D ) for case,D in peak_sourcesD.items() }				
@@ -335,7 +338,7 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 	plot.title.text = title
 	plot.title.offset = 0
 	plot.title.align='center'
-	#plot.title_text_baseline='top'
+	plot.title_text_baseline='top'
 	plot.min_border_left = props['min_border']
 	plot.min_border_right = props['min_border']
 	plot.min_border_top = props['min_border']
@@ -349,10 +352,11 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 	plot.outline_line_width = None
 	plot.outline_line_color = None
 
-	app_data['dummy_plot'] = Cross( x='dummy', y='dummy', name='dummy')
-	app_data['dummy_plotR'] = plot.add_glyph(dummy_source, app_data['dummy_plot'])
-
 	if not dummy:
+		# dummy renderer to allow for box tool on all axes
+		app_data['dummy_plot'] = Cross( x='dummy', y='dummy', name='dummy')
+		app_data['dummy_plotR'] = plot.add_glyph(dummy_source, app_data['dummy_plot'])
+		
 		# Axes
 		xAxis = LinearAxis()#x_range_name='sharedX')
 		#xTicker = AdaptiveTicker(base=10,mantissas=[0,4],min_interval=50)
@@ -411,8 +415,8 @@ def make_plot(plot_setup, ranges, experiment, tool_generators):
 			plot.add_glyph(app_data[experiment]['data source'],line)
 
 
-	if PS['tool generators']:
-		plot.add_tools(*[ g() for g in PS['tool generators'] ])
+		if PS['tool generators'] :
+			plot.add_tools(*[ g() for g in PS['tool generators'] ])
 
 
 	# if dummy:
@@ -836,8 +840,8 @@ def build_experiment_tab(experiment):
 				props=plot_props,  mode='server',
 				source=expD['data source'],
 				tool_gen=plot_tool_generators,
-				style='layout'
-				)
+				style='layout',
+				time_range=app_data['display props']['time range']				)
 
 	# Ranges
 	expD['y range'] = Range1d(*gridplots_setup[0][1]['props']['yrange'])

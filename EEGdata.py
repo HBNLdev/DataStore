@@ -133,7 +133,9 @@ class avgh1:
 	def apply_peak(s, case, peak):
 		pass
 
-	def prepare_plot_data(s):
+	def prepare_plot_data(s, time_range='all'):
+		''' time_range can be a list of start,finish
+		'''
 		
 		s.extract_exp_data()
 		
@@ -141,7 +143,15 @@ class avgh1:
 		# times = np.array(range(potentials.shape[2]))/s.samp_freq
 		start_ms = -s.exp['pre_stim_time_ms']
 		end_ms = s.exp['post_stim_time_ms']
-		times = np.linspace(start_ms, end_ms, potentials.shape[2] + 1)[1:]
+		times = np.linspace(start_ms, end_ms, potentials.shape[2] + 1)[:-1]
+		delta = times[1] - times[0]
+		times = times-delta
+
+		if time_range !='all':
+			start_ind= np.argmin(abs(times-time_range[0]))
+			fin_ind = np.argmin(abs(times-time_range[1]))
+			times = times[start_ind:fin_ind]
+			potentials=potentials[:,:,start_ind:fin_ind]
 
 		return times, potentials
 
@@ -299,7 +309,7 @@ class avgh1:
 		show(g)
 
 	def selected_cases_by_channel(s,cases='all', channels='all', props={}, 
-			mode='notebook', source=None,
+			mode='notebook', source=None, time_range='all',
 			tools=[], tool_gen=[], style='grid'):
 
 		# Setup properties for plots 
@@ -319,7 +329,7 @@ class avgh1:
 		if cases == 'all':
 			cases = s.case_list
 
-		tms,potentials = s.prepare_plot_data()
+		tms,potentials = s.prepare_plot_data(time_range=time_range)
 
 		props['times'] = tms
 
@@ -424,8 +434,8 @@ class avgh1:
 		else:
 			return
 
-	def make_data_sources(s,channels='all',empty_flag=False):
-		times, potentials = s.prepare_plot_data()
+	def make_data_sources(s,channels='all',empty_flag=False, time_range='all'):
+		times, potentials = s.prepare_plot_data(time_range=time_range)
 		s.extract_case_data()
 		s.extract_mt_data()
 
