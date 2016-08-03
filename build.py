@@ -1,4 +1,4 @@
-'''build collections'''
+''' build collections '''
 
 import os
 from datetime import datetime
@@ -19,7 +19,7 @@ def subjects():
     for rec in mi.master.to_dict(orient='records'):
         so = O.Subject(rec)
         so.storeNaTsafe()
-    sourceO = O.SourceInfo('subjects', (mi.master_path, master_mtime))
+    sourceO = O.SourceInfo(O.Subject.collection, (mi.master_path, master_mtime))
     sourceO.store()
 
 
@@ -45,7 +45,7 @@ def sessions():
             for rec in sessionDF.to_dict(orient='records'):
                 so = O.Session(rec)
                 so.storeNaTsafe()
-    sourceO = O.SourceInfo('sessions', (mi.master_path, master_mtime))
+    sourceO = O.SourceInfo(O.Session.collection, (mi.master_path, master_mtime))
     sourceO.store()
 
 
@@ -75,7 +75,7 @@ def erp_peaks():
         mtO.parse_fileDB()
         erpO = O.ERPPeak(mtO.data)
         erpO.store()
-    sourceO = O.SourceInfo('ERPpeaks', list(zip(mt_files, datemods)))
+    sourceO = O.SourceInfo(O.ERPPeak.collection, list(zip(mt_files, datemods)))
     sourceO.store()
 
 
@@ -86,7 +86,8 @@ def neuropsych_xml():
         xmlO = FH.neuropsych_xml(fp)
         nsO = O.Neuropsych('all', xmlO.data)
         nsO.store()
-    sourceO = O.SourceInfo('neuropsych', list(zip(xml_files, datemods)), 'all')
+    sourceO = O.SourceInfo(O.Neuropsych.collection,
+                            list(zip(xml_files, datemods)), 'all')
     sourceO.store()
 
 
@@ -98,7 +99,7 @@ def neuropsych_TOLT():
         toltO = FH.tolt_summary_file(fp)
         nsO = O.Neuropsych('TOLT', toltO.data)
         nsO.store()
-    sourceO = O.SourceInfo('neuropsych', list(
+    sourceO = O.SourceInfo(O.Neuropsych.collection, list(
         zip(tolt_files, datemods)), 'TOLT')
     sourceO.store()
 
@@ -111,7 +112,7 @@ def neuropsych_CBST():
         cbstO = FH.cbst_summary_file(fp)
         nsO = O.Neuropsych('CBST', cbstO.data)
         nsO.store()
-    sourceO = O.SourceInfo('neuropsych', list(
+    sourceO = O.SourceInfo(O.Neuropsych.collection, list(
         zip(cbst_files, datemods)), 'CBST')
     sourceO.store()
 
@@ -123,7 +124,7 @@ def questionnaires():
     for qname in qi.knowledge.keys():
         print(qname)
         qi.import_questfolder(qname)
-        qi.match_fups2sessions(qname, qi.knowledge, 'questionnaires')
+        qi.match_fups2sessions(qname, qi.knowledge, O.Questionnaire.collection)
 
 def ssaga():
     ''' import all session-based questionnaire info related to SSAGA '''
@@ -131,11 +132,11 @@ def ssaga():
     for qname in qi.knowledge_ssaga.keys():
         print(qname)
         qi.import_questfolder_ssaga(qname)
-        qi.match_fups2sessions(qname, qi.knowledge_ssaga, 'ssaga')
+        qi.match_fups2sessions(qname, qi.knowledge_ssaga, O.SSAGA.collection)
 
 # so far, subject-based questionnaire info each has its own build method
 # have so far: core, internalizing
-# missing: fams, fham4, ph4master, rels, vcuext
+# missing: fams, fham4, ph4master, rels
 
 def core():
     # fast
@@ -147,7 +148,7 @@ def core():
     for drec in df.to_dict(orient='records'):
         ro = O.Core(drec)
         ro.store()
-    sourceO = O.SourceInfo('core', (path, datemod))
+    sourceO = O.SourceInfo(O.Core.collection, (path, datemod))
     sourceO.store()
 
 def internalizing():
@@ -159,7 +160,19 @@ def internalizing():
     for drec in tqdm(df.to_dict(orient='records')):
         ro = O.Internalizing(drec)
         ro.store()
-    sourceO = O.SourceInfo('internalizing', (path, datemod))
+    sourceO = O.SourceInfo(O.Internalizing.collection, (path, datemod))
+    sourceO.store()
+
+def externalizing():
+    folder = '/active_projects/mike/zork-ph4-65-bl/subject/vcuext/'
+    file = 'vcu_ext_all_121112.sas7bdat.csv'
+    path = folder + file
+    datemod = datetime.fromtimestamp(os.path.getmtime(path))
+    df = qi.df_fromcsv(path, 'IND_ID')
+    for drec in tqdm(df.to_dict(orient='records')):
+        ro = O.Externalizing(drec)
+        ro.store()
+    sourceO = O.SourceInfo(O.Externalizing.collection, (path, datemod))
     sourceO.store()
 
 # end subject-based questionnaire stuff

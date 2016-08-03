@@ -1,5 +1,4 @@
-''' Compilation tools for HBNL
-'''
+''' compilation tools for the HBNL '''
 
 import numpy as np
 import pandas as pd
@@ -58,6 +57,8 @@ default_EROfields = {'ID': 1, 'session': 1, 'uID': 1, '_id': 0}
 
 
 def populate_subcolldict():
+    ''' make dict whose keys are collections and values are lists of
+        subcollections (if they exist) '''
     subcoll_dict = {coll: O.Mdb[coll].distinct(subcoll_fnames[coll])
                     if coll in subcoll_fnames.keys() else None
                     for coll in O.Mdb.collection_names()}
@@ -67,15 +68,18 @@ subcoll_dict = populate_subcolldict()
 
 
 def display_samples():
+    ''' display available subject / session samples '''
     lst = sorted([(k, get_subjectdocs(k).count()) for k in subjects_queries])
     pp.pprint(lst)
 
 
 def display_dbcontents():
+    ''' display the contents of the database '''
     pp.pprint(subcoll_dict)
 
 
 def get_subjectdocs(sample, sparsify=False):
+    ''' given sample, prepare matching docs from the subjects collection '''
     if sample not in subjects_queries.keys():
         print('sample incorrectly specified, the below are valid')
         pp.pprint(sorted(list(subjects_queries.keys())))
@@ -91,6 +95,7 @@ def get_subjectdocs(sample, sparsify=False):
 
 
 def get_sessiondocs(sample, followups=None, sparsify=False):
+    ''' given sample, prepare matching docs from the sessions collection '''
     if sample not in subjects_queries.keys():
         print('sample incorrectly specified, the below are valid')
         pp.pprint(sorted(list(subjects_queries.keys())))
@@ -112,6 +117,7 @@ def get_sessiondocs(sample, followups=None, sparsify=False):
 
 
 def check_collinputs(coll, subcoll=None, mode='program'):
+    ''' verify collection / sub-collection is in DB '''
     result = True
     if coll not in subcoll_dict.keys():
         result = False
@@ -130,6 +136,7 @@ def check_collinputs(coll, subcoll=None, mode='program'):
 
 
 def display_collcontents(coll, subcoll=None):
+    ''' display contents of a collection '''
     ck_res = check_collinputs(coll, subcoll, mode='interactive')
     if not ck_res:
         return
@@ -142,6 +149,7 @@ def display_collcontents(coll, subcoll=None):
 
 
 def get_colldocs(coll, subcoll=None, add_query={}, add_proj={}):
+    ''' get documents from a collection/sub-collection '''
     ck_res = check_collinputs(coll, subcoll, mode='interactive')
     if not ck_res:
         return
@@ -159,6 +167,7 @@ def get_colldocs(coll, subcoll=None, add_query={}, add_proj={}):
 
 
 def buildframe_fromdocs(docs, inds=['ID','session']):
+    ''' build a dataframe from a list of docs '''
     df = pd.DataFrame.from_records(
         [O.flatten_dict(d) for d in list(docs)])
     for ind in inds:
@@ -167,12 +176,14 @@ def buildframe_fromdocs(docs, inds=['ID','session']):
                 df.set_index(ind, inplace=True)
             else:
                 df.set_index(ind, append=True, inplace=True)
-    # drop empty columns
-    df.dropna(axis=1, how='all', inplace=True)
+    
+    df.dropna(axis=1, how='all', inplace=True) # drop empty columns
+    df.sort_index(inplace=True) # sort
     return df
 
 
 def format_sparseproj(coll, subcoll=None):
+    ''' format a projection to sparsify a collection / subcollection '''
     if coll in sparse_addmaps.keys():
         proj = {field: 1 for field in sparse_addmaps[coll]}
     else:
@@ -181,6 +192,7 @@ def format_sparseproj(coll, subcoll=None):
 
 
 def format_ERPprojection(conds_peaks, chans, measures=['amp', 'lat']):
+    ''' format a projection to retrieve specific ERP peak information '''
     proj = default_ERPfields.copy()
     proj.update({'.'.join([cp, chan, m]): 1
                  for cp in conds_peaks for chan in chans for m in measures})
@@ -189,6 +201,7 @@ def format_ERPprojection(conds_peaks, chans, measures=['amp', 'lat']):
 
 def format_EROprojection(conds, freqs, times, chans,
         measures=['evo', 'tot'], calc_types=['v60-all']):
+    ''' format a projection to retrieve specific ERO information '''
 
     freqs = [[str(float(lim)).replace('.', 'p') for lim in lims]
              for lims in freqs]
@@ -201,17 +214,17 @@ def format_EROprojection(conds, freqs, times, chans,
     return proj
 
 
-def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
+def prepare_joindata(keyDF, coll, subcoll=None, add_query={}, add_proj={},
                     left_join_inds=['ID'], right_join_inds=['ID'], 
-                    id_field='ID', drop_empty=True,
-                    how='left', flatten=True, prefix=None):
+                    id_field='ID', flatten=True, prefix=None):
+    ''' given a "key" dataframe and target collection,
+        prepare a dataframe of corresponding info '''
+
     if not prefix and prefix != '':
         if subcoll is not None:
             prefix = subcoll[:3] + '_'
         else:
             prefix = coll[:3] + '_'
-
-    keyDF = keyDF_in.copy()
 
     query = {id_field: {'$in': list(
         keyDF.index.get_level_values(right_join_inds[0]))}}
@@ -228,8 +241,27 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
 
     prepare_indices(newDF, left_join_inds)
     newDF.columns = [prefix + c for c in newDF.columns]
+    newDF.dropna(axis=1, how='all', inplace=True) # drop empty columns
+    newDF.sort_index(inplace=True)                # sort
+
+    return newDF
+
+
+def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
+                    left_join_inds=['ID'], right_join_inds=['ID'], 
+                    id_field='ID', flatten=True, prefix=None,
+                    drop_empty=True, how='left'):
+    ''' given a "key" dataframe and target collection,
+        join corresponding info '''
+
+    keyDF = keyDF_in.copy()
+
+    newDF = prepare_joindata(keyDF_in, coll, subcoll, add_query, add_proj,
+                    left_join_inds, right_join_inds, 
+                    id_field, flatten, prefix)
 
     prepare_indices(keyDF, right_join_inds)
+
     jDF = keyDF.join(newDF, how=how)
 
     if drop_empty:  # remove duplicate & empty rows, empty columns
@@ -241,6 +273,7 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
 
 
 def prepare_indices(df, join_inds):
+    ''' make certain a dataframe has certain indices '''
     for ji in join_inds:
         if ji not in df.index.names:
             if pd.isnull(df[ji]).values.any():
@@ -250,6 +283,7 @@ def prepare_indices(df, join_inds):
 
 
 def fix_indexcol(s):
+    ''' convert nans in a column in preparation for creating an index '''
     if s is np.NaN:  # does this cover all cases?
         return 'x'
     else:

@@ -366,6 +366,20 @@ class Internalizing(Acquisition):
         Acquisition.__init__(s, I)
 
 
+class Externalizing(Acquisition):
+    def_info = {'technique': 'score'}
+    collection = 'externalizing'
+
+    part_name = 'score'
+    repeat_name = 'followup'
+
+    def __init__(s, info={}):
+        I = s.def_info.copy()
+        I.update(info)
+        s.data = I
+        # Acquisition.__init__(s, I)
+
+
 class Questionnaire(Acquisition):
     def_info = {'technique': 'questionnaire'}
     collection = 'questionnaires'
