@@ -14,12 +14,17 @@ from plot_utils import (subplot_heuristic, figsize_heuristic,
                     MidpointNormalize,
                     blank_topo, plot_arcs, ordinalize_one)
 
+''' initialize matplotlib backend settings '''
 # print(mpl.matplotlib_fname())
 mpl.rcParams['svg.fonttype'] = 'none' # none, path, or svgfont
 # mpl.rcParams['font.family'] = 'sans-serif'
 # mpl.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Helvetica', 'Verdana',
 #     'Bitstream Vera Sans', 'Lucida Grande', 'Geneva', 'Lucid',
 #     'Arial', 'Avant Garde', 'sans-serif']
+titlefont_sz = 16
+titlefont_wt = 'bold'
+stitlefont_sz = 12
+stitlefont_wt = 'medium'
 
 ''' dictionary mapping measures to their object info '''
 measure_pps = {'erp':   {'data': 'erp', 'd_dims': 'erp_dims',
@@ -124,7 +129,7 @@ def erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
     for fi, fval in enumerate(f_vals):
         f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
                                 sharex=True, sharey=True, figsize=figsize)
-        f.suptitle(f_lbls[fi], fontsize=16, fontweight='bold')
+        f.suptitle(f_lbls[fi], fontsize=titlefont_sz, fontweight=titlefont_wt)
         try:
             axarr = axarr.ravel()
         except:
@@ -133,12 +138,12 @@ def erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
             for gi, gval in enumerate(g_vals):
                 vals = [fval, spval, gval]
                 dims = [f_dim[fi], sp_dim[spi], g_dim[gi]]
+                dimval_tups = [(d,v) for d,v in zip(dims, vals)]
                 try:
-                    dimval_tups = [(d,v) for d,v in zip(dims, vals)]
                     line = basic_slice(data, dimval_tups)
                     print('slice')
                 except:
-                    line = compound_take(data, vals, dims)
+                    line = compound_take(data, dimval_tups)
                     print('compound take')
                 while len(line.shape) > 1:
                     line = line.mean(axis=0)
@@ -152,14 +157,14 @@ def erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
                                 alpha=0.5, linewidth=0,
                                 facecolor=l.get_color())
             axarr[spi].grid(True)
-            axarr[spi].set_title(sp_lbls[spi], fontweight='bold')
+            axarr[spi].set_title(sp_lbls[spi], fontweight=stitlefont_wt)
             axarr[spi].legend(loc='upper left')
             axarr[spi].set_xticks(s.time_ticks_pt_erp)
             axarr[spi].set_xticklabels(s.time_ticks_ms)
-            axarr[spi].set_xlabel('Time (s)', fontweight='bold')
+            axarr[spi].set_xlabel('Time (s)', fontweight=stitlefont_wt)
             if spi % sp_dims[1] == 0:
                 axarr[spi].set_ylabel('Potential (' + s.pot_units + ')',
-                                                fontweight='bold')
+                                                fontweight=stitlefont_wt)
             axarr[spi].axhline(0, color='k', linestyle='--')
             axarr[spi].axvline(s.zero, color='k', linestyle='--')
             axarr[spi].set_xlim(s.time_plotlims)
@@ -189,7 +194,7 @@ def tf(s, measure='power',
     for fi, fval in enumerate(f_vals):
         f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
                                 sharex=True, sharey=True, figsize=figsize)
-        f.suptitle(f_lbls[fi], fontsize=16, fontweight='bold')
+        f.suptitle(f_lbls[fi], fontsize=titlefont_sz, fontweight=titlefont_wt)
         try:
             axarr = axarr.ravel()
         except:
@@ -199,14 +204,14 @@ def tf(s, measure='power',
         for spi, spval in enumerate(sp_vals):
             vals = [fval, spval]
             dims = [f_dim[fi], sp_dim[spi]]
+            dimval_tups = [(d,v) for d,v in zip(dims, vals)]
             try:
-                dimval_tups = [(d,v) for d,v in zip(dims, vals)]
                 print(dimval_tups)
                 rect = basic_slice(data, dimval_tups)
                 print('slice')
                 print(rect.shape)
             except:
-                rect = compound_take(data, vals, dims)
+                rect = compound_take(data, dimval_tups)
                 print('done compound take')
             while len(rect.shape) > 2:
                 rect = rect.mean(axis=0)
@@ -234,10 +239,10 @@ def tf(s, measure='power',
             axarr[spi].axvline(s.zero_tf, color='k', linestyle='--')
             axarr[spi].set_xlim(s.time_tf_plotlims)
             ''' labels and title '''
-            axarr[spi].set_xlabel('Time (s)', fontweight='bold')
+            axarr[spi].set_xlabel('Time (s)', fontweight=stitlefont_wt)
             if spi % sp_dims[1] == 0:
-                axarr[spi].set_ylabel('Frequency (Hz)', fontweight='bold')
-            axarr[spi].set_title(sp_lbls[spi], fontweight='bold')
+                axarr[spi].set_ylabel('Frequency (Hz)', fontweight=stitlefont_wt)
+            axarr[spi].set_title(sp_lbls[spi], fontweight=stitlefont_wt)
 
         norm = None
         rects = np.stack(rect_lst, axis=-1)
@@ -260,7 +265,7 @@ def tf(s, measure='power',
             cbar = plt.colorbar(c, ax=axarr[spi])
             if spi % sp_dims[1] == sp_dims[1] - 1:
                 cbar.ax.set_ylabel(units, rotation=270, va='bottom',
-                                        fontweight='bold')
+                                        fontweight=stitlefont_wt)
 
         ''' colorbar '''
         # plt.subplots_adjust(right=0.85)
@@ -301,7 +306,7 @@ def topo(s, measure='erp', times=list(range(0, 501, 125)),
     for fi, fval in enumerate(f_vals):
         f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
                                 sharex=True, sharey=True, figsize=figsize)
-        f.suptitle(f_lbls[fi], fontsize=16, fontweight='bold')
+        f.suptitle(f_lbls[fi], fontsize=titlefont_sz, fontweight=titlefont_wt)
         try:
             axarr = axarr.ravel()
         except:
@@ -319,7 +324,7 @@ def topo(s, measure='erp', times=list(range(0, 501, 125)),
                     topo = basic_slice(data, dimval_tups)
                     print('slice')
                 except:
-                    topo = compound_take(data, vals, dims)
+                    topo = compound_take(data, dimval_tups)
                     print('compound take')
                 mean_dims = np.where([d!=final_dim for d in d_dims])
                 topo = topo.mean(axis=tuple(mean_dims[0]))
@@ -358,7 +363,7 @@ def topo(s, measure='erp', times=list(range(0, 501, 125)),
         plt.subplots_adjust(right=0.85)
         cbar_ax = f.add_axes([0.9, 0.15, 0.03, 0.75])
         cbar = plt.colorbar(im, cax=cbar_ax)
-        cbar.ax.set_ylabel(units, rotation=270, fontweight='bold')
+        cbar.ax.set_ylabel(units, rotation=270, fontweight=stitlefont_wt)
         if savedir:
             save_fig(s, savedir, ptype, measure, f_lbls[fi])
 
@@ -381,6 +386,9 @@ def arctopo(s, pairs='all',
                            'eeg', s.montage)
 
     f_dim, f_vals, f_lbls = handle_by(s, figure_by, d_dims, d_dimlvls)
+    print('~~~~')
+    print(f_dim, '\n', f_vals, '\n', f_lbls)
+    print('~~~~')
     r_dim, r_vals, r_lbls = handle_by(s, row_by, d_dims, d_dimlvls)
     time_by = {'timepoint': times}
     t_dim, t_vals, t_lbls = handle_by(s, time_by, d_dims, d_dimlvls)
@@ -396,7 +404,7 @@ def arctopo(s, pairs='all',
     for fi, fval in enumerate(f_vals):
         f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
                                 sharex=True, sharey=True, figsize=figsize)
-        f.suptitle(f_lbls[fi], fontsize=16, fontweight='bold')
+        f.suptitle(f_lbls[fi], fontsize=titlefont_sz, fontweight=titlefont_wt)
         try:
             axarr = axarr.ravel()
         except:
@@ -414,7 +422,7 @@ def arctopo(s, pairs='all',
                     arcs = basic_slice(data, dimval_tups)
                     print('slice')
                 except:
-                    arcs = compound_take(data, vals, dims)
+                    arcs = compound_take(data, dimval_tups)
                     print('compound take')
                 mean_dims = np.where([d!=final_dim for d in d_dims])
                 arcs = arcs.mean(axis=tuple(mean_dims[0]))
@@ -461,6 +469,6 @@ def arctopo(s, pairs='all',
         mapper = plt.cm.ScalarMappable(cmap=cmap)
         mapper.set_array([vmin, vmax])
         cbar = plt.colorbar(mapper, cax=cbar_ax)
-        cbar.ax.set_ylabel(units, rotation=270, fontweight='bold')
+        cbar.ax.set_ylabel(units, rotation=270, fontweight=stitlefont_wt)
         if savedir:
             save_fig(s, savedir, ptype, measure, f_lbls[fi])

@@ -81,23 +81,11 @@ def create_arc(pt1, pt2, color=(0, 0, 0), linewidth=1, alpha=1):
     x0, y0 = pt1
     x1, y1 = pt2
     midpoint = ((x0 + x1)/2, (y0 + y1)/2)
-    hdist = 0.1
     vdist = np.linalg.norm(np.array((x0, y0)) - np.array((x1, y1)))
+    hdist = 0.1 + (vdist / 10) # this works pretty good?
     angle = np.degrees(np.arctan2((x1 - x0), -(y1 - y0)))
     return Arc(midpoint, hdist, vdist, angle, 90, 270, color=color,
               linewidth=linewidth, alpha=alpha)
-
-def ordinalize(data, size=256, lims=[0, 0.25]):
-    ''' given data, ordinalize it to a given index size '''
-    if lims:
-        vmin, vmax = lims
-    else:
-        vmin, vmax = data.min(), data.max()
-    data_prop = (data - vmin) / (vmax -  vmin)
-    data_prop_inds = (data_prop * (size-1)).round().astype(int)
-    data_prop_inds[data_prop_inds < 0] = 0
-    data_prop_inds[data_prop_inds > size - 1] = size - 1
-    return data_prop_inds, vmin, vmax
 
 def ordinalize_one(num, size, lims, mid=None):
     ''' given datum, ordinalize it to a given index size '''
@@ -119,9 +107,21 @@ def ordinalize_one(num, size, lims, mid=None):
         data_prop_ind = size - 1
     return data_prop_ind, abs_prop
 
+def ordinalize_many(data, size=256, lims=[0, 0.25]):
+    ''' given data, ordinalize it to a given index size '''
+    if lims:
+        vmin, vmax = lims
+    else:
+        vmin, vmax = data.min(), data.max()
+    data_prop = (data - vmin) / (vmax -  vmin)
+    data_prop_inds = (data_prop * (size-1)).round().astype(int)
+    data_prop_inds[data_prop_inds < 0] = 0
+    data_prop_inds[data_prop_inds > size - 1] = size - 1
+    return data_prop_inds, vmin, vmax
+
 def plot_arcs(arcs, ax, pair_inds, pos_x, pos_y, cmap, lims=[0, 0.25]):
     ''' given 1d array of connection strengths, plot as colored arcs '''
-    arc_inds, vmin, vmax = ordinalize(arcs, cmap.N, lims)
+    arc_inds, vmin, vmax = ordinalize_many(arcs, cmap.N, lims)
     lims = np.array( [vmin, vmax] )
     cmap_array = cmap(range(cmap.N))
     arch_lst = []

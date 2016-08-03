@@ -19,32 +19,39 @@ def convert_ms(time_array, ms):
     ''' given time array, find index nearest to given time value '''
     return np.argmin(np.fabs(time_array - ms))
 
-def compound_take(a, vals, dims):
+def compound_take(a, dimval_tups):
     ''' given array, apply multiple indexing operations '''
-    def apply_take(a, v, d):
+    def apply_take(a, d, v):
         if isinstance(v, int) or isinstance(v, np.int64):
-            return a.take([v], d)
+            return a.take([v], d) # stand-in for expand_dims
         else:
             return a.take(v, d)
     # print(a.shape)
-    for v, d in zip(vals, dims):
+    for d, v in dimval_tups:
         if isinstance(v, tuple): # reserved for itertools.product-takes
-            for vp, dp in zip(v, d):
+            for dp, vp in zip(d, v):
                 if isinstance(vp, dict): # reserved for operation-takes
                     (op, lvls), = vp.items()
                     if op == 'minus':
-                        a = apply_take(a, lvls[0], dp) - \
-                            apply_take(a, lvls[1], dp)
+                        a = apply_take(a, dp, lvls[0]) - \
+                            apply_take(a, dp, lvls[1])
                         # print('level subtraction')
                 else:
-                    a = apply_take(a, vp, dp)
+                    a = apply_take(a, dp, vp)
         elif isinstance(v, dict): # reserved for operation-takes
             (op, lvls), = v.items()
             if op == 'minus':
-                a = apply_take(a, lvls[0], d) - apply_take(a, lvls[1], d)
+                try: # assume singleton indices
+                    a = apply_take(a, d, lvls[0]) - apply_take(a, d, lvls[1])
+                except ValueError:
+                    print('level subtraction with mean')
+                    a = apply_take(a, d, lvls[0]).mean(d) - \
+                        apply_take(a, d, lvls[1]).mean(d)
+                    a = np.expand_dims(a, axis=d)
+                    print(a.shape)
                 # print('level subtraction')
         else:
-            a = apply_take(a, v, d)
+            a = apply_take(a, d, v)
         # print(a.shape)
     return a
 
@@ -63,13 +70,21 @@ def basic_slice(a, in_dimval_tups):
     
     # build the slice list
     dimval_tups.sort(reverse=True) # sort descending by dims
+    print('~~~slice time~~~')
     for d, v in dimval_tups:
         try:
             v[1] # for non-singleton vals
-            slicer[d] = v
+            if type(v) == range:
+                print('got a range')
+                slicer[d] = slice(v.start, v.stop, v.step)
+            else:
+                slicer[d] = v
         except: # for singleton vals
             print('singleton dim', d)
-            slicer[d] = v
+            if type(v) == np.ndarray:
+                slicer[d] = v[0]
+            else:
+                slicer[d] = v
             slicer.insert(d+1, np.newaxis)
     
     print(slicer)
@@ -118,7 +133,11 @@ def interpret_by(s, by_stage, data_dims, data_dimlvls):
     if by_stage[0] in data_dims:  # if variable is in data dims
         dim = data_dims.index(by_stage[0])
         print('data in dim', dim)
-        if by_stage[1]: # if levels are specified
+        if by_stage[1] == 'all': # if levels were not specified
+            labels = data_dimlvls[dim]
+            vals = list(range(len(labels)))
+            print('iterate across available vals including', vals)
+        else: # if levels were specified
             labels = by_stage[1]
             if data_dimlvls[dim].dtype == np.float64: # if array data
                 vals = []
@@ -149,23 +168,28 @@ def interpret_by(s, by_stage, data_dims, data_dimlvls):
                     else:
                         vals.append(np.where(data_dimlvls[dim]==lbl)[0])
             print('vals to iterate on are', vals)
-        else: # if levels were not specified, iterate across all available
-            labels = data_dimlvls[dim]
-            vals = list(range(len(labels)))
-            print('iterate across available vals including', vals)
     elif by_stage[0] in s.demog_df.columns:  # if variable in demog dims
         dim = data_dims.index('subject')
         print('demogs in', dim)
-        if by_stage[1]:
-            labels = by_stage[1]
-            vals = [np.where(s.demog_df[by_stage[0]] == lbl)[0]
-                    for lbl in labels]
-            print('vals to iterate on are', vals)
-        else:
+        if by_stage[1] == 'all':
             labels = s.demog_df[by_stage[0]].unique()
             vals = [np.where(s.demog_df[by_stage[0]].values == lbl)[0]
                     for lbl in labels]
             print('iterate across available vals including', vals)
+        else:
+            labels = by_stage[1]
+            vals = []
+            for lbl in labels:
+                if isinstance(lbl, dict):
+                    (op, lvls), = lbl.items()
+                    vals.append({op: [np.where(s.demog_df[by_stage[0]]==l)[0]
+                                                for l in lvls]})
+                elif isinstance(lbl, list):
+                    vals.append([np.where(s.demog_df[by_stage[0]]==lb)[0][0]
+                                                for lb in lbl])
+                else:
+                    vals.append(np.where(s.demog_df[by_stage[0]]==lbl)[0])
+            print('vals to iterate on are', vals)
     else:
         print('variable not found in data or demogs')
         raise

@@ -9,7 +9,10 @@ import numpy as np
 import pandas as pd
 import mne
 
-from array_utils import convert_ms, baseline_amp, baseline_tf
+from array_utils import (convert_ms, baseline_amp, baseline_tf, handle_by,
+                             basic_slice, compound_take)
+from plot import measure_pps, get_plotparams
+from plot_utils import nested_strjoin
 
 # values are tuples of h5py fieldname and datatype
 opt_info = {'Options path':                 ('optpath', 'text'),
@@ -373,3 +376,39 @@ class Results:
                         np.array(s.params['Condition labels'], dtype=object),
                         np.array(s.montage.ch_names, dtype=object),
                         s.freq, s.time_tf)
+
+
+    def save_mean(s, measure, spec_dict):
+        ''' save data-means and add as columns in s.demog_df '''
+        final_dim = 'subject'
+
+        if measure in measure_pps.keys():
+            data, d_dims, d_dimlvls, units, lims, cmap = \
+                get_plotparams(s, measure)
+
+        # TODO: verify spec_dict accords with data_dims
+        
+        dims, vals, lbls = handle_by(s, spec_dict, d_dims, d_dimlvls)
+
+        amean_lst = []
+        for dim_set, val_set, lbl_set in zip(dims, vals, lbls):
+            dimval_tups = [(d, v) for d, v in zip(dim_set, val_set)]
+            try:
+                amean = basic_slice(data, dimval_tups)
+                print('done slice')
+            except:
+                amean = compound_take(data, dimval_tups)
+                print('done compound take')
+            
+            mean_dims = np.where([d!=final_dim for d in d_dims])
+            amean = amean.mean(axis=tuple(mean_dims[0]))
+            
+            amean_lst.append(amean)
+
+        amean_stack = np.stack(amean_lst, axis=-1)
+        lbl_lst = [nested_strjoin(lbl_set) for lbl_set in lbls]
+
+        amean_df = pd.DataFrame(amean_stack,
+                        index=s.demog_df.index, columns=lbl_lst)
+
+        s.demog_df = pd.concat([s.demog_df, amean_df], axis=1)
