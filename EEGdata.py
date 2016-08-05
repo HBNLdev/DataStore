@@ -328,6 +328,11 @@ class avgh1:
 		s.extract_case_data()
 		if cases == 'all':
 			cases = s.case_list
+		if channels == 'all':
+			channels = s.electrodes
+		elif channels == 'core_31':
+			channels = s.electrodes[0:31]
+			channels.append(s.electrodes[63])
 
 		tms,potentials = s.prepare_plot_data(time_range=time_range)
 
@@ -342,11 +347,7 @@ class avgh1:
 			props['colors'] = brewer['Spectral'][len(cases)]
 		else: props['colors'] = ['#DD2222','#66DD66','#2222DD']
 
-		if channels ==  'all':
-			channels = s.electrodes
-		elif channels == 'core_31':
-			channels = s.electrodes[0:31]
-			channels.append(s.electrodes[63])
+
 
 		if style == 'grid':
 			n_plots = len( channels ) #potentials.shape[1]
