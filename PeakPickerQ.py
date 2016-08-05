@@ -46,7 +46,7 @@ class Picker(QtGui.QMainWindow):
         userName = user.split('_')[1]
     else: userName = 'default'
     app_data['user'] = userName
-    app_data['file paths'] = [ os.path.join(os.path.dirname(__file__),init_files_by_exp['ant'] ) ]
+    app_data['file paths'] = ['/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_e1_40143015_avg.h1']#os.path.join(os.path.dirname(__file__),init_files_by_exp['ant'] ) ]
     app_data['paths input'] = []
 
     app_data['file ind'] = 0
@@ -90,16 +90,21 @@ class Picker(QtGui.QMainWindow):
         s.plots = {}
 
         s.load_file(initialize=True)
-
         #plot_layout = [['a','b','c'],['d','e','f'],['g','h','i']]
 
         for rN,prow in enumerate(s.plot_desc):
             for cN,p_desc in enumerate(prow):
                 if p_desc:
-                    title = p_desc['electrode']
-                    plot = s.plotsGrid.addPlot(rN,cN,title=title)
+                    elec = p_desc['electrode']
+                    plot = s.plotsGrid.addPlot(rN,cN,title=elec)
                     #plot.resize(300,250)
-                    s.plots[title] = plot
+                    s.plots[elec] = plot
+                    case_keys = [k for k in s.current_data if elec in k]
+                    #plot.plot([rN,rN],[cN,cN+1],symbol='o')                    
+                    for c_ind,ck in enumerate(case_keys):
+                        plot.plot(x=s.current_data['times'],
+                                    y=s.current_data[ck], 
+                                    pen=(c_ind,len(case_keys)))
 
         s.pickLayout.addLayout(s.controls_1)
         s.plotsScroll = QtGui.QScrollArea()
@@ -119,7 +124,7 @@ class Picker(QtGui.QMainWindow):
         s.show()
 
 
-    def load_file(s,next=False, initialize=False):
+    def load_file(s,next=False, initialize=True):
 
         paths = s.app_data['file paths']
 
@@ -138,7 +143,8 @@ class Picker(QtGui.QMainWindow):
             print('Load  ', experiment,' n paths, ind: ', len(paths), ind, eeg.file_info)
             s.app_data['current experiment'] = experiment
             #expD = s.app_data[experiment]
-            data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=initialize, 
+            # reversing initialize flag for testing
+            data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=False,#initialize, 
                                             time_range=s.app_data['display props']['time range'])
             s.current_data = data_sourceD
 
