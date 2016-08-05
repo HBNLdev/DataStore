@@ -1,3 +1,5 @@
+''' tools for demographic info, mainly calculating family history density '''
+
 import numpy as np
 from collections import defaultdict
 
@@ -5,9 +7,11 @@ default_field_eponyms = {'ID', 'famID', 'mID', 'fID', 'sex', 'twin'}
 default_dx_sxc = {'dx4': 'alc_dep_dx', 'dx5': 'cor_ald5dx',
                   'sxc4': 'cor_alc_dep_max_sx_cnt',
                   'sxc5': 'cor_ald5sx_max_cnt'}
+
 def_fields = {f:f for f in default_field_eponyms}
 def_fields.update(default_dx_sxc)
-sex2pf = {'m':'fID', 'f':'mID'}
+
+sex_to_parentfield = {'m':'fID', 'f':'mID'}
 score_map = {'self': 1, 'twin': 1,
              'mother':0.5, 'father':0.5, 'fullsib':0.5, 'child':0.5,
              'mgm': 0.25, 'mgf': 0.25, 'fgm': 0.25, 'fgf': 0.25,
@@ -16,6 +20,7 @@ score_map = {'self': 1, 'twin': 1,
              'halfsib': 0.25}
 
 def conv_159(v):
+    ''' convert COGA coding to regular coding '''
     if v==1:
         return 0
     elif v==5:
@@ -24,12 +29,15 @@ def conv_159(v):
         return np.nan
 
 def harmonize_fields(row, field1, field2):
-    if row[field1]==row[field2] or (np.isnan(row[field1]) and np.isnan(row[field1])):
+    ''' harmonize two columns by return the max of the two '''
+    if row[field1]==row[field2] or \
+        (np.isnan(row[field1]) and np.isnan(row[field2])):
         return row[field1]
     else:
         return max(row[field1], row[field2])
     
 def prepare_for_fhd(in_df):
+    ''' prepare a dataframe for FHD calculation '''
     df = in_df.copy()
     df['cor_alc_dep_dx'] = df['cor_alc_dep_dx'].apply(conv_159)
     df['aldep1'] = df.apply(
@@ -49,7 +57,10 @@ def calc_fhd(sDF, in_fDF, field_dict=None):
     fDF = in_fDF.rename(columns={v:k for k,v in fd.items()})
     #sDF['fhd_dx4'], sDF['fhd_dx5'], sDF['fhd_sxc4'], sDF['fhd_sxc5'], \
     #    sDF['n_rels'] = zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF]))
-    sDF['fhd_dx4_ratio'], sDF['fhd_dx4_sum'], sDF['n_rels'] = zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF]))
+    sDF['fhd_dx4_ratio'], sDF['fhd_dx4_sum'], \
+    sDF['fhd_dx4_ratio_rob'], sDF['fhd_dx4_sum_rob'], \
+    sDF['n_rels'] = \
+        zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF]))
     #sDF['fhd_dx4_nrels'] = sDF.apply(calc_fhd_row, axis=1, args=[fDF])
 
 def calc_fhd_row(row, df, degrees=[1, 2], descend=False, cat_norm=True):
@@ -63,16 +74,21 @@ def calc_fhd_row(row, df, degrees=[1, 2], descend=False, cat_norm=True):
     if 2 in degrees:
         I.second_degree(descend) # 0.25
     print('.',end='')
+    I.count('dx4')
     return I.ratio_score('dx4', 1, cat_norm), I.sum_score('dx4', 1, cat_norm), \
-                I.count('dx4')
+           I.ratio_score_rob('dx4', 1, cat_norm), \
+           I.sum_score_rob('dx4', 1, cat_norm), \
+           I.n_rels
 
 class Individual:
+    ''' represents one person, can calculate density of some affectedness
+        based on family members '''
 
-    def __init__(s, row, df):
+    def __init__(s, row, fam_df):
         s.info = row
-        s.df = df
+        s.df = fam_df
         try:
-            s.parent_field = sex2pf[row['sex']]
+            s.parent_field = sex_to_parentfield[row['sex']]
         except:
             s.parent_field = None
 
@@ -80,11 +96,13 @@ class Individual:
         s.rel_dict = defaultdict(list)
 
     def add_rel(s, ID, relation):
+        ''' add a relative to the dict of relatives '''
         if ID not in s.rel_set and isinstance(ID, str):
             s.rel_set.update({ID})
             s.rel_dict[relation].append(ID)
 
     def ratio_score(s, ckfield, ckfield_max, cat_norm=True):
+        ''' score FHD as a ratio '''
         score_num = score_denom = 0
         for rel_type, rel_IDs in s.rel_dict.items():
             weight = score_map[rel_type]
@@ -111,7 +129,45 @@ class Individual:
         else:
             return score_num / score_denom
 
+    def ratio_score_rob(s, ckfield, ckfield_max, cat_norm=True, prop=0.3):
+        ''' score FHD as a ratio, removing a random proportion of scores '''
+        n_rels_known = s.n_rels
+        remove_n = round(n_rels_known * prop)
+        remove_lst = [False]*remove_n + [True]*(n_rels_known - remove_n)
+        np.random.shuffle(remove_lst)
+        remove_lst_iter = iter(remove_lst)
+
+        score_num = score_denom = 0
+        for rel_type, rel_IDs in s.rel_dict.items():
+            weight = score_map[rel_type]
+            tmp_score = tmp_count = 0
+            for rel_ID in rel_IDs:
+                try:
+                    rel_val = s.df.loc[rel_ID, ckfield]
+                    if np.isnan(rel_val): # subject found, missing value
+                        continue
+                    else: # subject found, has value
+                        if next(remove_lst_iter):
+                            tmp_score += weight * rel_val/ckfield_max
+                            tmp_count += 1
+                        else:
+                            continue
+                except: # subject not found at all
+                    pass
+            if cat_norm: # normalize in each relative category
+                if tmp_count > 0:
+                    score_num += tmp_score / tmp_count
+                    score_denom += weight
+            else:
+                score_num += tmp_score
+                score_denom += weight * tmp_count
+        if score_denom == 0: # no rels known or nothing known about rels
+            return np.nan
+        else:
+            return score_num / score_denom
+
     def sum_score(s, ckfield, ckfield_max, cat_norm=True):
+        ''' score FHD as a sum '''
         score_num = 0
         for rel_type, rel_IDs in s.rel_dict.items():
             weight = score_map[rel_type]
@@ -133,7 +189,40 @@ class Individual:
                 score_num += tmp_score
         return score_num
 
+    def sum_score_rob(s, ckfield, ckfield_max, cat_norm=True, prop=0.3):
+        ''' score FHD as a sum, removing a random proportion of scores '''
+        n_rels_known = s.n_rels
+        remove_n = round(n_rels_known * prop)
+        remove_lst = [False]*remove_n + [True]*(n_rels_known - remove_n)
+        np.random.shuffle(remove_lst)
+        remove_lst_iter = iter(remove_lst)
+
+        score_num = 0
+        for rel_type, rel_IDs in s.rel_dict.items():
+            weight = score_map[rel_type]
+            tmp_score = tmp_count = 0
+            for rel_ID in rel_IDs:
+                try:
+                    rel_val = s.df.loc[rel_ID, ckfield]
+                    if np.isnan(rel_val): # subject found, missing value
+                        continue
+                    else: # subject found, has value
+                        if next(remove_lst_iter):
+                            tmp_score += weight * rel_val/ckfield_max
+                            tmp_count += 1
+                        else:
+                            continue
+                except: # subject not found at all
+                    pass
+            if cat_norm: # normalize in each relative category
+                if tmp_count > 0:
+                    score_num += tmp_score / tmp_count
+            else:
+                score_num += tmp_score
+        return score_num
+
     def count(s, ckfield):
+        ''' count relatives '''
         count = 0
         for rel_type, rel_IDs in s.rel_dict.items():
             for rel_ID in rel_IDs:
@@ -145,7 +234,7 @@ class Individual:
                         count+=1
                 except: # subject not found at all
                     pass
-        return count
+        s.n_rels = count
 
     def zeroth_degree(s): # worth 1
         s.add_rel(s.info['ID'], 'self') # self
