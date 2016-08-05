@@ -30,6 +30,13 @@ class Picker(QtGui.QMainWindow):
                                 'aod_6_a1_40021070_avg.h1 aod_6_a1_40021017_avg.h1 aod_6_a1_40017007_avg.h1']
                         }
 
+
+    plot_props = {'width':180, 'height':110,
+                 'extra_bottom_height':40, # for bottom row
+                'min_border':4,
+                'line colors':[(221,34,34),(102,221,102),(34,34,221),(34,221,34)]}
+
+
     app_data = {}
 
     app_data['display props'] = {'marker size':8,
@@ -38,9 +45,11 @@ class Picker(QtGui.QMainWindow):
                             'current color':'#ffbc00',
                             'picked color':'#886308',
                             'time range':[-10,850]
-     }
+     } 
 
     user = ''
+    if len(sys.argv) > 1:
+        user = sys.argv[1]
     #userName for store path
     if '_' in user:
         userName = user.split('_')[1]
@@ -54,22 +63,36 @@ class Picker(QtGui.QMainWindow):
     def __init__(s):
         super(Picker,s).__init__()
         s.setGeometry(50,50,1200,750)
-        s.setWindowTitle("HBNL Peak Picker")
+        s.setWindowTitle("HBNL Peak Picker ("+s.user+")")
 
         s.buttons = {}
 
         s.tabs = QtGui.QTabWidget()
 
         ### Navigation ###
+        #temporary placeholders
+        dir_files = s.dir_paths_by_exp['ant']
+
         s.navTab = QtGui.QWidget()
 
         s.navLayout = QtGui.QVBoxLayout()
-        s.directoryInput = QtGui.QLineEdit()
-        s.fileInput = QtGui.QLineEdit()
-        s.startButton = QtGui.QPushButton("Start")
 
-        s.navLayout.addWidget(s.directoryInput)
-        s.navLayout.addWidget(s.fileInput)
+        s.directoryLayout = QtGui.QHBoxLayout()
+        directory_label = QtGui.QLabel('Directory:')
+        s.directoryInput = QtGui.QLineEdit(dir_files[0])
+        s.directoryLayout.addWidget(directory_label)
+        s.directoryLayout.addWidget(s.directoryInput)
+
+        s.filesLayout = QtGui.QHBoxLayout()
+        files_label = QtGui.QLabel('Files:')
+        s.filesInput = QtGui.QLineEdit(dir_files[1])
+        s.filesLayout.addWidget(files_label)
+        s.filesLayout.addWidget(s.filesInput)
+        s.startButton = QtGui.QPushButton("Start")
+        s.startButton.clicked.connect(s.start_handler)
+
+        s.navLayout.addLayout(s.directoryLayout)
+        s.navLayout.addLayout(s.filesLayout)
         s.navLayout.addWidget(s.startButton)
         s.navTab.setLayout(s.navLayout)
 
@@ -80,11 +103,15 @@ class Picker(QtGui.QMainWindow):
 
         s.controls_1 = QtGui.QHBoxLayout()
 
-        buttons_1 = ['Apply','Prev','Next','Clear',]
+        buttons_1 = [('Apply',None),('Prev',s.previous_file),
+                    ('Next',s.next_file),('Clear',None)]
 
-        for label in buttons_1:
+        for label,handler in buttons_1:
             s.buttons[label] = QtGui.QPushButton(label)
             s.controls_1.addWidget(s.buttons[label])
+            if handler:
+                s.buttons[label].clicked.connect(handler)
+
 
         s.plotsGrid = pg.GraphicsLayoutWidget()#QtGui.QGridLayout()
         s.plots = {}
@@ -99,12 +126,7 @@ class Picker(QtGui.QMainWindow):
                     plot = s.plotsGrid.addPlot(rN,cN,title=elec)
                     #plot.resize(300,250)
                     s.plots[elec] = plot
-                    case_keys = [k for k in s.current_data if elec in k]
-                    #plot.plot([rN,rN],[cN,cN+1],symbol='o')                    
-                    for c_ind,ck in enumerate(case_keys):
-                        plot.plot(x=s.current_data['times'],
-                                    y=s.current_data[ck], 
-                                    pen=(c_ind,len(case_keys)))
+
 
         s.pickLayout.addLayout(s.controls_1)
         s.plotsScroll = QtGui.QScrollArea()
@@ -123,13 +145,39 @@ class Picker(QtGui.QMainWindow):
 
         s.show()
 
+    def start_handler(s,signal):
+        print('Start:',signal)
+        directory = s.directoryInput.text().strip()
+        
+        files = s.filesInput.text().split(' ')
+        files = [f for f in files if '.h1' in f]
+        paths = [ os.path.join(directory,f) for f in files ]
+        if len(s.app_data['paths input']) > 0 and paths == s.app_data['paths input'][-1]:
+            return
+        s.app_data['paths input'].append(paths)
 
-    def load_file(s,next=False, initialize=True):
+        s.app_data['file paths'] = paths
+        s.app_data['file ind'] = -1
+
+        s.next_file()
+
+    def next_file(s):
+        print('Next')
+        s.load_file(next=True)
+
+    def previous_file(s):
+        print('Previous')
+        if s.app_data['file ind'] > 0:
+            s.app_data['file ind'] -= 1
+            s.load_file()
+
+    def load_file(s,next=False, initialize=False):
 
         paths = s.app_data['file paths']
 
-        if not initialize:
-            if next and s.app_data['file ind'] < len(paths)-1:
+   
+        if next: 
+            if s.app_data['file ind'] < len(paths)-1:
                 s.app_data['file ind'] += 1
             else:
                 print('already on last file')
@@ -144,13 +192,22 @@ class Picker(QtGui.QMainWindow):
             s.app_data['current experiment'] = experiment
             #expD = s.app_data[experiment]
             # reversing initialize flag for testing
-            data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=False,#initialize, 
+            data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=initialize, 
                                             time_range=s.app_data['display props']['time range'])
             s.current_data = data_sourceD
 
             s.plot_desc = eeg.selected_cases_by_channel(mode='server',style='layout')
 
-            #expD['eeg'] = eeg
+            if not initialize:
+                chan_cases = [ entry for entry in s.current_data if '_' in entry and 'BLANK' not in entry]
+                chans = set([cc.split('_')[0] for cc in chan_cases])
+                cases = set([cc.split('_')[1] for cc in chan_cases])
+                for elec in chans:
+                    s.plots[elec].clear()
+                    for c_ind,case in enumerate(cases):
+                        s.plots[elec].plot(x=s.current_data['times'],
+                                y=s.current_data[elec+'_'+case], 
+                                pen=s.plot_props['line colors'][c_ind] )
 
 
 app = QtGui.QApplication(sys.argv)
