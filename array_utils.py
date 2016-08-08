@@ -26,7 +26,7 @@ def compound_take(a, dimval_tups):
             return a.take([v], d) # stand-in for expand_dims
         else:
             return a.take(v, d)
-    # print(a.shape)
+    print(a.shape)
     for d, v in dimval_tups:
         if isinstance(v, tuple): # reserved for itertools.product-takes
             for dp, vp in zip(d, v):
@@ -36,6 +36,12 @@ def compound_take(a, dimval_tups):
                         a = apply_take(a, dp, lvls[0]) - \
                             apply_take(a, dp, lvls[1])
                         # print('level subtraction')
+                    elif op == 'mean':
+                        print('mean')
+                        a = apply_take(a, dp, lvls).mean(dp)
+                        print(a.shape)
+                        # a = np.expand_dims(a, axis=dp)
+                        print(a.shape)
                 else:
                     a = apply_take(a, dp, vp)
         elif isinstance(v, dict): # reserved for operation-takes
@@ -49,7 +55,12 @@ def compound_take(a, dimval_tups):
                         apply_take(a, d, lvls[1]).mean(d)
                     a = np.expand_dims(a, axis=d)
                     print(a.shape)
-                # print('level subtraction')
+            elif op == 'mean':
+                print('mean')
+                a = apply_take(a, d, lvls).mean(d)
+                print(a.shape)
+                # a = np.expand_dims(a, axis=d)
+                print(a.shape)
         else:
             a = apply_take(a, d, v)
         # print(a.shape)

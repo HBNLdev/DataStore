@@ -60,7 +60,10 @@ def nested_strjoin(obj, delim='_'):
     for thing in obj:
         if is_nonstr_sequence(thing):
             js += nested_strjoin(thing)
-            js = js[:-1]
+            # js = js[:-1]
+        elif isinstance(thing, dict):
+            (op, lvls), = thing.items()
+            js += op + delim + str(lvls)[:9] + delim
         else:
             js += str(thing) + delim
     return js

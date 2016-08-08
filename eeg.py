@@ -1,7 +1,8 @@
 ''' represents intermediate results from MATLAB processing pipeline '''
 
-from glob import glob
 import os
+from glob import glob
+from datetime import datetime
 
 import h5py
 import dask.array as da
@@ -13,6 +14,8 @@ from array_utils import (convert_ms, baseline_amp, baseline_tf, handle_by,
                              basic_slice, compound_take)
 from plot import measure_pps, get_plotparams
 from plot_utils import nested_strjoin
+
+import compilation as C
 
 # values are tuples of h5py fieldname and datatype
 opt_info = {'Options path':                 ('optpath', 'text'),
@@ -154,6 +157,26 @@ class Results:
     def load_demogs(s):
         ''' load the most recently saved demog_df '''
         s.demog_df = s._demog_bkup.copy()
+
+    def retrieve_behavior(s, experiment):
+        ''' given 3-letter experiment designation, retrieve behavioral data '''
+        wanted_fields = ['ID', 'session', experiment]
+        proj = {wf:1 for wf in wanted_fields}
+
+        s.demog_df = C.join_collection(s.demog_df, 'EEGbehavior', add_proj=proj,
+            left_join_inds=['ID', 'session'], right_join_inds=['ID', 'session'])
+
+    def export_demogs(s, savedir='~'):
+        ''' export the current demog_df as a csv '''
+        batch_id = s.params['Batch ID']
+        today = datetime.now().strftime('%m-%d-%Y')
+        now = datetime.now().strftime('%H%M')
+
+        outname = '_'.join([batch_id, today, now])+'.csv'
+        outpath = os.path.expanduser(os.path.join(savedir, outname))
+
+        print(outpath)
+        s.demog_df.to_csv(outpath)
 
     def make_scales(s):
         ''' populate attributes describing channels and units '''
@@ -406,7 +429,7 @@ class Results:
             amean_lst.append(amean)
 
         amean_stack = np.stack(amean_lst, axis=-1)
-        lbl_lst = [nested_strjoin(lbl_set) for lbl_set in lbls]
+        lbl_lst = [measure+'_'+nested_strjoin(lbl_set) for lbl_set in lbls]
 
         amean_df = pd.DataFrame(amean_stack,
                         index=s.demog_df.index, columns=lbl_lst)
