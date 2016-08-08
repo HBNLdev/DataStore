@@ -4,7 +4,7 @@
 '''
 
 import os, sys
-from PyQt4 import QtGui
+from PyQt4 import QtGui, QtCore
 import pyqtgraph as pg
 
 import numpy as np
@@ -31,7 +31,9 @@ class Picker(QtGui.QMainWindow):
                         }
 
     show_plots = ('X','Y')
+    repick_modes = ('all','single')
     peak_choices = ['P1','P2','P3','P4','N1','N2','N3','N4']
+
 
     plot_props = {'width':180, 'height':110,
                  'extra_bottom_height':40, # for bottom row
@@ -56,11 +58,14 @@ class Picker(QtGui.QMainWindow):
     if '_' in user:
         userName = user.split('_')[1]
     else: userName = 'default'
+
     app_data['user'] = userName
     app_data['file paths'] = ['/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_e1_40143015_avg.h1']#os.path.join(os.path.dirname(__file__),init_files_by_exp['ant'] ) ]
     app_data['paths input'] = []
 
     app_data['file ind'] = 0
+    app_data['pick state'] = { 'case':None, 'peak':None,
+                                'repick mode':repick_modes[0]}
 
     def __init__(s):
         super(Picker,s).__init__()
@@ -245,18 +250,37 @@ class Picker(QtGui.QMainWindow):
                                 y=s.current_data[elec+'_'+case], 
                                 pen=s.plot_props['line colors'][c_ind] )
 
+        s.peak_regions = {}
 
+    def update_regions(s):
+        
+        region = s.sender().getRegion()
+        case = s.app_data['pick state']['case']
+        peak = s.app_data['pick state']['peak']
+
+        print('update_regions',s.app_data['pick state']['repick mode'], 
+                    case, peak, region)
+
+        if s.app_data['pick state']['repick mode'] == 'all':
+            for reg in s.peak_regions:
+                if reg[1] == case and reg[2] == peak:
+                    s.peak_regions[reg].setRegion( region )
 
     def pick_init(s):
 
         case = s.caseChooser.currentText()
         peak = s.peakChooser.currentText()
+        s.app_data['pick state']['case'] = case
+        s.app_data['pick state']['peak'] = peak
+
         print('Pick init for ',case, peak)
         peak_center_ms = 100*int(peak[1])
         start_range = (peak_center_ms-75,peak_center_ms+75)
 
         for elec in [ p for p in s.plots if p not in s.show_plots ]:
             region = pg.LinearRegionItem(values=start_range,movable=True)
+            region.sigRegionChangeFinished.connect(s.update_regions)
+            s.peak_regions[(elec,case,peak)] = region 
             s.plots[elec].addItem(region)
 
 app = QtGui.QApplication(sys.argv)
