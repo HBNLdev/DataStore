@@ -30,6 +30,8 @@ class Picker(QtGui.QMainWindow):
                                 'aod_6_a1_40021070_avg.h1 aod_6_a1_40021017_avg.h1 aod_6_a1_40017007_avg.h1']
                         }
 
+    show_plots = ('X','Y')
+    peak_choices = ['P1','P2','P3','P4','N1','N2','N3','N4']
 
     plot_props = {'width':180, 'height':110,
                  'extra_bottom_height':40, # for bottom row
@@ -112,11 +114,24 @@ class Picker(QtGui.QMainWindow):
             if handler:
                 s.buttons[label].clicked.connect(handler)
 
+        s.caseChooser = QtGui.QComboBox()
+        s.peakChooser = QtGui.QComboBox()
+        for peak in s.peak_choices:
+            s.peakChooser.addItem(peak)
+        s.pickButton = QtGui.QPushButton("Pick")
+
+        s.peak_controls = QtGui.QHBoxLayout()
+        s.peak_controls.addWidget(s.caseChooser)
+        s.peak_controls.addWidget(s.peakChooser)
+        s.peak_controls.addWidget(s.pickButton)
+
+        s.pickButton.clicked.connect(s.pick_init)
 
         s.plotsGrid = pg.GraphicsLayoutWidget()#QtGui.QGridLayout()
         s.plots = {}
 
         s.load_file(initialize=True)
+        s.caseChooser.clear()
         #plot_layout = [['a','b','c'],['d','e','f'],['g','h','i']]
 
         for rN,prow in enumerate(s.plot_desc):
@@ -129,6 +144,7 @@ class Picker(QtGui.QMainWindow):
 
 
         s.pickLayout.addLayout(s.controls_1)
+        s.pickLayout.addLayout(s.peak_controls)
         s.plotsScroll = QtGui.QScrollArea()
         s.plotsGrid.resize(1150,1800)
         #s.plotsScroll.setFixedWidth(1200)
@@ -171,10 +187,24 @@ class Picker(QtGui.QMainWindow):
             s.app_data['file ind'] -= 1
             s.load_file()
 
+    def gather_info(s,exp):
+        exp.extract_transforms_data()
+        exp.extract_case_data()
+        filter_info = 'Filter band: '+'{:4.3f}'.format(exp.transforms['hi_pass_filter']) \
+                        + ' Hz to '+'{:4.1f}'.format(exp.transforms['lo_pass_filter'])+' Hz'
+        case_info = ['cases: trials accepted/total']
+        trials_str =''
+        for caseN, caseD in exp.cases.items():
+            trials_str += caseD['case_type']+': '+str(caseD['n_trials_accepted'])+'/' \
+                        +str(caseD['n_trials']) +',   '
+        trials_str = trials_str[:-4]
+        case_info.append( trials_str )
+
+        s.app_data['info'] = [ filter_info ] + case_info
+
     def load_file(s,next=False, initialize=False):
 
         paths = s.app_data['file paths']
-
    
         if next: 
             if s.app_data['file ind'] < len(paths)-1:
@@ -188,8 +218,14 @@ class Picker(QtGui.QMainWindow):
         if ind < len(paths):
             eeg = EEGdata.avgh1( paths[ind] )
             experiment = eeg.file_info['experiment']
+            s.gather_info(eeg)
+
             print('Load  ', experiment,' n paths, ind: ', len(paths), ind, eeg.file_info)
             s.app_data['current experiment'] = experiment
+            s.app_data['experiment cases'] = eeg.case_list
+            s.caseChooser.clear()
+            for case in eeg.case_list:
+                s.caseChooser.addItem(case)
             #expD = s.app_data[experiment]
             # reversing initialize flag for testing
             data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=initialize, 
@@ -209,6 +245,19 @@ class Picker(QtGui.QMainWindow):
                                 y=s.current_data[elec+'_'+case], 
                                 pen=s.plot_props['line colors'][c_ind] )
 
+
+
+    def pick_init(s):
+
+        case = s.caseChooser.currentText()
+        peak = s.peakChooser.currentText()
+        print('Pick init for ',case, peak)
+        peak_center_ms = 100*int(peak[1])
+        start_range = (peak_center_ms-75,peak_center_ms+75)
+
+        for elec in [ p for p in s.plots if p not in s.show_plots ]:
+            region = pg.LinearRegionItem(values=start_range,movable=True)
+            s.plots[elec].addItem(region)
 
 app = QtGui.QApplication(sys.argv)
 GUI = Picker()
