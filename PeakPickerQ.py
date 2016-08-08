@@ -5,6 +5,7 @@
 
 import os, sys
 from PyQt4 import QtGui, QtCore
+Qt = QtCore.Qt
 import pyqtgraph as pg
 
 import numpy as np
@@ -125,12 +126,18 @@ class Picker(QtGui.QMainWindow):
             s.peakChooser.addItem(peak)
         s.pickButton = QtGui.QPushButton("Pick")
 
-        s.peak_controls = QtGui.QHBoxLayout()
-        s.peak_controls.addWidget(s.caseChooser)
-        s.peak_controls.addWidget(s.peakChooser)
-        s.peak_controls.addWidget(s.pickButton)
+        s.peakControls = QtGui.QHBoxLayout()
+        s.peakControls.addWidget(s.caseChooser)
+        s.peakControls.addWidget(s.peakChooser)
+        s.peakControls.addWidget(s.pickButton)
+        all_single_label = QtGui.QLabel("repick mode:")
+        all_single_label.setAlignment(Qt.AlignRight)
+        s.pickModeToggle = QtGui.QPushButton(s.app_data['pick state']['repick mode'])
+        s.peakControls.addWidget(all_single_label)
+        s.peakControls.addWidget(s.pickModeToggle)
 
         s.pickButton.clicked.connect(s.pick_init)
+        s.pickModeToggle.clicked.connect(s.mode_toggle)
 
         s.plotsGrid = pg.GraphicsLayoutWidget()#QtGui.QGridLayout()
         s.plots = {}
@@ -149,7 +156,7 @@ class Picker(QtGui.QMainWindow):
 
 
         s.pickLayout.addLayout(s.controls_1)
-        s.pickLayout.addLayout(s.peak_controls)
+        s.pickLayout.addLayout(s.peakControls)
         s.plotsScroll = QtGui.QScrollArea()
         s.plotsGrid.resize(1150,1800)
         #s.plotsScroll.setFixedWidth(1200)
@@ -258,9 +265,6 @@ class Picker(QtGui.QMainWindow):
         case = s.app_data['pick state']['case']
         peak = s.app_data['pick state']['peak']
 
-        print('update_regions',s.app_data['pick state']['repick mode'], 
-                    case, peak, region)
-
         if s.app_data['pick state']['repick mode'] == 'all':
             for reg in s.peak_regions:
                 if reg[1] == case and reg[2] == peak:
@@ -282,6 +286,13 @@ class Picker(QtGui.QMainWindow):
             region.sigRegionChangeFinished.connect(s.update_regions)
             s.peak_regions[(elec,case,peak)] = region 
             s.plots[elec].addItem(region)
+
+    def mode_toggle(s):
+        current_mode = s.app_data['pick state']['repick mode']
+        current_mode_i = s.repick_modes.index(current_mode)
+        s.app_data['pick state']['repick mode'] = \
+            s.repick_modes[(current_mode_i+1)%len(s.repick_modes)]
+        s.pickModeToggle.setText(s.app_data['pick state']['repick mode'])
 
 app = QtGui.QApplication(sys.argv)
 GUI = Picker()
