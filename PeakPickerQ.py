@@ -31,7 +31,7 @@ class Picker(QtGui.QMainWindow):
                                 'aod_6_a1_40021070_avg.h1 aod_6_a1_40021017_avg.h1 aod_6_a1_40017007_avg.h1']
                         }
 
-    show_plots = ('X','Y')
+    show_only = ('X','Y')
     repick_modes = ('all','single')
     peak_choices = ['P1','P2','P3','P4','N1','N2','N3','N4']
 
@@ -67,6 +67,7 @@ class Picker(QtGui.QMainWindow):
     app_data['file ind'] = 0
     app_data['pick state'] = { 'case':None, 'peak':None,
                                 'repick mode':repick_modes[0]}
+    app_data['active axis'] = None
 
     def __init__(s):
         super(Picker,s).__init__()
@@ -152,6 +153,8 @@ class Picker(QtGui.QMainWindow):
                     elec = p_desc['electrode']
                     plot = s.plotsGrid.addPlot(rN,cN,title=elec)
                     #plot.resize(300,250)
+                    plot.vb.sigRangeChanged.connect(s.update_ranges)
+
                     s.plots[elec] = plot
 
 
@@ -259,6 +262,21 @@ class Picker(QtGui.QMainWindow):
 
         s.peak_regions = {}
 
+    def update_ranges(s):
+        '''This scheme leads to a recursive mess.  Need a way to limit
+        signals to only the axis being updated, and update afterward
+        '''
+
+        sender = s.sender()
+        if sender == s.app_data['active axis']:
+            for elec,plot in s.plots.items():
+                if plot != s.sender():
+
+                    plot.setXLink(sender)
+                    plot.setYLink(sender)
+
+        s.app_data['active axis'] = sender
+
     def update_regions(s):
         
         region = s.sender().getRegion()
@@ -281,7 +299,7 @@ class Picker(QtGui.QMainWindow):
         peak_center_ms = 100*int(peak[1])
         start_range = (peak_center_ms-75,peak_center_ms+75)
 
-        for elec in [ p for p in s.plots if p not in s.show_plots ]:
+        for elec in [ p for p in s.plots if p not in s.show_only ]:
             region = pg.LinearRegionItem(values=start_range,movable=True)
             region.sigRegionChangeFinished.connect(s.update_regions)
             s.peak_regions[(elec,case,peak)] = region 
