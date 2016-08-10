@@ -67,7 +67,6 @@ class Picker(QtGui.QMainWindow):
     app_data['file ind'] = 0
     app_data['pick state'] = { 'case':None, 'peak':None,
                                 'repick mode':repick_modes[0]}
-    app_data['active axis'] = None
 
     def __init__(s):
         super(Picker,s).__init__()
@@ -149,7 +148,7 @@ class Picker(QtGui.QMainWindow):
         s.load_file(initialize=True)
         s.caseChooser.clear()
         #plot_layout = [['a','b','c'],['d','e','f'],['g','h','i']]
-
+        last_plot = None
         for rN,prow in enumerate(s.plot_desc):
             for cN,p_desc in enumerate(prow):
                 if p_desc:
@@ -160,6 +159,10 @@ class Picker(QtGui.QMainWindow):
                     plot.vb.sigRangeChanged.connect(s.update_ranges)
 
                     s.plots[elec] = plot
+                    if last_plot:
+                        plot.setXLink(last_plot)
+                        plot.setYLink(last_plot)
+                    last_plot = plot
 
 
         s.pickLayout.addLayout(s.controls_1)
@@ -266,16 +269,16 @@ class Picker(QtGui.QMainWindow):
                                 pen=s.plot_props['line colors'][c_ind] )
                     label = pg.TextItem(text=elec)
                     plot.addItem(label)                    
-                    s.plot_labels[elec] = label
-                    s.adjust_label(elec)
+                    s.plot_labels[plot.vb] = label
+                    s.adjust_label(plot.vb)
 
         s.peak_regions = {}
 
-    def adjust_label(s,elec):
-        plot = s.plots[elec]
-        if elec in s.plot_labels:
-            label = s.plot_labels[elec]
-            region = plot.vb.getState()['viewRange']
+    def adjust_label(s,viewbox):
+
+        if viewbox in s.plot_labels:
+            label = s.plot_labels[viewbox]
+            region = viewbox.getState()['viewRange']
             #print('adjust label',elec,region)
             label.setPos(region[0][0],region[1][1])
 
@@ -283,18 +286,7 @@ class Picker(QtGui.QMainWindow):
         '''This scheme leads to a recursive mess.  Need a way to limit
         signals to only the axis being updated, and update afterward
         '''
-        for elec in s.plots:
-            s.adjust_label(elec)
-
-        sender = s.sender()
-        if sender == s.app_data['active axis']:
-            for elec,plot in s.plots.items():
-                if plot != s.sender():
-                    plot.setXLink(sender)
-                    plot.setYLink(sender)
-
-
-        s.app_data['active axis'] = sender
+        s.adjust_label(s.sender())
 
     def update_regions(s):
         
