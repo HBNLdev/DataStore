@@ -272,7 +272,8 @@ class Picker(QtGui.QMainWindow):
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
 
-        s.peak_regions = {}
+        s.pick_regions = {}
+        s.region_case_peaks = {}
 
     def adjust_label(s,viewbox):
 
@@ -288,16 +289,16 @@ class Picker(QtGui.QMainWindow):
         '''
         s.adjust_label(s.sender())
 
-    def update_regions(s):
+    def update_pick_regions(s):
         
-        region = s.sender().getRegion()
-        case = s.app_data['pick state']['case']
-        peak = s.app_data['pick state']['peak']
+        sender = s.sender()
+        region = sender.getRegion()
+        elec, case, peak = s.region_case_peaks[sender]
 
         if s.app_data['pick state']['repick mode'] == 'all':
-            for reg in s.peak_regions:
+            for reg in s.pick_regions:
                 if reg[1] == case and reg[2] == peak:
-                    s.peak_regions[reg].setRegion( region )
+                    s.pick_regions[reg].setRegion( region )
 
     def pick_init(s):
 
@@ -312,8 +313,9 @@ class Picker(QtGui.QMainWindow):
 
         for elec in [ p for p in s.plots if p not in s.show_only ]:
             region = pg.LinearRegionItem(values=start_range,movable=True)
-            region.sigRegionChangeFinished.connect(s.update_regions)
-            s.peak_regions[(elec,case,peak)] = region 
+            region.sigRegionChangeFinished.connect(s.update_pick_regions)
+            s.pick_regions[(elec,case,peak)] = region 
+            s.region_case_peaks[region] = (elec,case,peak)
             s.plots[elec].addItem(region)
 
     def mode_toggle(s):
