@@ -39,7 +39,7 @@ class Picker(QtGui.QMainWindow):
     plot_props = {'width':180, 'height':110,
                  'extra_bottom_height':40, # for bottom row
                 'min_border':4,
-                'line colors':[(221,34,34),(102,221,102),(34,34,221),(34,221,34)]}
+                'line colors':[(221,34,34),(102,221,102),(34,34,221),(221,34,221)]}
 
 
     app_data = {}
@@ -148,21 +148,30 @@ class Picker(QtGui.QMainWindow):
         s.load_file(initialize=True)
         s.caseChooser.clear()
         #plot_layout = [['a','b','c'],['d','e','f'],['g','h','i']]
-        last_plot = None
+        prev_plot = None
+        s.legend_plot = None
         for rN,prow in enumerate(s.plot_desc):
+            if rN == 0:
+                for cN,p_desc in enumerate(prow):
+                    s.plotsGrid.addLabel('',rN,cN)
             for cN,p_desc in enumerate(prow):
                 if p_desc:
                     elec = p_desc['electrode']
-                    plot = s.plotsGrid.addPlot(rN,cN)#,title=elec)
+                    plot = s.plotsGrid.addPlot(rN+1,cN)#,title=elec)
 
                     #plot.resize(300,250)
                     plot.vb.sigRangeChanged.connect(s.update_ranges)
 
                     s.plots[elec] = plot
-                    if last_plot:
-                        plot.setXLink(last_plot)
-                        plot.setYLink(last_plot)
-                    last_plot = plot
+                    if prev_plot:
+                        plot.setXLink(prev_plot)
+                        plot.setYLink(prev_plot)
+                    prev_plot = plot
+                elif not s.legend_plot:
+                    s.legend_plot = s.plotsGrid.addPlot(rN+1,cN)
+                    s.legend_plot.getAxis('left').hide()
+                    s.legend_plot.getAxis('bottom').hide()
+
 
 
         s.pickLayout.addLayout(s.controls_1)
@@ -260,13 +269,25 @@ class Picker(QtGui.QMainWindow):
                 chan_cases = [ entry for entry in s.current_data if '_' in entry and 'BLANK' not in entry]
                 chans = set([cc.split('_')[0] for cc in chan_cases])
                 cases = set([cc.split('_')[1] for cc in chan_cases])
+                s.legend_plot.clear()
+                s.legend_plot.addLegend(size=(60,40),offset=(-60,0) )
+                for c_ind,case in enumerate(cases):
+                    s.legend_plot.plot(x=[-5,-4],y=[-20,-20],
+                        pen=s.plot_props['line colors'][c_ind],
+                        name=case)
+                    s.legend_plot.vb.setRange(xRange=[0,1],yRange=[0,1])
+                #print('plot',type(s.legend_plot.getAxis('left')))
+                #print('viewbox',type(s.legend_plot.vb.x()))
+                #print('plot',dir(s.legend_plot.getAxis('left')))
+
                 for elec in chans:
                     plot = s.plots[elec]
                     plot.clear()
                     for c_ind,case in enumerate(cases):
                         s.plots[elec].plot(x=s.current_data['times'],
                                 y=s.current_data[elec+'_'+case], 
-                                pen=s.plot_props['line colors'][c_ind] )
+                                pen=s.plot_props['line colors'][c_ind],
+                                name=case )
                     label = pg.TextItem(text=elec)
                     plot.addItem(label)                    
                     s.plot_labels[plot.vb] = label
