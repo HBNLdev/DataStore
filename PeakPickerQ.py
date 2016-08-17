@@ -50,8 +50,12 @@ class Picker(QtGui.QMainWindow):
                             'current color':'#ffbc00',
                             'picked color':'#886308',
                             'time range':[-10,850],
-                            'bar length':np.float64(1)
+                            'bar length':np.float64(1),
+                            'pick region':(80,80,80,50)
      } 
+    pg.setConfigOption('background', (40,40,40))
+    pg.setConfigOption('foreground', (135,135,135))
+
 
     user = ''
     if len(sys.argv) > 1:
@@ -335,7 +339,8 @@ class Picker(QtGui.QMainWindow):
         start_range = (peak_center_ms-75,peak_center_ms+75)
 
         for elec in [ p for p in s.plots if p not in s.show_only ]:
-            region = pg.LinearRegionItem(values=start_range,movable=True)
+            region = pg.LinearRegionItem(values=start_range,movable=True,
+                    brush=s.app_data['display props']['pick region'])
             region.sigRegionChangeFinished.connect(s.update_pick_regions)
             s.pick_regions[(elec,case,peak)] = region 
             s.region_case_peaks[region] = (elec,case,peak)
