@@ -49,7 +49,8 @@ class Picker(QtGui.QMainWindow):
                             'pick width':2,
                             'current color':'#ffbc00',
                             'picked color':'#886308',
-                            'time range':[-10,850]
+                            'time range':[-10,850],
+                            'bar length':np.float64(1)
      } 
 
     user = ''
@@ -354,10 +355,9 @@ class Picker(QtGui.QMainWindow):
         starts = []
         finishes = []
         elecs = []
-        marker_path = QtGui.QPainterPath()
-        #marker_path.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
-        marker_path.addRect(0,0,8,2)
-        #pg.symbolMap['vline'] = marker_path
+
+        bar_len = s.app_data['display props']['bar length']
+
         for elec_case_peak in s.pick_regions:
             if elec_case_peak[1] == case and elec_case_peak[2] == peak:
                 region = s.pick_regions[elec_case_peak]
@@ -369,13 +369,10 @@ class Picker(QtGui.QMainWindow):
         pval,pms = s.eeg.find_peaks(case,elecs,
             starts_ms=starts,ends_ms=finishes, polarity=polarity)
         for e_ind,elec in enumerate(elecs):
-            marker = pg.ScatterPlotItem()
-            #marker.symbolMap['vline'] = marker_path
-            marker.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
-            marker.setData(x=[pms[e_ind]],y=[pval[e_ind]],
-                symbol='+')#'vline')#,pen=(255,255,255),pxMode=True)
+
+            marker = pg.ErrorBarItem(x=[pms[e_ind]],y=[pval[e_ind]],
+                top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
             s.plots[elec].addItem(marker)
-                #print(elec_case_peak,start_finish)
 
 
 app = QtGui.QApplication(sys.argv)
