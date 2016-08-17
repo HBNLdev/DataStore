@@ -111,7 +111,7 @@ class Picker(QtGui.QMainWindow):
 
         s.controls_1 = QtGui.QHBoxLayout()
 
-        buttons_1 = [('Apply',None),('Prev',s.previous_file),
+        buttons_1 = [('Apply',s.apply_selections),('Prev',s.previous_file),
                     ('Next',s.next_file),('Clear',None)]
 
         for label,handler in buttons_1:
@@ -248,6 +248,7 @@ class Picker(QtGui.QMainWindow):
         print('load file: #',ind, paths)
         if ind < len(paths):
             eeg = EEGdata.avgh1( paths[ind] )
+            s.eeg = eeg
             experiment = eeg.file_info['experiment']
             s.gather_info(eeg)
 
@@ -345,6 +346,37 @@ class Picker(QtGui.QMainWindow):
         s.app_data['pick state']['repick mode'] = \
             s.repick_modes[(current_mode_i+1)%len(s.repick_modes)]
         s.pickModeToggle.setText(s.app_data['pick state']['repick mode'])
+
+    def apply_selections(s):
+        case = s.app_data['pick state']['case']
+        peak = s.app_data['pick state']['peak']
+        polarity = peak[0].lower()
+        starts = []
+        finishes = []
+        elecs = []
+        marker_path = QtGui.QPainterPath()
+        #marker_path.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
+        marker_path.addRect(0,0,8,2)
+        #pg.symbolMap['vline'] = marker_path
+        for elec_case_peak in s.pick_regions:
+            if elec_case_peak[1] == case and elec_case_peak[2] == peak:
+                region = s.pick_regions[elec_case_peak]
+                start_finish = region.getRegion()
+                elecs.append(elec_case_peak[0])
+                starts.append(start_finish[0])
+                finishes.append(start_finish[1])
+        print('starts:',starts)
+        pval,pms = s.eeg.find_peaks(case,elecs,
+            starts_ms=starts,ends_ms=finishes, polarity=polarity)
+        for e_ind,elec in enumerate(elecs):
+            marker = pg.ScatterPlotItem()
+            #marker.symbolMap['vline'] = marker_path
+            marker.setPen(QtGui.QPen(QtGui.QColor(255,255,255)))
+            marker.setData(x=[pms[e_ind]],y=[pval[e_ind]],
+                symbol='+')#'vline')#,pen=(255,255,255),pxMode=True)
+            s.plots[elec].addItem(marker)
+                #print(elec_case_peak,start_finish)
+
 
 app = QtGui.QApplication(sys.argv)
 GUI = Picker()

@@ -167,6 +167,12 @@ class avgh1:
 		n_chans = len(chan_list)
 		latmat = np.matrix(lats).repeat(n_chans,axis=0)
 
+		if type(starts_ms) == list:
+			starts_ms = np.matrix(starts_ms).transpose()
+			print('transposed starts')
+		if type(ends_ms) == list:
+			ends_ms = np.matrix(ends_ms).transpose()
+
 		startsmat = np.matrix(starts_ms).repeat(n_tms,axis=1)
 		endsmat = np.matrix(ends_ms).repeat(n_tms,axis=1)
 
