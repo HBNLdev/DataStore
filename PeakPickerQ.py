@@ -15,8 +15,6 @@ import organization as O
 import EEGdata
 
 
-
-
 class Picker(QtGui.QMainWindow):
 
     init_files_by_exp = {'ant':'ant_0_a0_11111111_avg.h1', 
@@ -51,11 +49,10 @@ class Picker(QtGui.QMainWindow):
                             'picked color':'#886308',
                             'time range':[-10,850],
                             'bar length':np.float64(1),
-                            'pick region':(80,80,80,50)
-     } 
-    pg.setConfigOption('background', (40,40,40))
-    pg.setConfigOption('foreground', (135,135,135))
-
+                            'pick region':(80,80,80,50),
+                            'background':(40, 40, 40),
+                            'foreground':(135, 135, 135)
+                }
 
     user = ''
     if len(sys.argv) > 1:
@@ -77,6 +74,11 @@ class Picker(QtGui.QMainWindow):
         super(Picker,s).__init__()
         s.setGeometry(50,50,1200,750)
         s.setWindowTitle("HBNL Peak Picker ("+s.user+")")
+
+        DProps = s.app_data['display props']
+
+        pg.setConfigOption('background', DProps['background'])
+        pg.setConfigOption('foreground', DProps['foreground'])
 
         s.buttons = {}
 
@@ -152,7 +154,7 @@ class Picker(QtGui.QMainWindow):
 
         s.load_file(initialize=True)
         s.caseChooser.clear()
-        #plot_layout = [['a','b','c'],['d','e','f'],['g','h','i']]
+
         prev_plot = None
         s.legend_plot = None
         for rN,prow in enumerate(s.plot_desc):
@@ -183,10 +185,8 @@ class Picker(QtGui.QMainWindow):
         s.pickLayout.addLayout(s.peakControls)
         s.plotsScroll = QtGui.QScrollArea()
         s.plotsGrid.resize(1150,1800)
-        #s.plotsScroll.setFixedWidth(1200)
-        #s.plotsScroll.setFixedHeight(900)
         s.plotsScroll.setWidget(s.plotsGrid)
-        s.pickLayout.addWidget(s.plotsScroll) #s.plotsGrid)
+        s.pickLayout.addWidget(s.plotsScroll)
 
         s.pickTab.setLayout(s.pickLayout)
 
@@ -256,12 +256,14 @@ class Picker(QtGui.QMainWindow):
             s.eeg = eeg
             experiment = eeg.file_info['experiment']
             s.gather_info(eeg)
+            cases = eeg.case_list
+            chans = eeg.electrodes
 
             print('Load  ', experiment,' n paths, ind: ', len(paths), ind, eeg.file_info)
             s.app_data['current experiment'] = experiment
             s.app_data['experiment cases'] = eeg.case_list
             s.caseChooser.clear()
-            for case in eeg.case_list:
+            for case in cases:
                 s.caseChooser.addItem(case)
             #expD = s.app_data[experiment]
             # reversing initialize flag for testing
@@ -272,9 +274,6 @@ class Picker(QtGui.QMainWindow):
             s.plot_desc = eeg.selected_cases_by_channel(mode='server',style='layout')
 
             if not initialize:
-                chan_cases = [ entry for entry in s.current_data if '_' in entry and 'BLANK' not in entry]
-                chans = set([cc.split('_')[0] for cc in chan_cases])
-                cases = set([cc.split('_')[1] for cc in chan_cases])
                 s.legend_plot.clear()
                 s.legend_plot.addLegend(size=(60,40),offset=(-60,0) )
                 for c_ind,case in enumerate(cases):
@@ -282,11 +281,8 @@ class Picker(QtGui.QMainWindow):
                         pen=s.plot_props['line colors'][c_ind],
                         name=case)
                     s.legend_plot.vb.setRange(xRange=[0,1],yRange=[0,1])
-                #print('plot',type(s.legend_plot.getAxis('left')))
-                #print('viewbox',type(s.legend_plot.vb.x()))
-                #print('plot',dir(s.legend_plot.getAxis('left')))
 
-                for elec in chans:
+                for elec in [ ch for ch in chans if ch not in ['BLANK'] ]:
                     plot = s.plots[elec]
                     plot.clear()
                     for c_ind,case in enumerate(cases):
@@ -307,7 +303,6 @@ class Picker(QtGui.QMainWindow):
         if viewbox in s.plot_labels:
             label = s.plot_labels[viewbox]
             region = viewbox.getState()['viewRange']
-            #print('adjust label',elec,region)
             label.setPos(region[0][0],region[1][1])
 
     def update_ranges(s):
