@@ -119,13 +119,33 @@ class Picker(QtGui.QMainWindow):
         s.controls_1 = QtGui.QHBoxLayout()
 
         buttons_1 = [('Apply',s.apply_selections),('Prev',s.previous_file),
-                    ('Next',s.next_file),('Clear',None)]
+                    ('Next',s.next_file)]
 
         for label,handler in buttons_1:
             s.buttons[label] = QtGui.QPushButton(label)
             s.controls_1.addWidget(s.buttons[label])
             if handler:
                 s.buttons[label].clicked.connect(handler)
+
+        # Display controls
+        s.dispLayout = QtGui.QHBoxLayout()
+        s.dispLayout.setAlignment(Qt.AlignRight)
+        disp_label = QtGui.QLabel("Display:")
+        s.pickRegionToggle = QtGui.QCheckBox("regions")
+        s.pickRegionToggle.setChecked(True)
+        s.peakMarkerToggle = QtGui.QCheckBox("peaks")
+        s.peakMarkerToggle.setChecked(True)
+        s.dispLayout.addWidget(disp_label)
+        s.dispLayout.addWidget(s.pickRegionToggle)
+        s.dispLayout.addWidget(s.peakMarkerToggle)
+        disp_cases_label = QtGui.QLabel("Cases:")
+        s.dispLayout.addWidget(disp_cases_label)
+        s.controls_1.addLayout(s.dispLayout)
+
+        s.case_toggles = []
+
+        s.pickRegionToggle.stateChanged.connect(s.toggle_regions)
+        s.peakMarkerToggle.stateChanged.connect(s.toggle_peaks)
 
         s.caseChooser = QtGui.QComboBox()
         s.peakChooser = QtGui.QComboBox()
@@ -151,6 +171,7 @@ class Picker(QtGui.QMainWindow):
         s.plotsGrid.ci.layout.setSpacing(0) 
         s.plots = {}
         s.plot_labels = {}
+        s.curves = {}
 
         s.load_file(initialize=True)
         s.caseChooser.clear()
@@ -263,8 +284,15 @@ class Picker(QtGui.QMainWindow):
             s.app_data['current experiment'] = experiment
             s.app_data['experiment cases'] = eeg.case_list
             s.caseChooser.clear()
+            for toggle in s.case_toggles:
+                s.dispLayout.removeWidget(toggle)
             for case in cases:
                 s.caseChooser.addItem(case)
+                case_toggle = QtGui.QCheckBox(case)
+                case_toggle.setChecked(True)
+                case_toggle.stateChanged.connect(s.toggle_case)
+                s.dispLayout.addWidget(case_toggle)
+                s.case_toggles.append(case_toggle)
             #expD = s.app_data[experiment]
             # reversing initialize flag for testing
             data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=initialize, 
@@ -286,7 +314,7 @@ class Picker(QtGui.QMainWindow):
                     plot = s.plots[elec]
                     plot.clear()
                     for c_ind,case in enumerate(cases):
-                        s.plots[elec].plot(x=s.current_data['times'],
+                        s.curves[(elec,case)] = s.plots[elec].plot(x=s.current_data['times'],
                                 y=s.current_data[elec+'_'+case], 
                                 pen=s.plot_props['line colors'][c_ind],
                                 name=case )
@@ -296,6 +324,7 @@ class Picker(QtGui.QMainWindow):
                     s.adjust_label(plot.vb)
 
         s.pick_regions = {}
+        s.peak_markers = {}
         s.region_case_peaks = {}
 
     def adjust_label(s,viewbox):
@@ -330,16 +359,38 @@ class Picker(QtGui.QMainWindow):
         s.app_data['pick state']['peak'] = peak
 
         print('Pick init for ',case, peak)
-        peak_center_ms = 100*int(peak[1])
-        start_range = (peak_center_ms-75,peak_center_ms+75)
 
-        for elec in [ p for p in s.plots if p not in s.show_only ]:
-            region = pg.LinearRegionItem(values=start_range,movable=True,
-                    brush=s.app_data['display props']['pick region'])
-            region.sigRegionChangeFinished.connect(s.update_pick_regions)
-            s.pick_regions[(elec,case,peak)] = region 
-            s.region_case_peaks[region] = (elec,case,peak)
-            s.plots[elec].addItem(region)
+        pick_case_peaks = set([(ecp[1],ecp[2]) for ecp in s.pick_regions])
+
+        if (case,peak) not in pick_case_peaks:
+            peak_center_ms = 100*int(peak[1])
+            start_range = (peak_center_ms-75,peak_center_ms+75)
+
+            for elec in [ p for p in s.plots if p not in s.show_only ]:
+                region = pg.LinearRegionItem(values=start_range,movable=True,
+                        brush=s.app_data['display props']['pick region'])
+                region.sigRegionChangeFinished.connect(s.update_pick_regions)
+                s.pick_regions[(elec,case,peak)] = region 
+                s.region_case_peaks[region] = (elec,case,peak)
+                s.plots[elec].addItem(region)
+
+    def toggle_regions(s):
+        checked = s.sender().isChecked()
+        for el_cs_pk,reg in s.pick_regions.items():
+             reg.setVisible(checked) 
+
+    def toggle_peaks(s):
+        checked = s.sender().isChecked()
+        for el_cs_pk,mark in s.peak_markers.items():
+            mark.setVisible(checked)
+
+    def toggle_case(s):
+        sender = s.sender()
+        case = sender.text()
+        print(case)
+        checked = sender.isChecked()
+        for el_cs in [ec for ec in s.curves if ec[1]==case]:
+            s.curves[el_cs].setVisible(checked)
 
     def mode_toggle(s):
         current_mode = s.app_data['pick state']['repick mode']
@@ -372,6 +423,7 @@ class Picker(QtGui.QMainWindow):
 
             marker = pg.ErrorBarItem(x=[pms[e_ind]],y=[pval[e_ind]],
                 top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
+            s.peak_markers[(elec,case,peak)] = marker
             s.plots[elec].addItem(marker)
 
 
