@@ -51,7 +51,9 @@ class Picker(QtGui.QMainWindow):
                             'bar length':np.float64(1),
                             'pick region':(80,80,80,50),
                             'background':(40, 40, 40),
-                            'foreground':(135, 135, 135)
+                            'foreground':(135, 135, 135),
+                            'main position':(50,50,1200,750),
+                            'zoom position':(300,200,600,600)
                 }
 
     user = ''
@@ -71,11 +73,12 @@ class Picker(QtGui.QMainWindow):
                                 'repick mode':repick_modes[0]}
 
     def __init__(s):
+        DProps = s.app_data['display props']
         super(Picker,s).__init__()
-        s.setGeometry(50,50,1200,750)
+        s.setGeometry(*DProps['main position'])
         s.setWindowTitle("HBNL Peak Picker ("+s.user+")")
 
-        DProps = s.app_data['display props']
+
 
         pg.setConfigOption('background', DProps['background'])
         pg.setConfigOption('foreground', DProps['foreground'])
@@ -167,11 +170,13 @@ class Picker(QtGui.QMainWindow):
         s.pickModeToggle.clicked.connect(s.mode_toggle)
 
         s.plotsGrid = pg.GraphicsLayoutWidget()#QtGui.QGridLayout()
+        s.zoomDialog = QtGui.QDialog(s)
         s.plotsGrid.ci.layout.setContentsMargins(0, 0, 0, 0)
         s.plotsGrid.ci.layout.setSpacing(0) 
         s.plots = {}
         s.plot_labels = {}
         s.curves = {}
+        s.vb_map = {}
 
         s.load_file(initialize=True)
         s.caseChooser.clear()
@@ -186,10 +191,10 @@ class Picker(QtGui.QMainWindow):
                 if p_desc:
                     elec = p_desc['electrode']
                     plot = s.plotsGrid.addPlot(rN+1,cN)#,title=elec)
-
+                    s.proxyMouse = pg.SignalProxy(plot.scene().sigMouseClicked, slot=s.zoom_plot)
                     #plot.resize(300,250)
                     plot.vb.sigRangeChanged.connect(s.update_ranges)
-
+                    s.vb_map[plot.vb] = elec
                     s.plots[elec] = plot
                     if prev_plot:
                         plot.setXLink(prev_plot)
@@ -319,9 +324,11 @@ class Picker(QtGui.QMainWindow):
                                 pen=s.plot_props['line colors'][c_ind],
                                 name=case )
                     label = pg.TextItem(text=elec)
+                    #label.mousePressEvent(s.zoom_plot)
                     plot.addItem(label)                    
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
+                print(dir(label))
 
         s.pick_regions = {}
         s.peak_markers = {}
@@ -373,6 +380,20 @@ class Picker(QtGui.QMainWindow):
                 s.pick_regions[(elec,case,peak)] = region 
                 s.region_case_peaks[region] = (elec,case,peak)
                 s.plots[elec].addItem(region)
+
+    def zoom_plot(s,ev):
+        print('zoom_plot',ev)
+        if ev[0].button() == 1:
+            elec = s.vb_map[ ev[0].currentItem ]
+            ev[0].accept()
+
+            print(elec)
+            #if s.zoomDialog is None:
+
+            s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
+            s.zoomDialog.setWindowTitle(elec)
+            s.zoomDialog.show()
+            #print(dir(s.zoomDialog))
 
     def toggle_regions(s):
         checked = s.sender().isChecked()
