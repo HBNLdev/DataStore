@@ -53,7 +53,7 @@ class Picker(QtGui.QMainWindow):
                             'background':(40, 40, 40),
                             'foreground':(135, 135, 135),
                             'main position':(50,50,1200,750),
-                            'zoom position':(300,200,600,600)
+                            'zoom position':(300,200,750,600)
                 }
 
     user = ''
@@ -171,6 +171,8 @@ class Picker(QtGui.QMainWindow):
 
         s.plotsGrid = pg.GraphicsLayoutWidget()#QtGui.QGridLayout()
         s.zoomDialog = QtGui.QDialog(s)
+        s.zoomGW = pg.GraphicsWindow(parent=s.zoomDialog)
+        s.zoomPlot = s.zoomGW.addPlot()#pg.PlotWidget(parent=s.zoomDialog)
         s.plotsGrid.ci.layout.setContentsMargins(0, 0, 0, 0)
         s.plotsGrid.ci.layout.setSpacing(0) 
         s.plots = {}
@@ -191,7 +193,7 @@ class Picker(QtGui.QMainWindow):
                 if p_desc:
                     elec = p_desc['electrode']
                     plot = s.plotsGrid.addPlot(rN+1,cN)#,title=elec)
-                    s.proxyMouse = pg.SignalProxy(plot.scene().sigMouseClicked, slot=s.zoom_plot)
+                    s.proxyMouse = pg.SignalProxy(plot.scene().sigMouseClicked, slot=s.show_zoom_plot)
                     #plot.resize(300,250)
                     plot.vb.sigRangeChanged.connect(s.update_ranges)
                     s.vb_map[plot.vb] = elec
@@ -372,7 +374,6 @@ class Picker(QtGui.QMainWindow):
         if (case,peak) not in pick_case_peaks:
             peak_center_ms = 100*int(peak[1])
             start_range = (peak_center_ms-75,peak_center_ms+75)
-
             for elec in [ p for p in s.plots if p not in s.show_only ]:
                 region = pg.LinearRegionItem(values=start_range,movable=True,
                         brush=s.app_data['display props']['pick region'])
@@ -381,9 +382,9 @@ class Picker(QtGui.QMainWindow):
                 s.region_case_peaks[region] = (elec,case,peak)
                 s.plots[elec].addItem(region)
 
-    def zoom_plot(s,ev):
+    def show_zoom_plot(s,ev):
         print('zoom_plot',ev)
-        if ev[0].button() == 1:
+        if ev[0].button() == 1 and ev[0].currentItem in s.vb_map:
             elec = s.vb_map[ ev[0].currentItem ]
             ev[0].accept()
 
@@ -392,7 +393,26 @@ class Picker(QtGui.QMainWindow):
 
             s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
             s.zoomDialog.setWindowTitle(elec)
-            s.zoomDialog.show()
+
+            Pstate = s.app_data['pick state']
+            if Pstate['case']:
+                c_ind = s.eeg.case_list.index(Pstate['case'])
+                s.zoomPlot.clear()
+                s.zoomCurve = s.zoomPlot.plot(x=s.current_data['times'],
+                                    y=s.current_data[elec+'_'+Pstate['case']], 
+                                    pen=s.plot_props['line colors'][c_ind],
+                                    name=Pstate['case'] )
+                s.zoomPlot.setXLink(s.plots[elec])
+                s.zoomPlot.setYLink(s.plots[elec])
+                small_region = s.pick_regions[(elec,Pstate['case'],Pstate['peak'])]
+                start_fin = small_region.getRegion()
+                region = pg.LinearRegionItem(values=start_fin,movable=True,
+                                brush=s.app_data['display props']['pick region'])
+                region.sigRegionChangeFinished.connect(s.update_pick_regions)
+                s.region_case_peaks[region] = (elec,Pstate['case'],Pstate['peak'])
+                s.zoomPlot.addItem(region)
+                s.zoomDialog.show()
+                # set apply on close and relink axes
             #print(dir(s.zoomDialog))
 
     def toggle_regions(s):
