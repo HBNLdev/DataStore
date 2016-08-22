@@ -150,11 +150,12 @@ class Picker(QtGui.QMainWindow):
         s.dispLayout.addWidget(s.pickRegionToggle)
         s.dispLayout.addWidget(s.peakMarkerToggle)
         disp_cases_label = QtGui.QLabel("Cases:")
-        s.dispLayout.addWidget(disp_cases_label)
+        s.casesLayout.addWidget(disp_cases_label)
         s.controls_1.addLayout(s.dispLayout)
         s.controls_1.addLayout(s.casesLayout)
 
-        buttons_1 = [('Prev', s.previous_file),
+        buttons_1 = [('Save',s.save_mt),
+                    ('Prev', s.previous_file),
                      ('Next', s.next_file)]
 
         # s.add_buttons(s.controls_1,buttons_1)
@@ -165,7 +166,7 @@ class Picker(QtGui.QMainWindow):
             if handler:
                 s.buttons[label].clicked.connect(handler)
 
-        s.case_toggles = [] # checkboxes populated for each file
+        s.case_toggles = {} # checkboxes populated for each file
 
         s.pickRegionToggle.stateChanged.connect(s.toggle_regions)
         s.peakMarkerToggle.stateChanged.connect(s.toggle_peaks)
@@ -318,17 +319,17 @@ class Picker(QtGui.QMainWindow):
             s.app_data['experiment cases'] = eeg.case_list
             s.caseChooser.clear()
             print('removing case toggles', s.case_toggles)
-            for toggle in s.case_toggles:
+            for cae,toggle in s.case_toggles.items():
                 toggle.stateChanged.disconnect(s.toggle_case)
                 toggle.setParent(None)#s.casesLayout.removeWidget(toggle)
-            s.case_toggles = []
+            s.case_toggles = {}
             for case in cases:
                 s.caseChooser.addItem(case)
                 case_toggle = QtGui.QCheckBox(case)
                 case_toggle.setChecked(True)
                 case_toggle.stateChanged.connect(s.toggle_case)
                 s.casesLayout.addWidget(case_toggle)
-                s.case_toggles.append(case_toggle)
+                s.case_toggles[case] = case_toggle
             #expD = s.app_data[experiment]
             # reversing initialize flag for testing
             data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=initialize, 
@@ -365,6 +366,9 @@ class Picker(QtGui.QMainWindow):
         s.peak_markers = {}
         s.region_case_peaks = {}
 
+    def save_mt(s):
+        print('Save mt')
+
     def adjust_label(s,viewbox):
 
         if viewbox in s.plot_labels:
@@ -384,10 +388,13 @@ class Picker(QtGui.QMainWindow):
         region = sender.getRegion()
         elec, case, peak = s.region_case_peaks[sender]
 
-        if s.app_data['pick state']['repick mode'] == 'all':
-            for reg in s.pick_regions:
-                if reg[1] == case and reg[2] == peak:
-                    s.pick_regions[reg].setRegion( region )
+        for el_cs_pk,reg in s.pick_regions.items():
+            if s.app_data['pick state']['repick mode'] == 'all' or el_cs_pk == (elec,case,peak):
+                if el_cs_pk[1] == case and el_cs_pk[2] == peak:
+                    reg.setRegion( region )
+            # else: #'single'
+            #     if :
+            #         s.pick_regions[reg].setRegion( region )
 
     def pick_init(s):
 
@@ -410,6 +417,10 @@ class Picker(QtGui.QMainWindow):
                 s.pick_regions[(elec,case,peak)] = region 
                 s.region_case_peaks[region] = (elec,case,peak)
                 s.plots[elec].addItem(region)
+        
+        for disp_case in s.eeg.case_list:
+            s.set_case_display(disp_case,disp_case == case)
+
         print('pick_init finish')
 
 
@@ -462,8 +473,19 @@ class Picker(QtGui.QMainWindow):
         case = sender.text()
         print(case)
         checked = sender.isChecked()
-        for el_cs in [ec for ec in s.curves if ec[1]==case]:
-            s.curves[el_cs].setVisible(checked)
+        s.set_case_display(case,checked)
+        #for el_cs in [ec for ec in s.curves if ec[1]==case]:
+        #    s.curves[el_cs].setVisible(checked)
+
+    def set_case_display(s,case,state):
+
+        s.case_toggles[case].setChecked(state)
+        for el_cs in [ec for ec in s.curves if ec[1] == case]:
+            s.curves[el_cs].setVisible(state)
+        for el_cs_pk in [ ecp for ecp in s.pick_regions if ecp[1] == case ]:
+            s.pick_regions[el_cs_pk].setVisible(state)
+        for el_cs_pk in [ ecp for ecp in s.peak_markers if ecp[1] == case ]:
+            s.peak_markers[el_cs_pk].setVisible(state)
 
     def mode_toggle(s):
         current_mode = s.app_data['pick state']['repick mode']
