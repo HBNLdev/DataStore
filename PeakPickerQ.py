@@ -15,7 +15,17 @@ import organization as O
 import EEGdata
 
 
+
+
 class Picker(QtGui.QMainWindow):
+
+    # def add_buttons(s, layout, labels_slots):
+    #     for label, handler in labels_slots:
+    #         button = QtGui.QPushButton(label)
+    #         layout.addWidget(button)
+    #         if handler:
+    #             button.connect(handler)
+    #         s.buttons[label] = button
 
     init_files_by_exp = {'ant':'ant_0_a0_11111111_avg.h1', 
                     'vp3':'vp3_0_a0_11111111_avg.h1',
@@ -71,6 +81,8 @@ class Picker(QtGui.QMainWindow):
     app_data['file ind'] = 0
     app_data['pick state'] = { 'case':None, 'peak':None,
                                 'repick mode':repick_modes[0]}
+    def dummy_slot(s,ev):
+        print('Dummy slot')
 
     def __init__(s):
         DProps = s.app_data['display props']
@@ -121,18 +133,14 @@ class Picker(QtGui.QMainWindow):
 
         s.controls_1 = QtGui.QHBoxLayout()
 
-        buttons_1 = [('Apply',s.apply_selections),('Prev',s.previous_file),
-                    ('Next',s.next_file)]
 
-        for label,handler in buttons_1:
-            s.buttons[label] = QtGui.QPushButton(label)
-            s.controls_1.addWidget(s.buttons[label])
-            if handler:
-                s.buttons[label].clicked.connect(handler)
 
         # Display controls
         s.dispLayout = QtGui.QHBoxLayout()
-        s.dispLayout.setAlignment(Qt.AlignRight)
+        s.dispLayout.setAlignment(Qt.AlignLeft)
+        s.casesLayout = QtGui.QHBoxLayout()
+        s.casesLayout.setAlignment(Qt.AlignLeft)
+
         disp_label = QtGui.QLabel("Display:")
         s.pickRegionToggle = QtGui.QCheckBox("regions")
         s.pickRegionToggle.setChecked(True)
@@ -144,8 +152,20 @@ class Picker(QtGui.QMainWindow):
         disp_cases_label = QtGui.QLabel("Cases:")
         s.dispLayout.addWidget(disp_cases_label)
         s.controls_1.addLayout(s.dispLayout)
+        s.controls_1.addLayout(s.casesLayout)
 
-        s.case_toggles = []
+        buttons_1 = [('Prev', s.previous_file),
+                     ('Next', s.next_file)]
+
+        # s.add_buttons(s.controls_1,buttons_1)
+
+        for label, handler in buttons_1:
+            s.buttons[label] = QtGui.QPushButton(label)
+            s.controls_1.addWidget(s.buttons[label])
+            if handler:
+                s.buttons[label].clicked.connect(handler)
+
+        s.case_toggles = [] # checkboxes populated for each file
 
         s.pickRegionToggle.stateChanged.connect(s.toggle_regions)
         s.peakMarkerToggle.stateChanged.connect(s.toggle_peaks)
@@ -154,19 +174,25 @@ class Picker(QtGui.QMainWindow):
         s.peakChooser = QtGui.QComboBox()
         for peak in s.peak_choices:
             s.peakChooser.addItem(peak)
-        s.pickButton = QtGui.QPushButton("Pick")
 
         s.peakControls = QtGui.QHBoxLayout()
         s.peakControls.addWidget(s.caseChooser)
         s.peakControls.addWidget(s.peakChooser)
-        s.peakControls.addWidget(s.pickButton)
+
+        pick_buttons = [('Pick',s.pick_init),('Apply',s.apply_selections)]
+        #s.add_buttons(s.peakControls,pick_buttons)
+        for label,handler in pick_buttons:
+            s.buttons[label] = QtGui.QPushButton(label)
+            s.peakControls.addWidget(s.buttons[label])
+            if handler:
+                s.buttons[label].clicked.connect(handler)
+
         all_single_label = QtGui.QLabel("repick mode:")
         all_single_label.setAlignment(Qt.AlignRight)
         s.pickModeToggle = QtGui.QPushButton(s.app_data['pick state']['repick mode'])
         s.peakControls.addWidget(all_single_label)
         s.peakControls.addWidget(s.pickModeToggle)
 
-        s.pickButton.clicked.connect(s.pick_init)
         s.pickModeToggle.clicked.connect(s.mode_toggle)
 
         s.plotsGrid = pg.GraphicsLayoutWidget()#QtGui.QGridLayout()
@@ -291,19 +317,22 @@ class Picker(QtGui.QMainWindow):
             s.app_data['current experiment'] = experiment
             s.app_data['experiment cases'] = eeg.case_list
             s.caseChooser.clear()
+            print('removing case toggles', s.case_toggles)
             for toggle in s.case_toggles:
-                s.dispLayout.removeWidget(toggle)
+                toggle.stateChanged.disconnect(s.toggle_case)
+                toggle.setParent(None)#s.casesLayout.removeWidget(toggle)
+            s.case_toggles = []
             for case in cases:
                 s.caseChooser.addItem(case)
                 case_toggle = QtGui.QCheckBox(case)
                 case_toggle.setChecked(True)
                 case_toggle.stateChanged.connect(s.toggle_case)
-                s.dispLayout.addWidget(case_toggle)
+                s.casesLayout.addWidget(case_toggle)
                 s.case_toggles.append(case_toggle)
             #expD = s.app_data[experiment]
             # reversing initialize flag for testing
             data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=initialize, 
-                                            time_range=s.app_data['display props']['time range'])
+                                    time_range=s.app_data['display props']['time range'])
             s.current_data = data_sourceD
 
             s.plot_desc = eeg.selected_cases_by_channel(mode='server',style='layout')
@@ -330,7 +359,7 @@ class Picker(QtGui.QMainWindow):
                     plot.addItem(label)                    
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
-                print(dir(label))
+                #print(dir(label))
 
         s.pick_regions = {}
         s.peak_markers = {}
@@ -381,12 +410,14 @@ class Picker(QtGui.QMainWindow):
                 s.pick_regions[(elec,case,peak)] = region 
                 s.region_case_peaks[region] = (elec,case,peak)
                 s.plots[elec].addItem(region)
+        print('pick_init finish')
+
 
     def show_zoom_plot(s,ev):
         print('zoom_plot',ev)
         if ev[0].button() == 1 and ev[0].currentItem in s.vb_map:
             elec = s.vb_map[ ev[0].currentItem ]
-            ev[0].accept()
+            #ev[0].accept()
 
             print(elec)
             #if s.zoomDialog is None:
@@ -402,8 +433,9 @@ class Picker(QtGui.QMainWindow):
                                     y=s.current_data[elec+'_'+Pstate['case']], 
                                     pen=s.plot_props['line colors'][c_ind],
                                     name=Pstate['case'] )
-                s.zoomPlot.setXLink(s.plots[elec])
-                s.zoomPlot.setYLink(s.plots[elec])
+                #Need a custom axis linking mechanism
+                #s.zoomPlot.setXLink(s.plots[elec])
+                #s.zoomPlot.setYLink(s.plots[elec])
                 small_region = s.pick_regions[(elec,Pstate['case'],Pstate['peak'])]
                 start_fin = small_region.getRegion()
                 region = pg.LinearRegionItem(values=start_fin,movable=True,
@@ -457,10 +489,12 @@ class Picker(QtGui.QMainWindow):
                 elecs.append(elec_case_peak[0])
                 starts.append(start_finish[0])
                 finishes.append(start_finish[1])
-        print('starts:',starts)
+        #print('starts:',starts)
         pval,pms = s.eeg.find_peaks(case,elecs,
             starts_ms=starts,ends_ms=finishes, polarity=polarity)
         for e_ind,elec in enumerate(elecs):
+            if (elec,case,peak) in s.peak_markers:
+                s.plots[elec].removeItem(s.peak_markers[(elec,case,peak)])
 
             marker = pg.ErrorBarItem(x=[pms[e_ind]],y=[pval[e_ind]],
                 top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
