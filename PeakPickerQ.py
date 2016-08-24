@@ -51,6 +51,7 @@ class Picker(QtGui.QMainWindow):
 
 
     app_data = {}
+    
 
     app_data['display props'] = {'marker size':8,
                             'pick dash':[4,1],
@@ -149,10 +150,20 @@ class Picker(QtGui.QMainWindow):
         s.dispLayout.addWidget(disp_label)
         s.dispLayout.addWidget(s.pickRegionToggle)
         s.dispLayout.addWidget(s.peakMarkerToggle)
-        disp_cases_label = QtGui.QLabel("Cases:")
+        disp_cases_label = QtGui.QLabel("cases:")
         s.casesLayout.addWidget(disp_cases_label)
         s.controls_1.addLayout(s.dispLayout)
         s.controls_1.addLayout(s.casesLayout)
+
+        # Picks display
+        s.stateLayout = QtGui.QHBoxLayout()
+        s.stateLayout.setAlignment(Qt.AlignRight)
+        state_label = QtGui.QLabel("Picked:")
+        s.stateInfo = QtGui.QLabel()
+        s.stateInfo.setAlignment(Qt.AlignLeft)
+        s.stateLayout.addWidget(state_label)
+        s.stateLayout.addWidget(s.stateInfo)
+        s.controls_1.addLayout(s.stateLayout)
 
         buttons_1 = [('Save',s.save_mt),
                     ('Prev', s.previous_file),
@@ -206,6 +217,10 @@ class Picker(QtGui.QMainWindow):
         s.plot_labels = {}
         s.curves = {}
         s.vb_map = {}
+
+        s.peak_data = {}
+
+        s.app_data['picks'] = set()
 
         s.load_file(initialize=True)
         s.caseChooser.clear()
@@ -356,7 +371,6 @@ class Picker(QtGui.QMainWindow):
                                 pen=s.plot_props['line colors'][c_ind],
                                 name=case )
                     label = pg.TextItem(text=elec)
-                    #label.mousePressEvent(s.zoom_plot)
                     plot.addItem(label)                    
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
@@ -368,6 +382,46 @@ class Picker(QtGui.QMainWindow):
 
     def save_mt(s):
         print('Save mt')
+        picked_cp = s.app_data['picks']
+        cases_Ns = list(set([(cp[0],s.eeg.case_num_map[cp[0]]) for cp in picked_cp]))
+        peaks = list(set([cp[1] for cp in picked_cp]))
+
+        n_cases = len(cases_Ns)
+        n_chans = 61 # only core 61 chans
+        n_peaks = len(peaks)
+        amps = np.empty( (n_peaks, n_chans, n_cases) )
+        lats = np.empty( (n_peaks, n_chans, n_cases) )
+        for icase, case_N in enumerate(cases_Ns):
+            case_name = case_N[0]
+            for ichan, chan in enumerate(s.eeg.electrodes_61): # only core 61 chans
+                case_peaks = [ cp[1] for cp in picked_cp if cp[0]==case_name ]
+                case_peaks.sort()
+                for peak in case_peaks:
+                    ipeak = peaks.index(peak)
+                    amp_lat =  s.peak_data[(chan,case_name,peak)]
+                    amps[ipeak, ichan, icase] = amp_lat[0]
+                    lats[ipeak, ichan, icase] = amp_lat[1]
+
+        # reshape into 1d arrays
+        amps1d = amps.ravel('F')
+        lats1d = lats.ravel('F')
+
+        # build mt text (makes default output location), write to a test location
+        s.eeg.build_mt([cn[1] for cn in cases_Ns], peaks, amps1d, lats1d)
+        #print(eeg.mt)
+        test_dir = os.path.join('/active_projects/test', s.app_data['user']+'Q' )
+        if not os.path.exists(test_dir):
+            os.mkdir(test_dir)
+        fullpath = os.path.join( test_dir, s.eeg.mt_name )
+        of = open( fullpath, 'w' )
+        of.write( s.eeg.mt )
+        of.close()
+
+        #exp['status display'].text = 'Saved .mt file to' + test_dir
+        print('Saved', fullpath)
+            
+
+
 
     def adjust_label(s,viewbox):
 
@@ -377,8 +431,7 @@ class Picker(QtGui.QMainWindow):
             label.setPos(region[0][0],region[1][1])
 
     def update_ranges(s):
-        '''This scheme leads to a recursive mess.  Need a way to limit
-        signals to only the axis being updated, and update afterward
+        ''' Called when axis ranges change 
         '''
         s.adjust_label(s.sender())
 
@@ -392,9 +445,6 @@ class Picker(QtGui.QMainWindow):
             if s.app_data['pick state']['repick mode'] == 'all' or el_cs_pk == (elec,case,peak):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                     reg.setRegion( region )
-            # else: #'single'
-            #     if :
-            #         s.pick_regions[reg].setRegion( region )
 
     def pick_init(s):
 
@@ -404,6 +454,8 @@ class Picker(QtGui.QMainWindow):
         s.app_data['pick state']['peak'] = peak
 
         print('Pick init for ',case, peak)
+
+        s.app_data['picks'].add( (case,peak) )
 
         pick_case_peaks = set([(ecp[1],ecp[2]) for ecp in s.pick_regions])
 
@@ -423,6 +475,15 @@ class Picker(QtGui.QMainWindow):
 
         print('pick_init finish')
 
+    def show_state(s):
+        picks = s.app_data['picks']
+        cases = s.eeg.case_list
+        state_string = ''
+        for case in cases:
+            state_string += case+':['
+            state_string += ','.join([cp[1] for cp in picks if cp[0]==case])+'] '
+
+        s.stateInfo.setText(state_string)
 
     def show_zoom_plot(s,ev):
         print('zoom_plot',ev)
@@ -518,10 +579,16 @@ class Picker(QtGui.QMainWindow):
             if (elec,case,peak) in s.peak_markers:
                 s.plots[elec].removeItem(s.peak_markers[(elec,case,peak)])
 
-            marker = pg.ErrorBarItem(x=[pms[e_ind]],y=[pval[e_ind]],
+            latency = pms[e_ind]
+            amplitude = pval[e_ind]
+            s.peak_data[ (elec,case,peak) ] = (amplitude, latency)
+
+            marker = pg.ErrorBarItem(x=[latency],y=[amplitude],
                 top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
             s.peak_markers[(elec,case,peak)] = marker
             s.plots[elec].addItem(marker)
+
+        s.show_state()
 
 
 app = QtGui.QApplication(sys.argv)
