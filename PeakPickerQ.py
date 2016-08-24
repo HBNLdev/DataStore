@@ -377,6 +377,7 @@ class Picker(QtGui.QMainWindow):
                 #print(dir(label))
 
         s.pick_regions = {}
+        s.pick_region_labels = {}
         s.peak_markers = {}
         s.region_case_peaks = {}
 
@@ -434,6 +435,7 @@ class Picker(QtGui.QMainWindow):
         ''' Called when axis ranges change 
         '''
         s.adjust_label(s.sender())
+        s.update_region_label_positions()
 
     def update_pick_regions(s):
         
@@ -445,6 +447,8 @@ class Picker(QtGui.QMainWindow):
             if s.app_data['pick state']['repick mode'] == 'all' or el_cs_pk == (elec,case,peak):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                     reg.setRegion( region )
+
+        s.update_region_label_positions()
 
     def pick_init(s):
 
@@ -466,14 +470,30 @@ class Picker(QtGui.QMainWindow):
                 region = pg.LinearRegionItem(values=start_range,movable=True,
                         brush=s.app_data['display props']['pick region'])
                 region.sigRegionChangeFinished.connect(s.update_pick_regions)
-                s.pick_regions[(elec,case,peak)] = region 
+                region_label = pg.TextItem(
+                    html='<div style="color: #FF0; font-size: 7pt;">'+peak+'</div>',
+                    anchor=(-0.025,0.2))
+
+                s.pick_regions[(elec,case,peak)] = region
+                s.pick_region_labels[(elec,case,peak)] = region_label
                 s.region_case_peaks[region] = (elec,case,peak)
                 s.plots[elec].addItem(region)
+                s.plots[elec].addItem(region_label)
+        s.update_region_label_positions()
         
         for disp_case in s.eeg.case_list:
             s.set_case_display(disp_case,disp_case == case)
 
+
+
         print('pick_init finish')
+
+    def update_region_label_positions(s):
+        for reg_key, region in s.pick_regions.items():
+            elec = reg_key[0]
+            vb_range = s.plots[elec].vb.getState()['viewRange']
+            start_fin = region.getRegion()
+            s.pick_region_labels[reg_key].setPos( start_fin[0],vb_range[1][1] )
 
     def show_state(s):
         picks = s.app_data['picks']
@@ -522,7 +542,8 @@ class Picker(QtGui.QMainWindow):
     def toggle_regions(s):
         checked = s.sender().isChecked()
         for el_cs_pk,reg in s.pick_regions.items():
-             reg.setVisible(checked) 
+            reg.setVisible(checked) 
+            s.pick_region_labels[el_cs_pk].setVisible(checked)
 
     def toggle_peaks(s):
         checked = s.sender().isChecked()
@@ -545,6 +566,8 @@ class Picker(QtGui.QMainWindow):
             s.curves[el_cs].setVisible(state)
         for el_cs_pk in [ ecp for ecp in s.pick_regions if ecp[1] == case ]:
             s.pick_regions[el_cs_pk].setVisible(state)
+            s.pick_region_labels[el_cs_pk].setVisible(state)
+
         for el_cs_pk in [ ecp for ecp in s.peak_markers if ecp[1] == case ]:
             s.peak_markers[el_cs_pk].setVisible(state)
 
