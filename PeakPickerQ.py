@@ -39,7 +39,8 @@ class Picker(QtGui.QMainWindow):
                                 'aod_6_a1_40021070_avg.h1 aod_6_a1_40021017_avg.h1 aod_6_a1_40017007_avg.h1']
                         }
 
-    show_only = ('X','Y')
+    ignore = ['BLANK']
+    show_only = ['X','Y']
     repick_modes = ('all','single')
     peak_choices = ['P1','P2','P3','P4','N1','N2','N3','N4']
 
@@ -212,7 +213,8 @@ class Picker(QtGui.QMainWindow):
         s.zoomGW = pg.GraphicsWindow(parent=s.zoomDialog)
         s.zoomPlot = s.zoomGW.addPlot()#pg.PlotWidget(parent=s.zoomDialog)
         s.plotsGrid.ci.layout.setContentsMargins(0, 0, 0, 0)
-        s.plotsGrid.ci.layout.setSpacing(0) 
+        s.plotsGrid.ci.layout.setSpacing(0)
+        s.pick_electrodes = []
         s.plots = {}
         s.plot_labels = {}
         s.curves = {}
@@ -234,6 +236,8 @@ class Picker(QtGui.QMainWindow):
             for cN,p_desc in enumerate(prow):
                 if p_desc:
                     elec = p_desc['electrode']
+                    if elec not in s.ignore + s.show_only:
+                        s.pick_electrodes.append(elec)
                     plot = s.plotsGrid.addPlot(rN+1,cN)#,title=elec)
                     s.proxyMouse = pg.SignalProxy(plot.scene().sigMouseClicked, slot=s.show_zoom_plot)
                     #plot.resize(300,250)
@@ -332,9 +336,10 @@ class Picker(QtGui.QMainWindow):
             print('Load  ', experiment,' n paths, ind: ', len(paths), ind, eeg.file_info)
             s.app_data['current experiment'] = experiment
             s.app_data['experiment cases'] = eeg.case_list
+
             s.caseChooser.clear()
             print('removing case toggles', s.case_toggles)
-            for cae,toggle in s.case_toggles.items():
+            for case,toggle in s.case_toggles.items():
                 toggle.stateChanged.disconnect(s.toggle_case)
                 toggle.setParent(None)#s.casesLayout.removeWidget(toggle)
             s.case_toggles = {}
@@ -362,7 +367,7 @@ class Picker(QtGui.QMainWindow):
                         name=case)
                     s.legend_plot.vb.setRange(xRange=[0,1],yRange=[0,1])
 
-                for elec in [ ch for ch in chans if ch not in ['BLANK'] ]:
+                for elec in [ ch for ch in chans if ch not in s.ignore ]:
                     plot = s.plots[elec]
                     plot.clear()
                     for c_ind,case in enumerate(cases):
@@ -376,10 +381,28 @@ class Picker(QtGui.QMainWindow):
                     s.adjust_label(plot.vb)
                 #print(dir(label))
 
-        s.pick_regions = {}
-        s.pick_region_labels = {}
+
         s.peak_markers = {}
         s.region_case_peaks = {}
+
+        #check for and load old mt
+        picked_file_exists = s.eeg.extract_mt_data()
+        if picked_file_exists:
+            print('Already picked')
+            for cs_pk in s.eeg.case_peaks:
+                s.app_data['picks'].add( (s.eeg.num_case_map[int(cs_pk[0])], cs_pk[1]  ) )
+
+            for elec in s.pick_electrodes:
+                for cs_pk in s.eeg.case_peaks:
+                    #print(elec,cs_pk,  s.eeg.get_peak_data( elec, cs_pk[0], cs_pk[1] ) )
+                    s.peak_data[ (elec,cs_pk[0],cs_pk[1]) ] = \
+                        tuple([float(v) for v in s.eeg.get_peak_data( elec, cs_pk[0], cs_pk[1] ) ])
+            print('picks',s.app_data['picks'])
+            s.show_peaks()
+            s.show_state()
+
+        s.pick_regions = {}
+        s.pick_region_labels = {}
 
     def save_mt(s):
         print('Save mt')
@@ -578,6 +601,20 @@ class Picker(QtGui.QMainWindow):
             s.repick_modes[(current_mode_i+1)%len(s.repick_modes)]
         s.pickModeToggle.setText(s.app_data['pick state']['repick mode'])
 
+    
+    def show_peaks(s):
+
+        bar_len = s.app_data['display props']['bar length']
+
+        for el_cs_pk, amp_lat in s.peak_data.items():
+            if el_cs_pk in s.peak_markers:
+                s.plots[el_cs_pk[0]].removeItem(s.peak_markers[el_cs_pk])
+
+            marker = pg.ErrorBarItem(x=[amp_lat[1]],y=[amp_lat[0]],
+                top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
+            s.peak_markers[el_cs_pk] = marker
+            s.plots[el_cs_pk[0]].addItem(marker)
+
     def apply_selections(s):
         case = s.app_data['pick state']['case']
         peak = s.app_data['pick state']['peak']
@@ -585,8 +622,6 @@ class Picker(QtGui.QMainWindow):
         starts = []
         finishes = []
         elecs = []
-
-        bar_len = s.app_data['display props']['bar length']
 
         for elec_case_peak in s.pick_regions:
             if elec_case_peak[1] == case and elec_case_peak[2] == peak:
@@ -599,17 +634,19 @@ class Picker(QtGui.QMainWindow):
         pval,pms = s.eeg.find_peaks(case,elecs,
             starts_ms=starts,ends_ms=finishes, polarity=polarity)
         for e_ind,elec in enumerate(elecs):
-            if (elec,case,peak) in s.peak_markers:
-                s.plots[elec].removeItem(s.peak_markers[(elec,case,peak)])
+            # if (elec,case,peak) in s.peak_markers:
+            #     s.plots[elec].removeItem(s.peak_markers[(elec,case,peak)])
 
             latency = pms[e_ind]
             amplitude = pval[e_ind]
             s.peak_data[ (elec,case,peak) ] = (amplitude, latency)
 
-            marker = pg.ErrorBarItem(x=[latency],y=[amplitude],
-                top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
-            s.peak_markers[(elec,case,peak)] = marker
-            s.plots[elec].addItem(marker)
+            # marker = pg.ErrorBarItem(x=[latency],y=[amplitude],
+            #     top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
+            # s.peak_markers[(elec,case,peak)] = marker
+            # s.plots[elec].addItem(marker)
+
+        s.show_peaks()
 
         s.show_state()
 
