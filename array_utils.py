@@ -4,12 +4,12 @@ import numpy as np
 import itertools
 
 # array functions
-def baseline_amp(array, pt_lims, along_dim=-1):
+def baseline_sub(array, pt_lims, along_dim=-1):
     ''' baseline array in a subtractive way '''
     return array - array.take(range(pt_lims[0], pt_lims[1]+1), axis=along_dim)\
                         .mean(axis=along_dim, keepdims=True)
 
-def baseline_tf(array, pt_lims, along_dim=-1):
+def baseline_div(array, pt_lims, along_dim=-1):
     ''' baseline array in a divisive way '''
     return 10 * np.log10(array / array.take(range(pt_lims[0], pt_lims[1] + 1),
                                             axis=along_dim)

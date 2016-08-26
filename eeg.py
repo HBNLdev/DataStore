@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import mne
 
-from array_utils import (convert_ms, baseline_amp, baseline_tf, handle_by,
+from array_utils import (convert_ms, baseline_sub, baseline_div, handle_by,
                              basic_slice, compound_take)
 from plot import measure_pps, get_plotparams
 from plot_utils import nested_strjoin
@@ -162,9 +162,11 @@ class Results:
         ''' given 3-letter experiment designation, retrieve behavioral data '''
         wanted_fields = ['ID', 'session', experiment]
         proj = {wf:1 for wf in wanted_fields}
+        proj.update({'_id':0})
 
         s.demog_df = C.join_collection(s.demog_df, 'EEGbehavior', add_proj=proj,
-            left_join_inds=['ID', 'session'], right_join_inds=['ID', 'session'])
+            left_join_inds=['ID', 'session'], right_join_inds=['ID', 'session'],
+            prefix='')
 
     def export_demogs(s, savedir='~'):
         ''' export the current demog_df as a csv '''
@@ -222,17 +224,22 @@ class Results:
                                         for ms in time_plotlims_ms]
 
         # coherence pairs
-        s.cohpair_inds = [ [int(chan_num)-1 for chan_num in pair]
+        s.cohpair_inds = [ [int(chan_num)-1 for chan_num in pair] # MATLAB index
                                 for pair in s.params['Coherence pairs'].T ]
         if len(s.params['Coherence pairs'].shape) > 1:
             s.cohpair_lbls = ['~'.join([s.montage.ch_names[chan_ind]
                                         for chan_ind in pair])
                                             for pair in s.cohpair_inds]
             s.cohpair_sets = {}
+            s.cohchan_sets = {}
             for pind, pset in enumerate(s.params['Coherence pair subsets']):
-                setpairs = [s.cohpair_lbls[pair] for pair in np.where(\
-                    s.params['Coherence pair subset index']==pind+1)[1]]
+                tmp_pairs = np.where(
+                        s.params['Coherence pair subset index']==pind+1)[1]
+                setpairs = [s.cohpair_lbls[pair] for pair in tmp_pairs]
                 s.cohpair_sets[pset] = setpairs
+                setchans = np.unique(np.array([s.cohpair_inds[p]
+                                                    for p in tmp_pairs]))
+                s.cohchan_sets[pset] = [s.montage.ch_names[i] for i in setchans]
 
     def time_ticks(s, interval=200):
         ''' time ticks for plots '''
@@ -269,7 +276,8 @@ class Results:
         print(data.shape)
         return data
 
-    def load_erp(s, lp_cutoff=16, bl_window=[-100, 0]):
+    def load_erp(s, filt=True, lp_cutoff=16,
+                    baseline=True, bl_window=[-100, 0]):
         ''' load, filter, and subtractively baseline ERP data '''
 
         erp = s.load('erp', 'erp', [3, 0, 1, 2])
@@ -278,19 +286,42 @@ class Results:
         # erp is now (subjects, conditions, channels, timepoints,)
 
         # filter
-        erp_filt = mne.filter.low_pass_filter(erp, s.params['Sampling rate'],
-                                                   lp_cutoff)
-        # baseline
-        erp_filt_bl = baseline_amp(erp_filt, (convert_ms(s.time, bl_window[0]),
-                                              convert_ms(s.time, bl_window[1])))
+        if filt:
+            erp_filt = mne.filter.low_pass_filter(erp,
+                s.params['Sampling rate'], lp_cutoff)
 
-        s.erp = erp_filt_bl
+        s.erp = erp_filt
         s.erp_dims = ('subject', 'condition', 'channel', 'timepoint')
         s.erp_dim_lsts = (s.demog_df.index.values,
                           np.array(s.params['Condition labels'], dtype=object),
                           np.array(s.montage.ch_names, dtype=object),
                           s.time)
 
+        # baseline
+        if baseline:
+            s.baseline('erp', 'subtractive', bl_window)
+
+    def baseline(s, measure, method, window):
+
+        if measure not in measure_pps:
+            print('measure incorrectly specified'); raise
+
+        if method not in ['subtractive', 'divisive']:
+            print('method incorrectly specified'); raise
+
+        data = getattr(s, measure_pps[measure]['data'])
+        pt_lims = (convert_ms(s.time, window[0]), convert_ms(s.time, window[1]))
+
+        print('baselining {} from {} to {} ms using {} method'.format(
+                    measure, window[0], window[1], method))
+
+        if method == 'subtractive':
+            setattr(s, measure_pps[measure]['data'],
+                baseline_sub(data, pt_lims))
+        elif method == 'divisive':
+            setattr(s, measure_pps[measure]['data'],
+                baseline_div(data, pt_lims))        
+        
     def prepare_mne(s):
         ''' prepare an mne EvokedArray object from erp data '''
         if 'erp' not in dir(s):
@@ -304,7 +335,7 @@ class Results:
         return mne.EvokedArray(chan_erps, info,
                                tmin=s.params['Temporal limits'][0] / 1000)
 
-    def load_power(s, bl_window=[-500, -200]):
+    def load_power(s, baseline=True, bl_window=[-500, -200]):
         ''' load (total) power data and divisively baseline-normalize '''
 
         power = s.load('power', 'wave_totpow', [4, 0, 2, 1, 3])
@@ -313,11 +344,7 @@ class Results:
         power = power[:, :, :, ::-1, :]  # reverse the freq dimension
         # power is (subjects, conditions, channels, freq, timepoints,)
 
-        # divisively baseline normalize
-        power_bl = baseline_tf(power, (convert_ms(s.time_tf, bl_window[0]),
-                                       convert_ms(s.time_tf, bl_window[1]),))
-
-        s.power = power_bl
+        s.power = power
         s.tf_dims = ('subject', 'condition', 'channel',
                         'frequency', 'timepoint')
         s.tf_dim_lsts = (s.demog_df.index.values,
@@ -325,7 +352,11 @@ class Results:
                         np.array(s.montage.ch_names, dtype=object),
                         s.freq, s.time_tf)
 
-    def load_itc(s, bl_window=[-500, -200]):
+        # divisively baseline normalize
+        if baseline:
+            s.baseline('power', 'divisive', bl_window)
+
+    def load_itc(s, baseline=True, bl_window=[-500, -200]):
         ''' load phase data, take absolute() of, and subtractively baseline '''
 
         dsets = [h5py.File(fn, 'r')['wave_evknorm']
@@ -340,11 +371,7 @@ class Results:
         itc = np.absolute(stack)
         print(itc.shape)
 
-        # baseline normalize
-        itc_bl = baseline_amp(itc, (convert_ms(s.time_tf, bl_window[0]),
-                                    convert_ms(s.time_tf, bl_window[1]),))
-
-        s.itc = itc_bl
+        s.itc = itc
         s.tf_dims = ('subject', 'condition', 'channel',
                         'frequency', 'timepoint')
         s.tf_dim_lsts = (s.demog_df.index.values,
@@ -352,7 +379,11 @@ class Results:
                         np.array(s.montage.ch_names, dtype=object),
                         s.freq, s.time_tf)
 
-    def load_coh(s, bl_window=[-500, -200]):
+        # divisively baseline normalize
+        if baseline:
+            s.baseline('itc', 'subtractive', bl_window)
+
+    def load_coh(s, baseline=True, bl_window=[-500, -200]):
 
         dsets = [h5py.File(fn, 'r')['coh']
                  for fn in s.demog_df['path'].values]
@@ -366,16 +397,16 @@ class Results:
         coh = np.absolute(stack)
         print(coh.shape)
 
-        # baseline normalize
-        coh_bl = baseline_amp(coh, (convert_ms(s.time_tf, bl_window[0]),
-                                    convert_ms(s.time_tf, bl_window[1]),))
-
-        s.coh = coh_bl
+        s.coh = coh
         s.coh_dims = ('subject', 'condition', 'pair', 'frequency', 'timepoint')
         s.coh_dim_lsts = (s.demog_df.index.values,
                         np.array(s.params['Condition labels'], dtype=object),
                         np.array(s.cohpair_lbls, dtype=object),
                         s.freq, s.time_tf)
+
+        # divisively baseline normalize
+        if baseline:
+            s.baseline('coh', 'subtractive', bl_window)
 
     def load_phi(s):
         ''' load phase data, take angle() of '''
