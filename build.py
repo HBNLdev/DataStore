@@ -1,6 +1,7 @@
 ''' build collections '''
 
 import os
+from glob import glob
 from datetime import datetime
 from collections import OrderedDict
 import numpy as np
@@ -12,11 +13,60 @@ import quest_import as qi
 import organization as O
 import file_handling as FH
 
+# utility functions
+
+def calc_followupcol(row):
+    ''' return the Phase 4 followup # '''
+    if row['Phase4-session'] is np.nan or row['Phase4-session'] not in 'abcd':
+        return np.nan
+    else:
+        return ord(row['session']) - ord(row['Phase4-session'])
+
+def join_ufields(row):
+    ''' join ID and session fields in a dataframe '''
+    return '_'.join([row['ID'], row['session']])
+
+def get_toc(target_dir, toc_str):
+    ''' given dir containing toc files and string to be found in one,
+        find the path of the most recently modified one matching the string '''
+    pd_tocfiles = [f for f in glob(target_dir+'*.toc') if toc_str in f]
+    pd_tocfiles.sort(key=os.path.getmtime)
+    latest = pd_tocfiles[-1]
+    return latest
+
+def txt_tolines(path):
+    ''' given path to text file, return its lines as list '''
+    with open(path, 'r') as f:
+        lines = [l.strip() for l in f.readlines()]
+    return lines
+    
+def find_lines(lines, start, end):
+    ''' find lines that match start and end exressions '''
+    tmp_lines = [l for l in lines if l[:len(start)] == start \
+                                 and l[-len(end):] == end]
+    return tmp_lines
+
+def verify_files(files):
+    ''' given a list of paths, return the ones that exist '''
+    existent_files = []
+    for f in files:
+        if os.path.isfile(f):
+            existent_files.append(f)
+        else:
+            print(f + ' does not exist')
+    return existent_files
+
+def get_dates(files):
+    ''' given a list of paths, return a matching list of modified times '''
+    return [os.path.getmtime(f) for f in files]
+
+# build functions
+#   each builds a collection, usually named after the function
 
 def subjects():
     # fast
     master_mtime = mi.load_master()
-    for rec in mi.master.to_dict(orient='records'):
+    for rec in tqdm(mi.master.to_dict(orient='records')):
         so = O.Subject(rec)
         so.storeNaTsafe()
     sourceO = O.SourceInfo(O.Subject.collection, (mi.master_path, master_mtime))
@@ -24,8 +74,6 @@ def subjects():
 
 
 def sessions():
-    def join_ufields(row):
-            return '_'.join([row['ID'], row['session']])
     # fast
     master_mtime = mi.load_master()
     for char in 'abcdefghijk':
@@ -33,34 +81,29 @@ def sessions():
         if sessionDF.empty:
             continue
         else:
-            sessionDF['session'] = char
-            sessionDF['followup'] = sessionDF.apply(calc_followupcol, axis=1)
+            sessionDF.loc[:, 'session'] = char
+            sessionDF.loc[:, 'followup'] = \
+                sessionDF.apply(calc_followupcol, axis=1)
             for col in ['raw', 'date', 'age']:
-                sessionDF[col] = sessionDF[char + '-' + col]
-            sessionDF['uID'] = sessionDF.apply(join_ufields, axis=1)
+                sessionDF.loc[:, col] = sessionDF[char + '-' + col]
+            sessionDF.loc[:, 'uID'] = sessionDF.apply(join_ufields, axis=1)
             # drop unneeded columns ?
             # drop_cols = [col for col in sessionDF.columns if '-age' in col or 
             #   '-date' in col or '-raw' in col or '-run' in col]
             # sessionDF.drop(drop_cols, axis=1, inplace=True)
-            for rec in sessionDF.to_dict(orient='records'):
+            for rec in tqdm(sessionDF.to_dict(orient='records')):
                 so = O.Session(rec)
                 so.storeNaTsafe()
     sourceO = O.SourceInfo(O.Session.collection, (mi.master_path, master_mtime))
     sourceO.store()
 
 
-def calc_followupcol(row):
-    if row['Phase4-session'] is np.nan or row['Phase4-session'] not in 'abcd':
-        return np.nan
-    else:
-        return ord(row['session']) - ord(row['Phase4-session'])
-
-
 def erp_peaks():
     # 3 minutes
+    # or 3 hours? depending on network traffic
     mt_files, datemods = FH.identify_files('/processed_data/mt-files/', '*.mt')
     add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
-        'ant_phase4_peaks_2016']
+                'ant_phase4_peaks_2016']
     for subdir in add_dirs:
         mt_files2, datemods2 = FH.identify_files(
             '/active_projects/HBNL/'+subdir+'/', '*.mt')
@@ -82,7 +125,7 @@ def erp_peaks():
 def neuropsych_xml():
     # 10 minutes
     xml_files, datemods = FH.identify_files('/raw_data/neuropsych/', '*.xml')
-    for fp in xml_files:
+    for fp in tqdm(xml_files):
         xmlO = FH.neuropsych_xml(fp)
         nsO = O.Neuropsych('all', xmlO.data)
         nsO.store()
@@ -90,69 +133,32 @@ def neuropsych_xml():
                             list(zip(xml_files, datemods)), 'all')
     sourceO.store()
 
-
-def neuropsych_TOLT():
-    # 30 seconds
-    tolt_files, datemods = FH.identify_files('/raw_data/neuropsych/',
-                                             '*TOLT*sum.txt')
-    for fp in tolt_files:
-        toltO = FH.tolt_summary_file(fp)
-        nsO = O.Neuropsych('TOLT', toltO.data)
-        nsO.store()
-    sourceO = O.SourceInfo(O.Neuropsych.collection, list(
-        zip(tolt_files, datemods)), 'TOLT')
-    sourceO.store()
-
-
-def neuropsych_CBST():
-    # 30 seconds
-    cbst_files, datemods = FH.identify_files('/raw_data/neuropsych/',
-                                             '*CBST*sum.txt')
-    for fp in cbst_files:
-        cbstO = FH.cbst_summary_file(fp)
-        nsO = O.Neuropsych('CBST', cbstO.data)
-        nsO.store()
-    sourceO = O.SourceInfo(O.Neuropsych.collection, list(
-        zip(cbst_files, datemods)), 'CBST')
-    sourceO.store()
-
-
-def questionnaires():
-    ''' import all session-based questionnaire info '''
+def questionnaires_ph4():
     # takes  ~20 seconds per questionnaire
-    # non-SSAGA
-    for qname in qi.knowledge.keys():
+    # phase 4 non-SSAGA
+    kmap = qi.map_ph4
+    path = '/processed_data/zork/zork-phase4-69/session/'
+    for qname in kmap.keys():
         print(qname)
-        qi.import_questfolder(qname)
-        qi.match_fups2sessions(qname, qi.knowledge, O.Questionnaire.collection)
-
-def ssaga():
-    ''' import all session-based questionnaire info related to SSAGA '''
-    # SSAGA
-    for qname in qi.knowledge_ssaga.keys():
-        print(qname)
-        qi.import_questfolder_ssaga(qname)
-        qi.match_fups2sessions(qname, qi.knowledge_ssaga, O.SSAGA.collection)
-
-# so far, subject-based questionnaire info each has its own build method
-# have so far: core, internalizing
-# missing: fams, fham4, ph4master, rels
+        qi.import_questfolder(qname, kmap, path)
+        qi.match_fups2sessions(qname, kmap, path, O.Questionnaire.collection)
 
 def core():
     # fast
-    folder = '/active_projects/mike/zork-ph4-65-bl/subject/core/'
-    file = 'core_pheno_20160411.sas7bdat.csv'
+    folder = '/processed_data/zork/zork-phase4-69/subject/core/'
+    file = 'core_pheno_20160822.sas7bdat.csv'
     path = folder + file
     datemod = datetime.fromtimestamp(os.path.getmtime(path))
     df = qi.df_fromcsv(path)
-    for drec in df.to_dict(orient='records'):
+    for drec in tqdm(df.to_dict(orient='records')):
         ro = O.Core(drec)
         ro.store()
     sourceO = O.SourceInfo(O.Core.collection, (path, datemod))
     sourceO.store()
 
 def internalizing():
-    folder = '/active_projects/mike/zork-ph4-65-bl/subject/internalizing/'
+    # fast
+    folder = '/processed_data/zork/zork-phase4-69/subject/internalizing/'
     file = 'INT_Scale_JK_Scores_n11271.csv'
     path = folder + file
     datemod = datetime.fromtimestamp(os.path.getmtime(path))
@@ -164,7 +170,8 @@ def internalizing():
     sourceO.store()
 
 def externalizing():
-    folder = '/active_projects/mike/zork-ph4-65-bl/subject/vcuext/'
+    # fast
+    folder = '/processed_data/zork/zork-phase4-69/subject/vcuext/'
     file = 'vcu_ext_all_121112.sas7bdat.csv'
     path = folder + file
     datemod = datetime.fromtimestamp(os.path.getmtime(path))
@@ -175,22 +182,72 @@ def externalizing():
     sourceO = O.SourceInfo(O.Externalizing.collection, (path, datemod))
     sourceO.store()
 
-# end subject-based questionnaire stuff
+def fham():
+    # fast
+    folder = '/processed_data/zork/zork-phase4-69/subject/fham4/'
+    file = 'bigfham4.sas7bdat.csv'
+    path = folder + file
+    datemod = datetime.fromtimestamp(os.path.getmtime(path))
+    df = qi.df_fromcsv(path, 'IND_ID')
+    for drec in tqdm(df.to_dict(orient='records')):
+        ro = O.FHAM(drec)
+        ro.store()
+    sourceO = O.SourceInfo(O.FHAM.collection, (path, datemod))
+    sourceO.store()
 
 def eeg_data():
     # ~2 mins?
     start_dir = '/processed_data/cnt-h1-files/'
     glob_expr = '*cnt.h1'
     cnth1_files, datemods = FH.identify_files(start_dir, glob_expr)
-    for f in cnth1_files:
+    for f in tqdm(cnth1_files):
         fO = FH.cnth1_file(f)
         fO.parse_fileDB()
         eegO = O.EEGData(fO.data)
         eegO.store()
-    sourceO = O.SourceInfo('EEGdata', list(zip(cnth1_files, datemods)))
+    sourceO = O.SourceInfo(O.EEGData.collection,
+                    list(zip(cnth1_files, datemods)))
     sourceO.store()
 
-def mat_st_inv_data():
+def erp_data():
+    # ~2 mins?
+    start_dir = '/processed_data/avg-h1-files/'
+    glob_expr = '*avg.h1'
+    avgh1_files, datemods = FH.identify_files(start_dir, glob_expr)
+    for f in tqdm(avgh1_files):
+        fO = FH.cnth1_file(f)  # basically identical at this point
+        fO.parse_fileDB()
+        eegO = O.ERPData(fO.data)
+        eegO.store()
+    sourceO = O.SourceInfo(O.ERPData.collection,
+                    list(zip(avgh1_files, datemods)))
+    sourceO.store()
+
+def mat_st_inv_data_toc():
+    # can take a while depending on network traffic
+    toc_dir = '/archive/backup/toc.d/'
+    toc_str = 'processed_data'
+    latest = get_toc(toc_dir, toc_str)
+
+    lines = txt_tolines(latest)
+
+    start = './mat-files-v'
+    end = 'st.mat'
+    tmp_lines = find_lines(lines, start, end)
+
+    new_prefix = '/processed_data'
+    files = [new_prefix + l[1:] for l in tmp_lines]
+    mat_files = verify_files(files)
+    # dates = get_dates(files)
+    for f in tqdm(mat_files):
+        infoD = FH.parse_mt_name(f)
+        infoD['path'] = f
+        infoD['prc_ver'] = f.split(os.path.sep)[2][-2]
+        matO = O.STransformInverseMats(infoD)
+        matO.store()
+
+def mat_st_inv_data_walk():
+    # can take a while depending on network traffic
     start_base = '/processed_data/mat-files-v'
     start_fins = ['40','60']
     glob_expr = '*st.mat'
@@ -200,27 +257,12 @@ def mat_st_inv_data():
         f_mats, f_dates = FH.identify_files(start_base+fin,glob_expr)
         mat_files.extend(f_mats)
         dates.extend(f_dates)
-    for f in mat_files:
+    for f in tqdm(mat_files):
         infoD = FH.parse_mt_name(f)
         infoD['path'] = f
         infoD['prc_ver'] = f.split(os.path.sep)[2][-2]
         matO = O.STransformInverseMats(infoD)
         matO.store()
-
-
-def erp_data():
-    # ~2 mins?
-    start_dir = '/processed_data/avg-h1-files/'
-    glob_expr = '*avg.h1'
-    avgh1_files, datemods = FH.identify_files(start_dir, glob_expr)
-    for f in avgh1_files:
-        fO = FH.cnth1_file(f)  # basically identical at this point
-        fO.parse_fileDB()
-        eegO = O.ERPData(fO.data)
-        eegO.store()
-    sourceO = O.SourceInfo('ERPdata', list(zip(avgh1_files, datemods)))
-    sourceO.store()
-
 
 def eeg_behavior(files_dms=None):
     # ~8 hours total to parse all *.avg.h1's for behavior
@@ -237,7 +279,7 @@ def eeg_behavior(files_dms=None):
         try:
             fO = FH.avgh1_file(f)
             if fO.file_info['experiment'] == 'err':
-                continue # these have corrupted trial info and will overwrite ern
+                continue # have corrupted trial info and will overwrite ern
             fO.parse_behav_forDB()
             erpbeh_obj = O.EEGBehavior(fO.data)
             erpbeh_obj.compare()
@@ -250,121 +292,60 @@ def eeg_behavior(files_dms=None):
     sourceO = O.SourceInfo('EEGbehavior', list(zip(avgh1_files, datemods)))
     sourceO.store()
 
+# not recommended / graveyard below
 
-def ero_pheno(files_dates=None,debug=False):
-    if not files_dates:
-        base_dir = '/processed_data'
-        start_dirs = ['csv-files-v60']  # ,'csv-files-v40'
-        glob_expr = '*.csv'
-        skip_dir = 'ERO-results'
-        for start_dir in start_dirs:
-            path = os.path.join(base_dir, start_dir)
-            all_eeg_csvs, datemods = FH.identify_files(path, glob_expr)
-            site_eeg_csvs_dates = [fp_d for fp_d in zip(all_eeg_csvs, datemods)
-                                   if skip_dir not in fp_d[0]]
+def questionnaires_ssaga():
+    ''' import all session-based questionnaire info related to SSAGA
+        i recommend not using this unless absolutely necessary because
+        most of this info is in the core phenotype file '''
+    # SSAGA
+    path = '/processed_data/zork/zork-phase4-69/session/'
+    kmap = qi.map_ph4_ssaga
+    for qname in kmap.keys():
+        print(qname)
+        qi.import_questfolder_ssaga(qname, kmap, path)
+        qi.match_fups2sessions(qname, kmap, path, O.SSAGA.collection)
 
-    else:
-        site_eeg_csvs_dates = files_dates
+def questionnaires_ph123():
+    ''' import all session-based questionnaire info from phase 4
+        unused because difficult but should fix it later '''
+    # takes  ~20 seconds per questionnaire
+    # phase 1, 2, and 3 non-SSAGA
+    kmap = qi.map_ph123
+    path = '/processed_data/zork/zork-phase123/session/'
+    for qname in kmap.keys():
+        print(qname)
+        qi.import_questfolder(qname, kmap, path)
+        qi.match_fups2sessions(qname, kmap, path, O.Questionnaire.collection)
 
-    if debug:
-        D_loop_times = []
-        D_sub_ses_times = []
-
-    for fileP, date in site_eeg_csvs_dates:
-        if debug:
-            D_loop_start = datetime.now()
-            D_loop_sub_ses_times = []
-
-        fileO = FH.ERO_csv(fileP)
-        file_info = fileO.data_for_file()  # all filename parsing to here
-
-        eroFileQ = O.Mdb['EROcsv'].find({'filepath': fileP})
-        if eroFileQ.count() > 1:
-            print('Repeat for ' + fileP)
-        if eroFileQ.count() > 0:
-            fileO_id = eroFileQ.next()['_id']
-        else:
-            eroFileO = O.EROcsv(fileP, file_info)
-            insert_info = eroFileO.store_track()
-            fileO_id = insert_info.inserted_id
-
-        for sub_ses in fileO.data_by_sub_ses():
-            if debug:
-                D_sub_ses_start = datetime.now()
-            eroPhenoO = O.EROpheno(sub_ses, fileO_id)
-            eroPhenoO.store()
-            if debug:
-                D_sub_ses_t = datetime.now() - D_sub_ses_start
-                D_loop_sub_ses_times.append(D_sub_ses_t)
-        if debug:
-            D_sub_ses_times.append(D_loop_sub_ses_times)
-            D_loop_times.append( datetime.now() - D_loop_start )
+def neuropsych_TOLT():
+    # 30 seconds
+    tolt_files, datemods = FH.identify_files('/raw_data/neuropsych/',
+                                             '*TOLT*sum.txt')
+    for fp in tqdm(tolt_files):
+        toltO = FH.tolt_summary_file(fp)
+        nsO = O.Neuropsych('TOLT', toltO.data)
+        nsO.store()
+    sourceO = O.SourceInfo(O.Neuropsych.collection, list(
+        zip(tolt_files, datemods)), 'TOLT')
+    sourceO.store()
 
 
-        print('.', end='')
-
-    if debug:
-        return {'loops':D_loop_times,
-                'sub_ses':D_sub_ses_times}
-    # return site_eeg_csvs_dates
-
-
-def ero_pheno_summary(csvs):
-    ''' for adding single "summary" CSVs one at a time
-        with individual insert/update operations per row '''
-    for fileP in csvs:
-        fileO = FH.ERO_summary_csv(fileP)
-        file_info = fileO.data_for_file()  # all filename parsing to here
-
-        eroFileQ = O.Mdb['EROcsv'].find({'filepath': fileP})
-        if eroFileQ.count() > 1:
-            print('Repeat for ' + fileP)
-        if eroFileQ.count() > 0:
-            fileO_id = eroFileQ.next()['_id']
-        else:
-            eroFileO = O.EROcsv(fileP, file_info)
-            insert_info = eroFileO.store_track()
-            fileO_id = insert_info.inserted_id
-
-        for sub_ses in fileO.data_by_sub_ses():  # start planning here for bulk
-
-            eroPhenoO = O.EROpheno(sub_ses, fileO_id)
-            eroPhenoO.store()
-
-        print('.', end='')
-
-
-def ero_pheno_summary_bulk(csvs):
-    ''' for adding single "summary" CSVs one at a time with bulk_write,
-        which performs all row inserts / updates simultaneously'''
-    for fpath in csvs:
-        csvfileO = FH.ERO_summary_csv(fpath)
-        file_info = csvfileO.data_for_file()  # all filename parsing to here
-
-        eroFileQ = O.Mdb['EROcsv'].find({'filepath': fpath}, {'_id': 1})
-        # in the line above should project only _id
-        if eroFileQ.count() >= 1:
-            print('Repeat for ' + fpath)
-            continue
-        else:
-            csvorgO = O.EROcsv(fpath, file_info)
-            insert_info = csvorgO.store_track()
-            csvfileO_id = insert_info.inserted_id
-
-        csvfileO.data_3tuple_bulklist()  # here CSV actually gets read
-        if not csvfileO.data.empty:
-            orgO = O.EROpheno(csvfileO.data, csvfileO_id)
-            orgO.store_bulk()
-        else:
-            pass
-            # print(fpath, 'was empty')
-        print('.', end='')
-
-
+def neuropsych_CBST():
+    # 30 seconds
+    cbst_files, datemods = FH.identify_files('/raw_data/neuropsych/',
+                                             '*CBST*sum.txt')
+    for fp in tqdm(cbst_files):
+        cbstO = FH.cbst_summary_file(fp)
+        nsO = O.Neuropsych('CBST', cbstO.data)
+        nsO.store()
+    sourceO = O.SourceInfo(O.Neuropsych.collection, list(
+        zip(cbst_files, datemods)), 'CBST')
+    sourceO.store()
 
 def ero_pheno_join_bulk(csvs, start_ind=0):
-    ''' join all CSVs in one terminal subdirectory together,
-        then bulk_write their rows '''
+    ''' build collection of ERO results from CSVs by joining all CSVs in one
+        terminal subdirectory together, then bulk_writing their rows '''
     def split_field(s, ind, delim='_'):
         return s.split(delim)[ind]
 
@@ -423,7 +404,7 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
             joinDF['session'] = joinDF['uID'].apply(split_field, args=[1])
             joinDF['experiment'] = joinDF['uID'].apply(split_field, args=[2])
 
-            orgO = O.EROpheno(joinDF.to_dict(orient='records'), subdir)
+            orgO = O.EROcsvresults(joinDF.to_dict(orient='records'), subdir)
             # del joinDF
             joinDF = None
             orgO.store_joined_bulk()
