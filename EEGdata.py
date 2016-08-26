@@ -75,6 +75,7 @@ class avgh1:
 				s.cases[ caseD['case_num'] ] = caseD
 				s.case_list.append(caseD['case_type'])
 				s.case_num_map[ caseD['case_type'] ] = caseD['case_num']
+			s.num_case_map = {v:k for k,v in s.case_num_map.items()}
 
 		else:
 			return
@@ -422,11 +423,13 @@ class avgh1:
 			show(g)
 
 	def extract_mt_data(s):
+
 		if 'mt_data' not in dir(s):
 			mt_dir = os.path.split(s.filepath)[0]
 			h1_name = os.path.split(s.filepath)[1]
 			s.mt_name = os.path.splitext(h1_name)[0] + '.mt'
 			s.mt_defaultpath = os.path.splitext(s.filepath)[0] + '.mt'
+			print(s.mt_defaultpath)
 			if os.path.isfile( s.mt_defaultpath ):
 				mt = FH.mt_file( s.mt_defaultpath )
 				mt.parse_file()
@@ -436,10 +439,11 @@ class avgh1:
 				for c_pk in s.case_peaks:
 				    peak_lst.append(c_pk[1])
 				s.peaks = list(set(peak_lst))
+				s.data_loaded = True
 			else:
-				return
-		else:
-			return
+				s.data_loaded = False
+
+		return s.data_loaded
 
 	def make_data_sources(s,channels='all',empty_flag=False, time_range='all'):
 		times, potentials = s.prepare_plot_data(time_range=time_range)
@@ -488,6 +492,16 @@ class avgh1:
 
 		#return peak_sourcesD
 		return pot_source_dict, peak_sourcesD
+
+	def get_peak_data(s,channel,case,peak):
+		'''return (amplitude,latency) for channel, case, peak
+		'''
+		#print s.mt_data()
+		if type(case) == str:
+			pass
+
+		return s.mt_data[(case,peak)][channel]
+
 
 	def prepare_plot_for_channel(s,pot,el_ind,props,case_list,tools,
 						mode='notebook',bottom_label=False,legend=False,
