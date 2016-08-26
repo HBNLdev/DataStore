@@ -220,10 +220,6 @@ class Picker(QtGui.QMainWindow):
         s.curves = {}
         s.vb_map = {}
 
-        s.peak_data = {}
-
-        s.app_data['picks'] = set()
-
         s.load_file(initialize=True)
         s.caseChooser.clear()
 
@@ -337,6 +333,10 @@ class Picker(QtGui.QMainWindow):
             s.app_data['current experiment'] = experiment
             s.app_data['experiment cases'] = eeg.case_list
 
+            s.peak_data = {}
+            s.app_data['picks'] = set()
+            s.show_state()
+
             s.caseChooser.clear()
             print('removing case toggles', s.case_toggles)
             for case,toggle in s.case_toggles.items():
@@ -403,6 +403,7 @@ class Picker(QtGui.QMainWindow):
 
         s.pick_regions = {}
         s.pick_region_labels = {}
+        s.pick_region_labels_byRegion = {}
 
     def save_mt(s):
         print('Save mt')
@@ -458,7 +459,7 @@ class Picker(QtGui.QMainWindow):
         ''' Called when axis ranges change 
         '''
         s.adjust_label(s.sender())
-        s.update_region_label_positions()
+        #s.update_region_label_positions()
 
     def update_pick_regions(s):
         
@@ -470,11 +471,13 @@ class Picker(QtGui.QMainWindow):
             if s.app_data['pick state']['repick mode'] == 'all' or el_cs_pk == (elec,case,peak):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                     reg.setRegion( region )
+                    #s.update_region_label_position(el_cs_pk)
 
-        s.update_region_label_positions()
+        #s.update_region_label_positions()
 
     def pick_init(s):
-        ffs = ['Verdana', 'Arial', 'Helvetica', 'sans-serif', 'Times']
+        ffs = ['Verdana', 'Arial', 'Helvetica', 'sans-serif', 'Times','Times New Roman', 'Georgia', 'serif',
+                'Lucida Console', 'Courier', 'monospace']
         ffind = 0
         case = s.caseChooser.currentText()
         peak = s.peakChooser.currentText()
@@ -493,6 +496,7 @@ class Picker(QtGui.QMainWindow):
             for elec in [ p for p in s.plots if p not in s.show_only ]:
                 region = pg.LinearRegionItem(values=start_range,movable=True,
                         brush=s.app_data['display props']['pick region'])
+                region.sigRegionChanged.connect(s.update_region_label_position)
                 region.sigRegionChangeFinished.connect(s.update_pick_regions)
                 #ffind +=1
                 #ff = ffs[ ffind%len(ffs) ]
@@ -505,10 +509,13 @@ class Picker(QtGui.QMainWindow):
 
                 s.pick_regions[(elec,case,peak)] = region
                 s.pick_region_labels[(elec,case,peak)] = region_label
+                s.pick_region_labels_byRegion[region] = region_label
                 s.region_case_peaks[region] = (elec,case,peak)
                 s.plots[elec].addItem(region)
                 s.plots[elec].addItem(region_label)
-        s.update_region_label_positions()
+                
+                s.update_region_label_position( (elec,case,peak) )
+
         
         for disp_case in s.eeg.case_list:
             s.set_case_display(disp_case,disp_case == case)
@@ -517,12 +524,22 @@ class Picker(QtGui.QMainWindow):
 
         print('pick_init finish')
 
-    def update_region_label_positions(s):
-        for reg_key, region in s.pick_regions.items():
-            elec = reg_key[0]
-            vb_range = s.plots[elec].vb.getState()['viewRange']
-            start_fin = region.getRegion()
-            s.pick_region_labels[reg_key].setPos( start_fin[0],vb_range[1][1] )
+    def update_region_label_position(s,reg_key=None):
+        if type(reg_key) != tuple:
+            region = s.sender()
+            region_label = s.pick_region_labels_byRegion[region]
+        else:
+            region = s.pick_regions[reg_key]
+            region_label = s.pick_region_labels[reg_key]
+
+    # def update_region_label_positions(s):
+    #     for reg_key, region in s.pick_regions.items():
+        elec = 'FZ'#s.eeg.electrodes[0]#reg_key[0]
+        vb_range = s.plots[elec].vb.getState()['viewRange']
+        start_fin = region.getRegion()
+        #print('update region label position', region, region_label)
+
+        region_label.setPos( start_fin[0],vb_range[1][1] )
 
     def show_state(s):
         picks = s.app_data['picks']
