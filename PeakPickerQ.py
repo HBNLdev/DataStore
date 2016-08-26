@@ -90,7 +90,7 @@ class Picker(QtGui.QMainWindow):
         DProps = s.app_data['display props']
         super(Picker,s).__init__()
         s.setGeometry(*DProps['main position'])
-        s.setWindowTitle("HBNL Peak Picker ("+s.user+")")
+        s.setWindowTitle("HBNL Peak Picker ("+s.user+")      ")
 
 
 
@@ -375,7 +375,7 @@ class Picker(QtGui.QMainWindow):
                                 y=s.current_data[elec+'_'+case], 
                                 pen=s.plot_props['line colors'][c_ind],
                                 name=case )
-                    label = pg.TextItem(text=elec)
+                    label = pg.TextItem(text=elec,anchor=(0,0.2))
                     plot.addItem(label)                    
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
@@ -474,7 +474,8 @@ class Picker(QtGui.QMainWindow):
         s.update_region_label_positions()
 
     def pick_init(s):
-
+        ffs = ['Verdana', 'Arial', 'Helvetica', 'sans-serif', 'Times']
+        ffind = 0
         case = s.caseChooser.currentText()
         peak = s.peakChooser.currentText()
         s.app_data['pick state']['case'] = case
@@ -493,8 +494,13 @@ class Picker(QtGui.QMainWindow):
                 region = pg.LinearRegionItem(values=start_range,movable=True,
                         brush=s.app_data['display props']['pick region'])
                 region.sigRegionChangeFinished.connect(s.update_pick_regions)
+                #ffind +=1
+                #ff = ffs[ ffind%len(ffs) ]
+                # region_label = pg.TextItem(
+                #     html='<div style="color: #FF0; font-size: 7pt; font-family: '+ff+'">'+peak+'-'+ff+'</div>',
+                #     anchor=(-0.025,0.2))
                 region_label = pg.TextItem(
-                    html='<div style="color: #FF0; font-size: 7pt;">'+peak+'</div>',
+                    html='<div style="color: #FF0; font-size: 7pt; font-family: Helvetica">'+peak+'</div>',
                     anchor=(-0.025,0.2))
 
                 s.pick_regions[(elec,case,peak)] = region
@@ -532,16 +538,15 @@ class Picker(QtGui.QMainWindow):
         print('zoom_plot',ev)
         if ev[0].button() == 1 and ev[0].currentItem in s.vb_map:
             elec = s.vb_map[ ev[0].currentItem ]
+            Pstate = s.app_data['pick state']
             #ev[0].accept()
 
             print(elec)
-            #if s.zoomDialog is None:
 
-            s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
-            s.zoomDialog.setWindowTitle(elec)
-
-            Pstate = s.app_data['pick state']
             if Pstate['case']:
+                s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
+                s.zoomDialog.setWindowTitle(elec + ' - '+ Pstate['peak']+'     ')
+                
                 c_ind = s.eeg.case_list.index(Pstate['case'])
                 s.zoomPlot.clear()
                 s.zoomCurve = s.zoomPlot.plot(x=s.current_data['times'],
