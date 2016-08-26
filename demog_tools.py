@@ -58,9 +58,9 @@ def calc_fhd(sDF, in_fDF, field_dict=None):
     #sDF['fhd_dx4'], sDF['fhd_dx5'], sDF['fhd_sxc4'], sDF['fhd_sxc5'], \
     #    sDF['n_rels'] = zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF]))
     sDF['fhd_dx4_ratio'], sDF['fhd_dx4_sum'], \
-    sDF['fhd_dx4_ratio_rob'], sDF['fhd_dx4_sum_rob'], \
-    sDF['n_rels'] = \
-        zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF]))
+        sDF['n_rels'] = \
+            zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF]))
+    # sDF['fhd_dx4_ratio_rob'], sDF['fhd_dx4_sum_rob'], \
     #sDF['fhd_dx4_nrels'] = sDF.apply(calc_fhd_row, axis=1, args=[fDF])
 
 def calc_fhd_row(row, df, degrees=[1, 2], descend=False, cat_norm=True):
@@ -76,9 +76,10 @@ def calc_fhd_row(row, df, degrees=[1, 2], descend=False, cat_norm=True):
     print('.',end='')
     I.count('dx4')
     return I.ratio_score('dx4', 1, cat_norm), I.sum_score('dx4', 1, cat_norm), \
-           I.ratio_score_rob('dx4', 1, cat_norm), \
-           I.sum_score_rob('dx4', 1, cat_norm), \
            I.n_rels
+           # I.ratio_score_rob('dx4', 1, cat_norm), \
+           # I.sum_score_rob('dx4', 1, cat_norm), \
+           
 
 class Individual:
     ''' represents one person, can calculate density of some affectedness
