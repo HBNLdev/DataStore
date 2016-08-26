@@ -356,12 +356,27 @@ class avgh1_file(cnth1_file):
             results[nm+'_medianrtwithlate'] = \
                 s.ev_df.loc[correct_late, 'rt'].median()
 
-            # for certain experiments, keep track of non-resp info
+            # for certain experiments, keep track of noresp info
             if s.file_info['experiment'] in ['ant', 'ern', 'stp']:
                 noresp = s.ev_df.loc[stmevs, 'noresp']
                 results[nm+'_noresp'] = np.sum(noresp) / np.sum(stmevs)
                 results[nm+'_accwithresp'] = np.sum(correct) / \
                     (np.sum(stmevs) - np.sum(noresp))
+                results[nm+'_accwithrespwithlate'] = np.sum(correct_late) / \
+                    (np.sum(stmevs) - np.sum(noresp))
+
+                resp_codes = list(s.ev_df['resp_seq'].unique())
+                try:
+                    resp_codes.remove(0)
+                except:
+                    pass
+                for rc in resp_codes:
+                    tmp_df = s.ev_df[(s.ev_df['resp_seq']==rc) & \
+                            ~(s.ev_df['early']) & ~(s.ev_df['errant'])]
+                    results[nm+str(rc)+'_medianrtwithlate'] = \
+                            tmp_df['rt'].median()
+                    tmp_df2 = tmp_df[~tmp_df['late']]
+                    results[nm+str(rc)+'_medianrt'] = tmp_df2['rt'].median()
 
         s.results = results
 
