@@ -67,7 +67,7 @@ class Picker(QtGui.QMainWindow):
                             'background':(40, 40, 40),
                             'foreground':(135, 135, 135),
                             'main position':(50,50,1200,750),
-                            'zoom position':(300,200,750,600),
+                            'zoom position':(300,200,780,650),
                 }
 
     user = ''
@@ -181,6 +181,7 @@ class Picker(QtGui.QMainWindow):
                 s.buttons[label].clicked.connect(handler)
 
         s.case_toggles = {} # checkboxes populated for each file
+        s.zoom_case_toggles = {}
 
         s.pickRegionToggle.stateChanged.connect(s.toggle_regions)
         s.peakMarkerToggle.stateChanged.connect(s.toggle_peaks)
@@ -212,7 +213,13 @@ class Picker(QtGui.QMainWindow):
 
         s.plotsGrid = pg.GraphicsLayoutWidget()#QtGui.QGridLayout()
         s.zoomDialog = QtGui.QDialog(s)
-        s.zoomGW = pg.GraphicsWindow(parent=s.zoomDialog)
+        s.zoomLayout = QtGui.QVBoxLayout()
+        s.zoomDialog.setLayout(s.zoomLayout)
+        s.zoomControls = QtGui.QHBoxLayout()
+        s.zoomLayout.addLayout(s.zoomControls)
+        s.zoomPlotWidget = QtGui.QWidget()
+        s.zoomLayout.addWidget(s.zoomPlotWidget)
+        s.zoomGW = pg.GraphicsWindow(parent=s.zoomPlotWidget)#zoomDialogWidget)
         s.zoomPlot = s.zoomGW.addPlot()#pg.PlotWidget(parent=s.zoomDialog)
         s.plotsGrid.ci.layout.setContentsMargins(0, 0, 0, 0)
         s.plotsGrid.ci.layout.setSpacing(0)
@@ -220,6 +227,7 @@ class Picker(QtGui.QMainWindow):
         s.plots = {}
         s.plot_labels = {}
         s.curves = {}
+        s.zoom_curves = {}
         s.vb_map = {}
 
         s.load_file(initialize=True)
@@ -344,7 +352,11 @@ class Picker(QtGui.QMainWindow):
             for case,toggle in s.case_toggles.items():
                 toggle.stateChanged.disconnect(s.toggle_case)
                 toggle.setParent(None)#s.casesLayout.removeWidget(toggle)
+            for case, toggle in s.zoom_case_toggles.items():
+                toggle.stateChanged.disconnect(s.toggle_zoom_case)
+                toggle.setParent(None)#s.casesLayout.removeWidget(toggle)                
             s.case_toggles = {}
+            s.zoom_case_toggles = {}
             for case in cases:
                 s.caseChooser.addItem(case)
                 case_toggle = QtGui.QCheckBox(case)
@@ -352,6 +364,12 @@ class Picker(QtGui.QMainWindow):
                 case_toggle.stateChanged.connect(s.toggle_case)
                 s.casesLayout.addWidget(case_toggle)
                 s.case_toggles[case] = case_toggle
+                zoom_case_toggle = QtGui.QCheckBox(case)
+                zoom_case_toggle.setChecked(True)
+                zoom_case_toggle.stateChanged.connect(s.toggle_zoom_case)
+                s.zoom_case_toggles[case] = zoom_case_toggle
+                s.zoomControls.addWidget(zoom_case_toggle)
+
             #expD = s.app_data[experiment]
             # reversing initialize flag for testing
             data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=initialize, 
@@ -401,11 +419,12 @@ class Picker(QtGui.QMainWindow):
                     for yval in y_lines:
                         plot.addLine(y=yval, pen=grid_pen)
 
-                    for c_ind,case in enumerate(cases):
-                        s.curves[(elec,case)] = s.plots[elec].plot(x=s.current_data['times'],
-                                y=s.current_data[elec+'_'+case], 
-                                pen=s.plot_props['line colors'][c_ind],
-                                name=case )
+                    for case in cases:
+                        s.curves[(elec,case)] = s.plot_curve(s.plots[elec],elec,case)
+                        # s.plots[elec].plot(x=s.current_data['times'],
+                        #         y=s.current_data[elec+'_'+case], 
+                        #         pen=s.plot_props['line colors'][c_ind],
+                        #         name=case )
                     label = pg.TextItem(text=elec,anchor=(0,0.2))
                     plot.addItem(label)
 
@@ -437,6 +456,15 @@ class Picker(QtGui.QMainWindow):
         s.pick_regions = {}
         s.pick_region_labels = {}
         s.pick_region_labels_byRegion = {}
+
+    def plot_curve(s,plot,electrode,case):
+        c_ind = s.eeg.case_list.index(case)
+        curve = plot.plot(x=s.current_data['times'],
+                        y=s.current_data[electrode+'_'+case], 
+                        pen=s.plot_props['line colors'][c_ind],
+                        name=case )
+
+        return curve
 
     def save_mt(s):
         print('Save mt')
@@ -592,20 +620,26 @@ class Picker(QtGui.QMainWindow):
             #ev[0].accept()
 
             print(elec)
+            s.zoomPlot.clear()
+            x_lines,y_lines = s.plot_props['XY gridlines']
+            grid_pen = s.plot_props['grid color']
+            for xval in x_lines:
+                s.zoomPlot.addLine(x=xval, pen=grid_pen)
+            for yval in y_lines:
+                s.zoomPlot.addLine(y=yval, pen=grid_pen)
+
+
+            for case in s.eeg.case_list:
+                s.zoom_curves[case] = s.plot_curve(s.zoomPlot,elec,case)
 
             if Pstate['case']:
                 s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
-                s.zoomDialog.setWindowTitle(elec + ' - '+ Pstate['peak']+'     ')
+                s.zoomDialog.setWindowTitle(elec + ' - '+ \
+                                Pstate['case']+' - '+Pstate['peak']+'     ')
                 
                 c_ind = s.eeg.case_list.index(Pstate['case'])
-                s.zoomPlot.clear()
-                s.zoomCurve = s.zoomPlot.plot(x=s.current_data['times'],
-                                    y=s.current_data[elec+'_'+Pstate['case']], 
-                                    pen=s.plot_props['line colors'][c_ind],
-                                    name=Pstate['case'] )
-                #Need a custom axis linking mechanism
-                #s.zoomPlot.setXLink(s.plots[elec])
-                #s.zoomPlot.setYLink(s.plots[elec])
+                
+
                 small_region = s.pick_regions[(elec,Pstate['case'],Pstate['peak'])]
                 start_fin = small_region.getRegion()
                 region = pg.LinearRegionItem(values=start_fin,movable=True,
@@ -637,17 +671,35 @@ class Picker(QtGui.QMainWindow):
         #for el_cs in [ec for ec in s.curves if ec[1]==case]:
         #    s.curves[el_cs].setVisible(checked)
 
-    def set_case_display(s,case,state):
+    def toggle_zoom_case(s):
+        sender = s.sender()
+        case = sender.text()
+        checked = sender.isChecked()
+        s.set_case_display(case,checked,zoom=True)
 
-        s.case_toggles[case].setChecked(state)
-        for el_cs in [ec for ec in s.curves if ec[1] == case]:
-            s.curves[el_cs].setVisible(state)
-        for el_cs_pk in [ ecp for ecp in s.pick_regions if ecp[1] == case ]:
-            s.pick_regions[el_cs_pk].setVisible(state)
-            s.pick_region_labels[el_cs_pk].setVisible(state)
+    def set_case_display(s,case,state,zoom=False):
 
-        for el_cs_pk in [ ecp for ecp in s.peak_markers if ecp[1] == case ]:
-            s.peak_markers[el_cs_pk].setVisible(state)
+        if zoom:
+            toggles = s.zoom_case_toggles
+            curves = s.zoom_curves
+            curve_keys = [case]
+        else:
+            toggles = s.case_toggles
+            curves = s.curves
+            curve_keys = [e_c for e_c in curves.keys() if e_c[1] == case]
+
+
+        toggles[case].setChecked(state)
+        for ck in curve_keys:
+            curves[ck].setVisible(state)
+
+        if not zoom:
+            for el_cs_pk in [ ecp for ecp in s.pick_regions if ecp[1] == case ]:
+                s.pick_regions[el_cs_pk].setVisible(state)
+                s.pick_region_labels[el_cs_pk].setVisible(state)
+
+            for el_cs_pk in [ ecp for ecp in s.peak_markers if ecp[1] == case ]:
+                s.peak_markers[el_cs_pk].setVisible(state)
 
     def mode_toggle(s):
         current_mode = s.app_data['pick state']['repick mode']
