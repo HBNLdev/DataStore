@@ -360,7 +360,26 @@ class Picker(QtGui.QMainWindow):
 
             if not initialize:
                 s.legend_plot.clear()
-                s.legend_plot.addLegend(size=(60,40),offset=(-60,0) )
+
+                file_info = s.app_data['info']
+                case_info = file_info[-1]
+                sep_cases = case_info.split(',')
+                print('sep cases',sep_cases)
+                if len(sep_cases) > 2:
+                    case_lines = [ ' '.join(sep_cases[:2]), ' '.join(sep_cases[2:])]
+                else: case_lines = [ case_info ]
+
+                html = '<div>'
+                for line in [ os.path.split(paths[ind])[1] ] + file_info[:-1] + case_lines:
+                    html+= '<span style="text-align: center; color: #EEE; font-size: 8pt; font-family: Helvetica;">'+line+'</span><br>'
+
+                html+='</div>'
+                print('html',html)
+                info_text = pg.TextItem(html=html,anchor=(-0.05,0))
+                info_text.setPos(-0.1,1.1)
+                s.legend_plot.addItem(info_text)
+
+                s.legend_plot.addLegend(size=(55,0),offset=(-4,0.001) )
                 for c_ind,case in enumerate(cases):
                     s.legend_plot.plot(x=[-5,-4],y=[-20,-20],
                         pen=s.plot_props['line colors'][c_ind],
@@ -376,10 +395,11 @@ class Picker(QtGui.QMainWindow):
                                 pen=s.plot_props['line colors'][c_ind],
                                 name=case )
                     label = pg.TextItem(text=elec,anchor=(0,0.2))
-                    plot.addItem(label)                    
+                    plot.addItem(label)
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
-                #print(dir(label))
+
+                #print('legend viewRange',s.legend_plot.vb.getState()['viewRange'])
 
 
         s.peak_markers = {}
