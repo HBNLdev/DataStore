@@ -48,7 +48,9 @@ class Picker(QtGui.QMainWindow):
     plot_props = {'width':180, 'height':110,
                  'extra_bottom_height':40, # for bottom row
                 'min_border':4,
-                'line colors':[(221,34,34),(102,221,102),(34,34,221),(221,34,221)]}
+                'line colors':[(221,34,34),(102,221,102),(34,34,221),(221,34,221)],
+                'XY gridlines':([0,200,400,600,800],[0]),
+                'grid color':'#555'}
 
 
     app_data = {}
@@ -65,7 +67,7 @@ class Picker(QtGui.QMainWindow):
                             'background':(40, 40, 40),
                             'foreground':(135, 135, 135),
                             'main position':(50,50,1200,750),
-                            'zoom position':(300,200,750,600)
+                            'zoom position':(300,200,750,600),
                 }
 
     user = ''
@@ -386,9 +388,19 @@ class Picker(QtGui.QMainWindow):
                         name=case)
                     s.legend_plot.vb.setRange(xRange=[0,1],yRange=[0,1])
 
+
+                x_lines,y_lines = s.plot_props['XY gridlines']
+                grid_pen = s.plot_props['grid color']
                 for elec in [ ch for ch in chans if ch not in s.ignore ]:
                     plot = s.plots[elec]
                     plot.clear()
+
+
+                    for xval in x_lines:
+                        plot.addLine(x=xval, pen=grid_pen)
+                    for yval in y_lines:
+                        plot.addLine(y=yval, pen=grid_pen)
+
                     for c_ind,case in enumerate(cases):
                         s.curves[(elec,case)] = s.plots[elec].plot(x=s.current_data['times'],
                                 y=s.current_data[elec+'_'+case], 
@@ -396,6 +408,7 @@ class Picker(QtGui.QMainWindow):
                                 name=case )
                     label = pg.TextItem(text=elec,anchor=(0,0.2))
                     plot.addItem(label)
+
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
 
