@@ -15,17 +15,7 @@ import organization as O
 import EEGdata
 
 
-
-
 class Picker(QtGui.QMainWindow):
-
-    # def add_buttons(s, layout, labels_slots):
-    #     for label, handler in labels_slots:
-    #         button = QtGui.QPushButton(label)
-    #         layout.addWidget(button)
-    #         if handler:
-    #             button.connect(handler)
-    #         s.buttons[label] = button
 
     init_files_by_exp = {'ant':'ant_0_a0_11111111_avg.h1', 
                     'vp3':'vp3_0_a0_11111111_avg.h1',
@@ -69,6 +59,8 @@ class Picker(QtGui.QMainWindow):
                             'main position':(50,50,1200,750),
                             'zoom position':(300,200,780,650),
                 }
+    region_label_html= '<div style="color: #FF0; font-size: 7pt; font-family: Helvetica">__PEAK__</div>'
+
 
     user = ''
     if len(sys.argv) > 1:
@@ -541,7 +533,7 @@ class Picker(QtGui.QMainWindow):
                 region.sigRegionChangeFinished.connect(s.update_pick_regions)
 
                 region_label = pg.TextItem(
-                    html='<div style="color: #FF0; font-size: 7pt; font-family: Helvetica">'+peak+'</div>',
+                    html=s.region_label_html.replace('__PEAK__',peak),
                     anchor=(-0.025,0.2))
 
                 s.pick_regions[(elec,case,peak)] = region
@@ -698,6 +690,25 @@ class Picker(QtGui.QMainWindow):
                 top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
             s.peak_markers[el_cs_pk] = marker
             s.plots[el_cs_pk[0]].addItem(marker)
+
+    def relabel_peak(s,case,old_peak,new_peak):
+
+        old_keys = [ k for k in s.peak_data.keys() if k[1]==case and k[2]==old_peak ]
+
+        for el,cs,opk in old_keys:
+            oK,nK = (el,cs,opk), (el,cs,new_peak)
+            s.peak_data[ nK ] = s.peak_data[ oK ]
+            s.peak_data.pop( oK )
+
+            s.pick_region_labels[ nK ] = s.pick_region_labels[ oK ]
+            reg = s.pick_region_labels.pop( oK )
+            reg.setHtml( s.region_label_html.replace('__PEAK__',new_peak) )
+
+        s.app_data['picks'].remove( (case, old_peak) )
+        s.app_data['picks'].add( (case, new_peak) )
+
+        s.show_state()
+
 
     def apply_selections(s):
         case = s.app_data['pick state']['case']
