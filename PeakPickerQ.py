@@ -94,8 +94,6 @@ class Picker(QtGui.QMainWindow):
         s.setGeometry(*DProps['main position'])
         s.setWindowTitle("HBNL Peak Picker ("+s.user+")      ")
 
-
-
         pg.setConfigOption('background', DProps['background'])
         pg.setConfigOption('foreground', DProps['foreground'])
 
@@ -137,8 +135,6 @@ class Picker(QtGui.QMainWindow):
 
         s.controls_1 = QtGui.QHBoxLayout()
 
-
-
         # Display controls
         s.dispLayout = QtGui.QHBoxLayout()
         s.dispLayout.setAlignment(Qt.AlignLeft)
@@ -171,8 +167,6 @@ class Picker(QtGui.QMainWindow):
         buttons_1 = [('Save',s.save_mt),
                     ('Prev', s.previous_file),
                      ('Next', s.next_file)]
-
-        # s.add_buttons(s.controls_1,buttons_1)
 
         for label, handler in buttons_1:
             s.buttons[label] = QtGui.QPushButton(label)
@@ -370,7 +364,6 @@ class Picker(QtGui.QMainWindow):
                 s.zoom_case_toggles[case] = zoom_case_toggle
                 s.zoomControls.addWidget(zoom_case_toggle)
 
-            #expD = s.app_data[experiment]
             # reversing initialize flag for testing
             data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=initialize, 
                                     time_range=s.app_data['display props']['time range'])
@@ -413,7 +406,6 @@ class Picker(QtGui.QMainWindow):
                     plot = s.plots[elec]
                     plot.clear()
 
-
                     for xval in x_lines:
                         plot.addLine(x=xval, pen=grid_pen)
                     for yval in y_lines:
@@ -421,18 +413,12 @@ class Picker(QtGui.QMainWindow):
 
                     for case in cases:
                         s.curves[(elec,case)] = s.plot_curve(s.plots[elec],elec,case)
-                        # s.plots[elec].plot(x=s.current_data['times'],
-                        #         y=s.current_data[elec+'_'+case], 
-                        #         pen=s.plot_props['line colors'][c_ind],
-                        #         name=case )
+
                     label = pg.TextItem(text=elec,anchor=(0,0.2))
                     plot.addItem(label)
 
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
-
-                #print('legend viewRange',s.legend_plot.vb.getState()['viewRange'])
-
 
         s.peak_markers = {}
         s.region_case_peaks = {}
@@ -494,7 +480,7 @@ class Picker(QtGui.QMainWindow):
 
         # build mt text (makes default output location), write to a test location
         s.eeg.build_mt([cn[1] for cn in cases_Ns], peaks, amps1d, lats1d)
-        #print(eeg.mt)
+
         test_dir = os.path.join('/active_projects/test', s.app_data['user']+'Q' )
         if not os.path.exists(test_dir):
             os.mkdir(test_dir)
@@ -503,11 +489,8 @@ class Picker(QtGui.QMainWindow):
         of.write( s.eeg.mt )
         of.close()
 
-        #exp['status display'].text = 'Saved .mt file to' + test_dir
         print('Saved', fullpath)
             
-
-
 
     def adjust_label(s,viewbox):
 
@@ -520,7 +503,6 @@ class Picker(QtGui.QMainWindow):
         ''' Called when axis ranges change 
         '''
         s.adjust_label(s.sender())
-        #s.update_region_label_positions()
 
     def update_pick_regions(s):
         
@@ -533,8 +515,6 @@ class Picker(QtGui.QMainWindow):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                     reg.setRegion( region )
                     #s.update_region_label_position(el_cs_pk)
-
-        #s.update_region_label_positions()
 
     def pick_init(s):
         ffs = ['Verdana', 'Arial', 'Helvetica', 'sans-serif', 'Times','Times New Roman', 'Georgia', 'serif',
@@ -559,11 +539,7 @@ class Picker(QtGui.QMainWindow):
                         brush=s.app_data['display props']['pick region'])
                 region.sigRegionChanged.connect(s.update_region_label_position)
                 region.sigRegionChangeFinished.connect(s.update_pick_regions)
-                #ffind +=1
-                #ff = ffs[ ffind%len(ffs) ]
-                # region_label = pg.TextItem(
-                #     html='<div style="color: #FF0; font-size: 7pt; font-family: '+ff+'">'+peak+'-'+ff+'</div>',
-                #     anchor=(-0.025,0.2))
+
                 region_label = pg.TextItem(
                     html='<div style="color: #FF0; font-size: 7pt; font-family: Helvetica">'+peak+'</div>',
                     anchor=(-0.025,0.2))
@@ -576,12 +552,9 @@ class Picker(QtGui.QMainWindow):
                 s.plots[elec].addItem(region_label)
                 
                 s.update_region_label_position( (elec,case,peak) )
-
-        
+     
         for disp_case in s.eeg.case_list:
             s.set_case_display(disp_case,disp_case == case)
-
-
 
         print('pick_init finish')
 
@@ -593,12 +566,10 @@ class Picker(QtGui.QMainWindow):
             region = s.pick_regions[reg_key]
             region_label = s.pick_region_labels[reg_key]
 
-    # def update_region_label_positions(s):
-    #     for reg_key, region in s.pick_regions.items():
+        # check region for one electrode
         elec = 'FZ'#s.eeg.electrodes[0]#reg_key[0]
         vb_range = s.plots[elec].vb.getState()['viewRange']
         start_fin = region.getRegion()
-        #print('update region label position', region, region_label)
 
         region_label.setPos( start_fin[0],vb_range[1][1] )
 
@@ -617,22 +588,26 @@ class Picker(QtGui.QMainWindow):
         if ev[0].button() == 1 and ev[0].currentItem in s.vb_map:
             elec = s.vb_map[ ev[0].currentItem ]
             Pstate = s.app_data['pick state']
-            #ev[0].accept()
 
             print(elec)
             s.zoomPlot.clear()
-            x_lines,y_lines = s.plot_props['XY gridlines']
-            grid_pen = s.plot_props['grid color']
-            for xval in x_lines:
-                s.zoomPlot.addLine(x=xval, pen=grid_pen)
-            for yval in y_lines:
-                s.zoomPlot.addLine(y=yval, pen=grid_pen)
 
-
-            for case in s.eeg.case_list:
-                s.zoom_curves[case] = s.plot_curve(s.zoomPlot,elec,case)
 
             if Pstate['case']:
+                s.zoomDialog.show()
+
+                x_lines,y_lines = s.plot_props['XY gridlines']
+                grid_pen = s.plot_props['grid color']
+                for xval in x_lines:
+                    s.zoomPlot.addLine(x=xval, pen=grid_pen)
+                for yval in y_lines:
+                    s.zoomPlot.addLine(y=yval, pen=grid_pen)
+
+                for case in s.eeg.case_list:
+                    s.zoom_curves[case] = s.plot_curve(s.zoomPlot,elec,case)
+                    #s.set_case_display(case, s.zoom_case_toggles[case].isChecked(), zoom=True)
+
+
                 s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
                 s.zoomDialog.setWindowTitle(elec + ' - '+ \
                                 Pstate['case']+' - '+Pstate['peak']+'     ')
@@ -647,9 +622,10 @@ class Picker(QtGui.QMainWindow):
                 region.sigRegionChangeFinished.connect(s.update_pick_regions)
                 s.region_case_peaks[region] = (elec,Pstate['case'],Pstate['peak'])
                 s.zoomPlot.addItem(region)
-                s.zoomDialog.show()
-                # set apply on close and relink axes
-            #print(dir(s.zoomDialog))
+                
+                for case in s.eeg.case_list: #unsure why this doesn't work in above loop, maybe timing
+                    s.set_case_display(case, s.zoom_case_toggles[case].isChecked(), zoom=True)
+
 
     def toggle_regions(s):
         checked = s.sender().isChecked()
@@ -665,7 +641,7 @@ class Picker(QtGui.QMainWindow):
     def toggle_case(s):
         sender = s.sender()
         case = sender.text()
-        print(case)
+        #print('toggle_case',case)
         checked = sender.isChecked()
         s.set_case_display(case,checked)
         #for el_cs in [ec for ec in s.curves if ec[1]==case]:
@@ -691,6 +667,7 @@ class Picker(QtGui.QMainWindow):
 
         toggles[case].setChecked(state)
         for ck in curve_keys:
+            #print( 'set zoom case display', ck, state)
             curves[ck].setVisible(state)
 
         if not zoom:
