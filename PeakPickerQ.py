@@ -430,6 +430,8 @@ class Picker(QtGui.QMainWindow):
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
 
+                    plot.vb.setMouseEnabled(x=False)
+
         s.peak_markers = {}
         s.region_case_peaks = {}
 
@@ -513,6 +515,8 @@ class Picker(QtGui.QMainWindow):
         ''' Called when axis ranges change 
         '''
         s.adjust_label(s.sender())
+        for el_cs_pk in s.pick_regions:
+            s.update_region_label_position(el_cs_pk)
 
     def update_pick_regions(s):
         
@@ -524,7 +528,7 @@ class Picker(QtGui.QMainWindow):
             if s.app_data['pick state']['repick mode'] == 'all' or el_cs_pk == (elec,case,peak):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                     reg.setRegion( region )
-                    #s.update_region_label_position(el_cs_pk)
+                    
 
     def pick_init(s):
         ffs = ['Verdana', 'Arial', 'Helvetica', 'sans-serif', 'Times','Times New Roman', 'Georgia', 'serif',
