@@ -181,7 +181,8 @@ class Picker(QtGui.QMainWindow):
         s.peakControls.addWidget(s.caseChooser)
         s.peakControls.addWidget(s.peakChooser)
 
-        pick_buttons = [('Pick',s.pick_init),('Apply',s.apply_selections)]
+        pick_buttons = [('Pick',s.pick_init),('Apply',s.apply_selections),
+                        ('Fix',s.fix_peak)]
         #s.add_buttons(s.peakControls,pick_buttons)
         for label,handler in pick_buttons:
             s.buttons[label] = QtGui.QPushButton(label)
@@ -207,8 +208,25 @@ class Picker(QtGui.QMainWindow):
         s.zoomLayout.addWidget(s.zoomPlotWidget)
         s.zoomGW = pg.GraphicsWindow(parent=s.zoomPlotWidget)#zoomDialogWidget)
         s.zoomPlot = s.zoomGW.addPlot()#pg.PlotWidget(parent=s.zoomDialog)
+
+        s.fixDialog = QtGui.QDialog(s)
+        s.fixLayout = QtGui.QVBoxLayout()
+        s.fixDialog.setLayout(s.fixLayout)
+        s.fixCase = QtGui.QComboBox()
+        s.fixCase.currentIndexChanged.connect(s.choose_fix_case)
+        s.oldPeak = QtGui.QComboBox()
+        s.oldPeak.currentIndexChanged.connect(s.choose_old_peak)
+        s.removePeak = QtGui.QPushButton('Remove Peak')
+        s.removePeak.clicked.connect(s.remove_peak)
+        s.newPeak = QtGui.QComboBox()
+        s.applyChange = QtGui.QPushButton('Apply Change')
+        s.applyChange.clicked.connect(s.apply_peak_change)
+        [ s.fixLayout.addWidget(w) for w in \
+            [s.fixCase, s.oldPeak,s.removePeak, s.newPeak,s.applyChange] ]
+
         s.plotsGrid.ci.layout.setContentsMargins(0, 0, 0, 0)
         s.plotsGrid.ci.layout.setSpacing(0)
+        
         s.pick_electrodes = []
         s.plots = {}
         s.plot_labels = {}
@@ -700,6 +718,13 @@ class Picker(QtGui.QMainWindow):
             s.peak_data[ nK ] = s.peak_data[ oK ]
             s.peak_data.pop( oK )
 
+            s.pick_regions[nK] = s.pick_regions[oK]
+            region = s.pick_regions.pop(oK)
+            s.region_case_peaks[region] = nK
+
+            s.peak_markers[nK] = s.peak_markers[oK]
+            s.peak_markers.pop(oK)
+
             s.pick_region_labels[ nK ] = s.pick_region_labels[ oK ]
             reg = s.pick_region_labels.pop( oK )
             reg.setHtml( s.region_label_html.replace('__PEAK__',new_peak) )
@@ -709,6 +734,64 @@ class Picker(QtGui.QMainWindow):
 
         s.show_state()
 
+    def remove_peak(s):
+        case = s.fixCase.currentText()
+        peak = s.oldPeak.currentText()
+
+        for el_cs_pk in list(s.peak_data.keys()):
+
+            if el_cs_pk[1] == case and el_cs_pk[2] == peak:
+                s.peak_data.pop(el_cs_pk)
+
+            plot = s.plots[el_cs_pk[0]]
+            region = s.pick_regions[el_cs_pk]
+            s.pick_regions.pop(el_cs_pk)
+            s.region_case_peaks.pop(region)
+            s.pick_region_labels_byRegion.pop(region)
+            plot.removeItem(region)
+            label = s.pick_region_labels[ el_cs_pk ]
+            plot.removeItem(label)
+            marker = s.peak_markers[el_cs_pk]
+            plot.removeItem(marker)
+
+
+        s.app_data['picks'].remove( (case, peak) )
+        s.show_state()
+        s.fixDialog.setVisible(False)
+
+ 
+    def fix_peak(s):
+        ''' callback for main gui button '''
+        s.fixCase.clear()
+        s.oldPeak.clear()
+        s.newPeak.clear()
+        picked_cases = set([ c_p[0] for c_p in s.app_data['picks'] ])
+        for case in picked_cases:
+            s.fixCase.addItem(case)
+        s.fixDialog.show()
+
+    def choose_fix_case(s):
+        case = s.sender().currentText()
+        print('choose_fix_case',case, s.app_data['picks'])
+        available_peaks = [ c_p[1] for c_p in s.app_data['picks'] if c_p[0==case] ]
+        for peak in available_peaks:
+            s.oldPeak.addItem(peak)
+
+    def choose_old_peak(s):
+        case = s.fixCase.currentText()
+        old_peak = s.sender().currentText()
+        print('choose_old_peak',case, old_peak)
+        possible_peaks = [ p for p in s.peak_choices if p[0] == old_peak[0] ]
+        for peak in possible_peaks:
+            s.newPeak.addItem(peak)
+
+    def apply_peak_change(s):
+        ''' callback for dialog button '''
+        case = s.fixCase.currentText()
+        old_peak = s.oldPeak.currentText()
+        new_peak = s.newPeak.currentText()
+        s.relabel_peak(case,old_peak,new_peak)
+        s.fixDialog.setVisible(False)
 
     def apply_selections(s):
         case = s.app_data['pick state']['case']
