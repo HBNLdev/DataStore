@@ -138,9 +138,12 @@ class Picker(QtGui.QMainWindow):
         s.pickRegionToggle.setChecked(True)
         s.peakMarkerToggle = QtGui.QCheckBox("peaks")
         s.peakMarkerToggle.setChecked(True)
+        s.peakTopToggle = QtGui.QCheckBox("markers")
+        s.peakTopToggle.setChecked(False)
         s.dispLayout.addWidget(disp_label)
         s.dispLayout.addWidget(s.pickRegionToggle)
         s.dispLayout.addWidget(s.peakMarkerToggle)
+        s.dispLayout.addWidget(s.peakTopToggle)
         disp_cases_label = QtGui.QLabel("cases:")
         s.casesLayout.addWidget(disp_cases_label)
         s.controls_1.addLayout(s.dispLayout)
@@ -166,11 +169,12 @@ class Picker(QtGui.QMainWindow):
             if handler:
                 s.buttons[label].clicked.connect(handler)
 
-        s.case_toggles = {} # checkboxes populated for each file
-        s.zoom_case_toggles = {}
+        s.caseToggles = {} # checkboxes populated for each file
+        s.zoomCaseToggles = {}
 
         s.pickRegionToggle.stateChanged.connect(s.toggle_regions)
         s.peakMarkerToggle.stateChanged.connect(s.toggle_peaks)
+        s.peakTopToggle.stateChanged.connect(s.toggle_peak_tops)
 
         s.caseChooser = QtGui.QComboBox()
         s.peakChooser = QtGui.QComboBox()
@@ -250,6 +254,7 @@ class Picker(QtGui.QMainWindow):
                         s.pick_electrodes.append(elec)
                     plot = s.plotsGrid.addPlot(rN+1,cN)#,title=elec)
                     s.proxyMouse = pg.SignalProxy(plot.scene().sigMouseClicked, slot=s.show_zoom_plot)
+                    #s.proxyScroll = pg.SignalProxy(plot.scene().sigMouseMoved, slot=s.scroll_handler)
                     #plot.resize(300,250)
                     plot.vb.sigRangeChanged.connect(s.update_ranges)
                     s.vb_map[plot.vb] = elec
@@ -352,26 +357,26 @@ class Picker(QtGui.QMainWindow):
             s.show_state()
 
             s.caseChooser.clear()
-            print('removing case toggles', s.case_toggles)
-            for case,toggle in s.case_toggles.items():
+            print('removing case toggles', s.caseToggles)
+            for case,toggle in s.caseToggles.items():
                 toggle.stateChanged.disconnect(s.toggle_case)
                 toggle.setParent(None)#s.casesLayout.removeWidget(toggle)
-            for case, toggle in s.zoom_case_toggles.items():
+            for case, toggle in s.zoomCaseToggles.items():
                 toggle.stateChanged.disconnect(s.toggle_zoom_case)
                 toggle.setParent(None)#s.casesLayout.removeWidget(toggle)                
-            s.case_toggles = {}
-            s.zoom_case_toggles = {}
+            s.caseToggles = {}
+            s.zoomCaseToggles = {}
             for case in cases:
                 s.caseChooser.addItem(case)
                 case_toggle = QtGui.QCheckBox(case)
                 case_toggle.setChecked(True)
                 case_toggle.stateChanged.connect(s.toggle_case)
                 s.casesLayout.addWidget(case_toggle)
-                s.case_toggles[case] = case_toggle
+                s.caseToggles[case] = case_toggle
                 zoom_case_toggle = QtGui.QCheckBox(case)
                 zoom_case_toggle.setChecked(True)
                 zoom_case_toggle.stateChanged.connect(s.toggle_zoom_case)
-                s.zoom_case_toggles[case] = zoom_case_toggle
+                s.zoomCaseToggles[case] = zoom_case_toggle
                 s.zoomControls.addWidget(zoom_case_toggle)
 
             # reversing initialize flag for testing
@@ -433,6 +438,7 @@ class Picker(QtGui.QMainWindow):
                     plot.vb.setMouseEnabled(x=False)
 
         s.peak_markers = {}
+        s.peak_tops = {}
         s.region_case_peaks = {}
 
         #check for and load old mt
@@ -587,15 +593,21 @@ class Picker(QtGui.QMainWindow):
 
         region_label.setPos( start_fin[0],vb_range[1][1] )
 
-    def show_state(s):
+    def show_state(s, cases= 'all'):
         picks = s.app_data['picks']
-        cases = s.eeg.case_list
+        if cases == 'all':
+            cases = s.eeg.case_list
         state_string = ''
         for case in cases:
             state_string += case+':['
             state_string += ','.join([cp[1] for cp in picks if cp[0]==case])+'] '
 
         s.stateInfo.setText(state_string)
+
+    # def scroll_handler(s,ev):
+    #     print('scroll handler', ev[0] )
+    #     print(dir(ev[0]))
+
 
     def show_zoom_plot(s,ev):
         print('zoom_plot',ev)
@@ -619,7 +631,7 @@ class Picker(QtGui.QMainWindow):
 
                 for case in s.eeg.case_list:
                     s.zoom_curves[case] = s.plot_curve(s.zoomPlot,elec,case)
-                    #s.set_case_display(case, s.zoom_case_toggles[case].isChecked(), zoom=True)
+                    #s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
 
 
                 s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
@@ -638,19 +650,27 @@ class Picker(QtGui.QMainWindow):
                 s.zoomPlot.addItem(region)
                 
                 for case in s.eeg.case_list: #unsure why this doesn't work in above loop, maybe timing
-                    s.set_case_display(case, s.zoom_case_toggles[case].isChecked(), zoom=True)
+                    s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
 
 
     def toggle_regions(s):
         checked = s.sender().isChecked()
         for el_cs_pk,reg in s.pick_regions.items():
-            reg.setVisible(checked) 
-            s.pick_region_labels[el_cs_pk].setVisible(checked)
+            if el_cs_pk[1] == s.caseChooser.currentText():
+                reg.setVisible(checked) 
+                s.pick_region_labels[el_cs_pk].setVisible(checked)
 
     def toggle_peaks(s):
         checked = s.sender().isChecked()
         for el_cs_pk,mark in s.peak_markers.items():
-            mark.setVisible(checked)
+            if s.caseToggles[el_cs_pk[1]].isChecked():
+                mark.setVisible(checked)
+
+    def toggle_peak_tops(s):
+        checked = s.sender().isChecked()
+        for el_cs_pk, top in s.peak_tops.items():
+            if s.caseToggles[el_cs_pk[1]].isChecked():
+                top.setVisible(checked)
 
     def toggle_case(s):
         sender = s.sender()
@@ -670,11 +690,11 @@ class Picker(QtGui.QMainWindow):
     def set_case_display(s,case,state,zoom=False):
 
         if zoom:
-            toggles = s.zoom_case_toggles
+            toggles = s.zoomCaseToggles
             curves = s.zoom_curves
             curve_keys = [case]
         else:
-            toggles = s.case_toggles
+            toggles = s.caseToggles
             curves = s.curves
             curve_keys = [e_c for e_c in curves.keys() if e_c[1] == case]
 
@@ -685,12 +705,15 @@ class Picker(QtGui.QMainWindow):
             curves[ck].setVisible(state)
 
         if not zoom:
+            #if s.pickRegionToggle.isChecked() or state == False:
             for el_cs_pk in [ ecp for ecp in s.pick_regions if ecp[1] == case ]:
-                s.pick_regions[el_cs_pk].setVisible(state)
-                s.pick_region_labels[el_cs_pk].setVisible(state)
+                if el_cs_pk[1] == s.caseChooser.currentText() or state == False:
+                    s.pick_regions[el_cs_pk].setVisible(state)
+                    s.pick_region_labels[el_cs_pk].setVisible(state)
 
-            for el_cs_pk in [ ecp for ecp in s.peak_markers if ecp[1] == case ]:
-                s.peak_markers[el_cs_pk].setVisible(state)
+            if s.peakMarkerToggle.isChecked():
+                for el_cs_pk in [ ecp for ecp in s.peak_markers if ecp[1] == case ]:
+                    s.peak_markers[el_cs_pk].setVisible(state)
 
     def mode_toggle(s):
         current_mode = s.app_data['pick state']['repick mode']
@@ -700,18 +723,29 @@ class Picker(QtGui.QMainWindow):
         s.pickModeToggle.setText(s.app_data['pick state']['repick mode'])
 
     
-    def show_peaks(s):
+    def show_peaks(s, cases='all'):
 
         bar_len = s.app_data['display props']['bar length']
 
-        for el_cs_pk, amp_lat in s.peak_data.items():
-            if el_cs_pk in s.peak_markers:
-                s.plots[el_cs_pk[0]].removeItem(s.peak_markers[el_cs_pk])
+        if cases == 'all':
+            cases = s.eeg.case_list
 
-            marker = pg.ErrorBarItem(x=[amp_lat[1]],y=[amp_lat[0]],
-                top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
-            s.peak_markers[el_cs_pk] = marker
-            s.plots[el_cs_pk[0]].addItem(marker)
+        for el_cs_pk, amp_lat in s.peak_data.items():
+            if el_cs_pk[1] in cases:
+                if el_cs_pk in s.peak_markers:
+                    s.plots[el_cs_pk[0]].removeItem(s.peak_markers[el_cs_pk])
+
+                marker = pg.ErrorBarItem(x=[amp_lat[1]],y=[amp_lat[0]],
+                    top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
+                s.peak_markers[el_cs_pk] = marker
+                s.plots[el_cs_pk[0]].addItem(marker)
+
+                c_ind = s.eeg.case_list.index(el_cs_pk[1])
+                top = pg.ScatterPlotItem(x=[amp_lat[1]],y=[amp_lat[0]+bar_len],
+                    symbol='o',size=4,pen=None,brush=s.plot_props['line colors'][c_ind])
+                s.peak_tops[el_cs_pk] = top
+                s.plots[el_cs_pk[0]].addItem(top)
+                top.setVisible(False)
 
     def relabel_peak(s,case,old_peak,new_peak):
 
@@ -828,7 +862,7 @@ class Picker(QtGui.QMainWindow):
             # s.peak_markers[(elec,case,peak)] = marker
             # s.plots[elec].addItem(marker)
 
-        s.show_peaks()
+        s.show_peaks(cases=[case])
 
         s.show_state()
 
