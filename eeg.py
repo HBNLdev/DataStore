@@ -9,13 +9,12 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 import mne
+from mne.channels import read_ch_connectivity
 
 from array_utils import (convert_ms, baseline_sub, baseline_div, handle_by,
-                             basic_slice, compound_take)
-from plot import measure_pps, get_plotparams
+                             basic_slice, compound_take, reverse_dimorder)
+from plot import measure_pps, get_data
 from plot_utils import nested_strjoin
-
-import compilation as C
 
 # values are tuples of h5py fieldname and datatype
 opt_info = {'Options path':                 ('optpath', 'text'),
@@ -160,6 +159,8 @@ class Results:
 
     def retrieve_behavior(s, experiment):
         ''' given 3-letter experiment designation, retrieve behavioral data '''
+        import compilation as C
+        
         wanted_fields = ['ID', 'session', experiment]
         proj = {wf:1 for wf in wanted_fields}
         proj.update({'_id':0})
@@ -189,6 +190,10 @@ class Results:
         fn, ext = file.split('.')
         s.montage = mne.channels.read_montage(os.path.join(path, fn) + use_ext)
 
+        # channel "connectivity" (adjacency)
+        target_path = '/active_projects/matlab_common/hbnl_neighbs.mat'
+        s.ch_connectivity, ch_names = read_ch_connectivity(target_path)
+
         # units and suggested limits; CSD transform or not
         if s.params['CSD matrix'].shape[0] > 2:
             s.pot_lims, s.pot_units = [-.2, .2], r'$\mu$V / $cm^2$'
@@ -198,6 +203,7 @@ class Results:
         s.itc_lims, s.itc_units = [-.06, 0.3], 'ITC'
         s.coh_lims, s.coh_units = [-.06, 0.3], 'ISPS'
         s.phi_lims, s.phi_units = [-np.pi, np.pi], 'Radians'
+        s.z_lims, s.z_units = [-1, 9], 'Z-score'
 
         # ERP times
         s.srate = s.params['Sampling rate'][0][0]
@@ -218,7 +224,7 @@ class Results:
         s.time_ticks() # additional helper function for ticks
 
         # time plot limits
-        time_plotlims_ms = [-200, 800]
+        time_plotlims_ms = [-100, 600]
         s.time_plotlims = [convert_ms(s.time, ms) for ms in time_plotlims_ms]
         s.time_tf_plotlims = [convert_ms(s.time_tf, ms)
                                         for ms in time_plotlims_ms]
@@ -264,7 +270,7 @@ class Results:
             if df.shape[0] != getattr(s, measure).shape[0]:
                 print('shape of loaded data does not match demogs, reloading')
             else:
-                return 'loaded already'
+                return np.array([])
 
         dsets = [h5py.File(fn, 'r')[dset_name] for fn in df['path'].values]
         arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
@@ -281,7 +287,7 @@ class Results:
         ''' load, filter, and subtractively baseline ERP data '''
 
         erp = s.load('erp', 'erp', [3, 0, 1, 2])
-        if erp == 'loaded already':
+        if erp.size == 0:
             return
         # erp is now (subjects, conditions, channels, timepoints,)
 
@@ -339,7 +345,7 @@ class Results:
         ''' load (total) power data and divisively baseline-normalize '''
 
         power = s.load('power', 'wave_totpow', [4, 0, 2, 1, 3])
-        if power == 'loaded already':
+        if power.size == 0:
             return
         power = power[:, :, :, ::-1, :]  # reverse the freq dimension
         # power is (subjects, conditions, channels, freq, timepoints,)
@@ -383,6 +389,24 @@ class Results:
         if baseline:
             s.baseline('itc', 'subtractive', bl_window)
 
+    def load_itc_Z(s):
+        ''' calculate and store Rayleigh's Z for currently loaded ITC data '''
+
+        if 'itc' not in dir(s):
+            print('load ITC first')
+            raise
+
+        tcol_list = []
+        for clab in s.params['Condition labels']:
+            tcol_list.append(s.demog_df['trials_'+clab])
+        trials_array = np.array(tcol_list).T
+
+        itc_rev = reverse_dimorder(s.itc)
+        trials_array_rev = reverse_dimorder(trials_array)
+
+        s.itc_Z = reverse_dimorder(np.power(itc_rev, 2) * trials_array_rev)
+
+
     def load_coh(s, baseline=True, bl_window=[-500, -200]):
 
         dsets = [h5py.File(fn, 'r')['coh']
@@ -404,9 +428,26 @@ class Results:
                         np.array(s.cohpair_lbls, dtype=object),
                         s.freq, s.time_tf)
 
-        # divisively baseline normalize
+        # subtractively baseline normalize
         if baseline:
             s.baseline('coh', 'subtractive', bl_window)
+
+    def load_coh_Z(s):
+        ''' calculate and store Rayleigh's Z for currently loaded COH data '''
+
+        if 'coh' not in dir(s):
+            print('load COH first')
+            raise
+
+        tcol_list = []
+        for clab in s.params['Condition labels']:
+            tcol_list.append(s.demog_df['trials_'+clab])
+        trials_array = np.array(tcol_list).T
+
+        coh_rev = reverse_dimorder(s.coh)
+        trials_array_rev = reverse_dimorder(trials_array)
+
+        s.coh_Z = reverse_dimorder(np.power(coh_rev, 2) * trials_array_rev)
 
     def load_phi(s):
         ''' load phase data, take angle() of '''
@@ -437,8 +478,7 @@ class Results:
         final_dim = 'subject'
 
         if measure in measure_pps.keys():
-            data, d_dims, d_dimlvls, units, lims, cmap = \
-                get_plotparams(s, measure)
+            data, d_dims, d_dimlvls = get_data(s, measure)
 
         # TODO: verify spec_dict accords with data_dims
         

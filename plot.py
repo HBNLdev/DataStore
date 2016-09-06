@@ -7,12 +7,14 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import scipy.stats as ss
 import mne
+from mne.viz import plot_connectivity_circle
 
 from array_utils import basic_slice, compound_take, handle_by, handle_pairs
 from plot_utils import (subplot_heuristic, figsize_heuristic,
                     is_nonstr_sequence, nested_strjoin,
                     MidpointNormalize,
-                    blank_topo, plot_arcs, ordinalize_one)
+                    blank_topo, plot_arcs, ordinalize_one,
+                    ordered_chans)
 
 ''' initialize matplotlib backend settings '''
 # print(mpl.matplotlib_fname())
@@ -39,18 +41,26 @@ measure_pps = {'erp':   {'data': 'erp', 'd_dims': 'erp_dims',
                          'd_dimlvls': 'tf_dim_lsts', 'units': 'itc_units',
                          'lims': 'itc_lims', 'cmap': plt.cm.PuOr,
                          'load': 'load_itc'},
+               'itc_Z': {'data': 'itc_Z', 'd_dims': 'tf_dims',
+                         'd_dimlvls': 'tf_dim_lsts', 'units': 'z_units',
+                         'lims': 'z_lims', 'cmap': plt.cm.PuOr,
+                         'load': 'load_itc_Z'},
                'coh':   {'data': 'coh', 'd_dims': 'coh_dims',
                          'd_dimlvls': 'coh_dim_lsts', 'units': 'coh_units',
                          'lims': 'coh_lims', 'cmap': plt.cm.PuOr,
                          'load': 'load_coh'},
+               'coh_Z': {'data': 'coh_Z', 'd_dims': 'coh_dims',
+                         'd_dimlvls': 'coh_dim_lsts', 'units': 'z_units',
+                         'lims': 'z_lims', 'cmap': plt.cm.PuOr,
+                         'load': 'load_coh_Z'},
                'phi':   {'data': 'phi', 'd_dims': 'tf_dims',
                          'd_dimlvls': 'tf_dim_lsts', 'units': 'phi_units',
                          'lims': 'phi_lims', 'cmap': plt.cm.PuOr,
                          'load': 'load_phi'},
                }
 
-def get_plotparams(s, measure, lims=None, cmap_override=None):
-    ''' given a measure, retrieve data and get plotting info '''
+def get_data(s, measure, ):
+    ''' given a measure, retrieve data and dimensional info '''
 
     measure_d = measure_pps[measure]
     if measure_d['data'] not in dir(s):
@@ -59,6 +69,13 @@ def get_plotparams(s, measure, lims=None, cmap_override=None):
     data        = getattr(s, measure_d['data'])
     d_dims      = getattr(s, measure_d['d_dims'])
     d_dimlvls   = getattr(s, measure_d['d_dimlvls'])
+    
+    return data, d_dims, d_dimlvls
+
+def get_plotparams(s, measure, lims=None, cmap_override=None):
+    ''' given a measure, retrieve default plotting info '''
+
+    measure_d = measure_pps[measure]
     units       = getattr(s, measure_d['units'])
 
     if lims:
@@ -80,7 +97,7 @@ def get_plotparams(s, measure, lims=None, cmap_override=None):
     else:
         cmap = measure_d['cmap']
 
-    return data, d_dims, d_dimlvls, units, lims, cmap
+    return units, lims, cmap
 
 def save_fig(s, savedir, ptype, measure, label, form='svg'):
     ''' name and save the current figure to a target directory
@@ -107,8 +124,8 @@ def gen_figname(s, ptype, measure, label):
 # plot functions that accept an eeg results object
 
 def erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
-           subplot_by={'POP': None},
-           glyph_by={'condition': None},
+           subplot_by={'POP': 'all'},
+           glyph_by={'condition': 'all'},
            savedir=None):
     ''' plot ERPs as lines '''
     ptype = 'line'
@@ -172,16 +189,16 @@ def erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
             save_fig(s, savedir, ptype, measure, f_lbls[fi])
 
 def tf(s, measure='power',
-          figure_by={'POP': None, 'channel': ['FZ']},
-          subplot_by={'condition': None},
+          figure_by={'POP': 'all', 'channel': ['FZ']},
+          subplot_by={'condition': 'all'},
           lims='absmax', cmap_override=None,
           savedir=None):
     ''' plot time-frequency data as a rectangular contour image '''
     ptype = 'tf'
 
-    if measure in ['power', 'itc', 'phi', 'coh']:
-        data, d_dims, d_dimlvls, units, lims, cmap = \
-            get_plotparams(s, measure, lims, cmap_override)
+    if measure in ['power', 'itc', 'itc_Z', 'phi', 'coh', 'coh_Z']:
+        data, d_dims, d_dimlvls = get_data(s, measure)
+        units, lims, cmap = get_plotparams(s, measure, lims, cmap_override)
     else:
         print('data not recognized')
         return
@@ -279,16 +296,16 @@ def tf(s, measure='power',
 
 def topo(s, measure='erp', times=list(range(0, 501, 125)),
             figure_by={'POP': ['C']},
-            row_by={'condition': None},
+            row_by={'condition': 'all'},
             lims='absmax', cmap_override=None,
             savedir=None):
     ''' plot data as topographic maps at specific timepoints '''
     ptype = 'topo'
     final_dim = 'channel'
 
-    if measure in ['erp', 'power', 'itc', 'phi']:
-        data, d_dims, d_dimlvls, units, lims, cmap = \
-            get_plotparams(s, measure, lims, cmap_override)
+    if measure in ['erp', 'power', 'itc', 'itc_Z', 'phi']:
+        data, d_dims, d_dimlvls = get_data(s, measure)
+        units, lims, cmap = get_plotparams(s, measure, lims, cmap_override)
     else:
         print('data not recognized')
         return
@@ -368,27 +385,31 @@ def topo(s, measure='erp', times=list(range(0, 501, 125)),
             save_fig(s, savedir, ptype, measure, f_lbls[fi])
 
 
-def arctopo(s, pairs='all',
+def arctopo(s, measure='coh',
+               pairs='all',
                times=list(range(0, 501, 125)),
                figure_by={'POP': ['C']},
-               row_by={'condition': None},
+               row_by={'condition': 'all'},
                lims='absmax', cmap_override=None,
                savedir=None):
-    ''' plot data as topographic maps at specific timepoints '''
-    measure='coh'
+    ''' plot coherence as topographically-arranged colored arcs '''
     ptype = 'arctopo'
     final_dim = 'pair'
 
-    data, d_dims, d_dimlvls, units, lims, cmap = \
-        get_plotparams(s, measure, lims, cmap_override)
+    if measure in ['coh', 'coh_Z']:
+        data, d_dims, d_dimlvls = get_data(s, measure)
+        units, lims, cmap = get_plotparams(s, measure, lims, cmap_override)
+    else:
+        print('data not recognized')
+        return
 
     info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
                            'eeg', s.montage)
 
     f_dim, f_vals, f_lbls = handle_by(s, figure_by, d_dims, d_dimlvls)
-    print('~~~~')
-    print(f_dim, '\n', f_vals, '\n', f_lbls)
-    print('~~~~')
+    # print('~~~~')
+    # print(f_dim, '\n', f_vals, '\n', f_lbls)
+    # print('~~~~')
     r_dim, r_vals, r_lbls = handle_by(s, row_by, d_dims, d_dimlvls)
     time_by = {'timepoint': times}
     t_dim, t_vals, t_lbls = handle_by(s, time_by, d_dims, d_dimlvls)
@@ -470,5 +491,95 @@ def arctopo(s, pairs='all',
         mapper.set_array([vmin, vmax])
         cbar = plt.colorbar(mapper, cax=cbar_ax)
         cbar.ax.set_ylabel(units, rotation=270, fontweight=stitlefont_wt)
+        if savedir:
+            save_fig(s, savedir, ptype, measure, f_lbls[fi])
+
+def connectivity_circle(s, measure='coh',
+                           pairs='all',
+                           times=list(range(0, 501, 125)),
+                           figure_by={'POP': ['C']},
+                           row_by={'condition': 'all'},
+                           lims='absmax', cmap_override=None,
+                           savedir=None):
+    ''' plot coherence as generic circle of nodes connected by colored arcs '''
+    ptype = 'arctopo'
+    final_dim = 'pair'
+
+    if measure in ['coh', 'coh_Z']:
+        data, d_dims, d_dimlvls = get_data(s, measure)
+        units, lims, cmap = get_plotparams(s, measure, lims, cmap_override)
+    else:
+        print('data not recognized')
+        return
+
+    f_dim, f_vals, f_lbls = handle_by(s, figure_by, d_dims, d_dimlvls)
+    r_dim, r_vals, r_lbls = handle_by(s, row_by, d_dims, d_dimlvls)
+    time_by = {'timepoint': times}
+    t_dim, t_vals, t_lbls = handle_by(s, time_by, d_dims, d_dimlvls)
+    
+    pair_inds = handle_pairs(s, pairs)
+    pair_chaninds = [s.cohpair_inds[pi] for pi in pair_inds]
+
+    uniq_chaninds = np.unique(np.array(pair_chaninds).ravel())
+    uniq_chanlabels = [s.montage.ch_names[ci] for ci in uniq_chaninds]
+    uniq_chanlabels.sort(key=lambda x: ordered_chans.index(x))
+
+    cohpair_array = []
+    for chan_pair in np.array(s.cohpair_inds):
+        cohpair_array.append(
+            [uniq_chanlabels.index(s.montage.ch_names[int(chan_pair[0])]),
+             uniq_chanlabels.index(s.montage.ch_names[int(chan_pair[1])])])
+    cohpair_array = np.array(cohpair_array)
+    indices = (cohpair_array[:, 0], cohpair_array[:, 1])
+
+    pair_dim = d_dims.index('pair')
+    data = basic_slice(data, [(pair_dim, pair_inds)])
+
+    sp_dims = (len(r_vals), len(times))
+    figsize = figsize_heuristic(sp_dims)
+    for fi, fval in enumerate(f_vals):
+        f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
+                                sharex=True, sharey=True, figsize=figsize)
+        f.suptitle(f_lbls[fi], fontsize=titlefont_sz, fontweight=titlefont_wt)
+        try:
+            axarr = axarr.ravel()
+        except:
+            axarr = [axarr]
+        ax_dum = -1
+        for ri, rval in enumerate(r_vals):
+            for ti, tval in enumerate(t_vals):
+                vals = [fval, rval, tval]
+                dims = [f_dim[fi], r_dim[ri], t_dim[ti]]
+                # try:
+                dimval_tups = [(d,v) for d,v in zip(dims, vals)]
+                try:
+                    arcs = basic_slice(data, dimval_tups)
+                    print('slice')
+                except:
+                    arcs = compound_take(data, dimval_tups)
+                    print('compound take')
+                mean_dims = np.where([d!=final_dim for d in d_dims])
+                arcs = arcs.mean(axis=tuple(mean_dims[0]))
+                print(arcs.shape)
+                ax_dum += 1
+                
+                # column = (ax_dum + 1) % sp_dims[1]
+                # row = floor(ax_dum / sp_dims[1])
+                # plot here
+                plot_connectivity_circle(arcs, uniq_chanlabels, indices,
+                        # node_angles=node_angles,
+                        facecolor='white',
+                        textcolor='black',
+                        colormap=plt.cm.hot_r,
+                        title='title',
+                        colorbar_size=0.4,
+                        colorbar_pos=(-0.5,0.5),
+                        fig=f,
+                        subplot=(sp_dims[0], sp_dims[1], ax_dum + 1))
+
+                axarr[ax_dum].text(-.5, .5, t_lbls[ti])  # time label
+                if ti == 0:
+                    axarr[ax_dum].text(-1.5, 0, r_lbls[ri])  # row label
+        
         if savedir:
             save_fig(s, savedir, ptype, measure, f_lbls[fi])

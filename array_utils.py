@@ -1,9 +1,13 @@
-''' utils for manipulating and slicing arrays to aid plotting '''
+''' utils for manipulating and slicing arrays '''
 
 import numpy as np
 import itertools
 
 # array functions
+def reverse_dimorder(array):
+    ''' return version of array with dimensions in reversed order '''
+    return np.transpose(array, list(range(len(array.shape)-1, -1, -1)))
+
 def baseline_sub(array, pt_lims, along_dim=-1):
     ''' baseline array in a subtractive way '''
     return array - array.take(range(pt_lims[0], pt_lims[1]+1), axis=along_dim)\
