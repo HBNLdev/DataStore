@@ -418,7 +418,7 @@ class avgh1_file(cnth1_file):
 
         event_interval_ms = np.concatenate([[0], np.diff(s.time_seq)*1000])
         rt = np.empty_like(event_interval_ms)*np.nan
-        rt[(s.resp_seq!=0) & ~s.errant] = \
+        rt[(s.resp_seq!=0) & ~(s.errant)] = \
             event_interval_ms[(s.resp_seq!=0) & ~s.errant]
         s.type_descriptor = np.array(s.type_descriptor, dtype=np.object_)
         dd = {'type_seq': s.type_seq, 'type_descriptor': s.type_descriptor,
@@ -615,7 +615,9 @@ class mt_file:
             for chan, amp_lat in s.data[k].items():  # chans
                 if type(amp_lat) is tuple:  # if amp / lat tuple
                     inner_ddict.update(
-                        {chan: {'amp': amp_lat[0], 'lat': amp_lat[1]}})
+                        { chan: {'amp': float(amp_lat[0]),
+                                 'lat': float(amp_lat[1])} }
+                                )
             ddict['data'].update({case + '_' + peak: inner_ddict})
         s.data = ddict
         s.data.update(s.file_info)
