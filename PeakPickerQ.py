@@ -481,6 +481,7 @@ class Picker(QtGui.QMainWindow):
         n_peaks = len(peaks)
         amps = np.empty( (n_peaks, n_chans, n_cases) )
         lats = np.empty( (n_peaks, n_chans, n_cases) )
+        amps.fill(np.NAN); lats.fill(np.NAN)
         for icase, case_N in enumerate(cases_Ns):
             case_name = case_N[0]
             for ichan, chan in enumerate(s.eeg.electrodes_61): # only core 61 chans

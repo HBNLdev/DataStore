@@ -126,6 +126,7 @@ class avgh1:
 		
 		# making CSV structure
 		df = pd.DataFrame(data,index=index)
+		df.dropna(inplace=True)
 		mt_string = df.to_csv(path_or_buf=None, sep=' ', na_rep='NaN',
 			float_format='%.3f', header=False, index=True,
 			index_label=None, line_terminator='\n')
