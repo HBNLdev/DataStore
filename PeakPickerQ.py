@@ -580,6 +580,8 @@ class Picker(QtGui.QMainWindow):
         for disp_case in s.eeg.case_list:
             s.set_case_display(disp_case,disp_case == case)
 
+        s.toggle_regions(True)
+
         print('pick_init finish')
 
     def update_region_label_position(s,reg_key=None):
@@ -657,12 +659,20 @@ class Picker(QtGui.QMainWindow):
                     s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
 
 
-    def toggle_regions(s):
-        checked = s.sender().isChecked()
+    def toggle_regions(s,state=None):
+        if state is None:
+            state = s.sender().isChecked()
+
+        Pstate = s.app_data['pick state']
+        print('toggle_regions',state, Pstate)
+
         for el_cs_pk,reg in s.pick_regions.items():
-            if el_cs_pk[1] == s.caseChooser.currentText():
-                reg.setVisible(checked) 
-                s.pick_region_labels[el_cs_pk].setVisible(checked)
+            #if el_cs_pk[1] == s.caseChooser.currentText():
+            show = False
+            if state and el_cs_pk[1] == Pstate['case'] and el_cs_pk[2] == Pstate['peak']:
+                show = True
+            reg.setVisible(show) 
+            s.pick_region_labels[el_cs_pk].setVisible(show)
 
     def toggle_peaks(s):
         checked = s.sender().isChecked()
@@ -692,7 +702,7 @@ class Picker(QtGui.QMainWindow):
         s.set_case_display(case,checked,zoom=True)
 
     def set_case_display(s,case,state,zoom=False):
-
+        print('set_case_display',case,state,'zoom',zoom)
         if zoom:
             toggles = s.zoomCaseToggles
             curves = s.zoom_curves
@@ -702,8 +712,9 @@ class Picker(QtGui.QMainWindow):
             curves = s.curves
             curve_keys = [e_c for e_c in curves.keys() if e_c[1] == case]
 
-
+        if not zoom: toggles[case].stateChanged.disconnect(s.toggle_case)
         toggles[case].setChecked(state)
+        if not zoom: toggles[case].stateChanged.connect(s.toggle_case)
         for ck in curve_keys:
             if ck in curves:
             #print( 'set zoom case display', ck, state)
@@ -711,10 +722,10 @@ class Picker(QtGui.QMainWindow):
 
         if not zoom:
             #if s.pickRegionToggle.isChecked() or state == False:
-            for el_cs_pk in [ ecp for ecp in s.pick_regions if ecp[1] == case ]:
-                if el_cs_pk[1] == s.caseChooser.currentText() or state == False:
-                    s.pick_regions[el_cs_pk].setVisible(state)
-                    s.pick_region_labels[el_cs_pk].setVisible(state)
+            # for el_cs_pk in [ ecp for ecp in s.pick_regions if ecp[1] == case ]:
+            #     if el_cs_pk[1] == s.caseChooser.currentText() or state == False:
+            #         s.pick_regions[el_cs_pk].setVisible(state)
+            #         s.pick_region_labels[el_cs_pk].setVisible(state)
 
             if s.peakMarkerToggle.isChecked():
                 for el_cs_pk in [ ecp for ecp in s.peak_markers if ecp[1] == case ]:
