@@ -59,7 +59,7 @@ measure_pps = {'erp':   {'data': 'erp', 'd_dims': 'erp_dims',
                          'load': 'load_phi'},
                }
 
-def get_data(s, measure, ):
+def get_data(s, measure):
     ''' given a measure, retrieve data and dimensional info '''
 
     measure_d = measure_pps[measure]
