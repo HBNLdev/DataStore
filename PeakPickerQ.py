@@ -552,6 +552,9 @@ class Picker(QtGui.QMainWindow):
 
         pick_case_peaks = set([(ecp[1],ecp[2]) for ecp in s.pick_regions])
 
+        for ztcase,checkbox in s.zoomCaseToggles.items():
+                checkbox.setChecked( ztcase == case )
+
         if (case,peak) not in pick_case_peaks:
             peak_center_ms = 100*int(peak[1])
             start_range = (peak_center_ms-75,peak_center_ms+75)
@@ -702,8 +705,9 @@ class Picker(QtGui.QMainWindow):
 
         toggles[case].setChecked(state)
         for ck in curve_keys:
+            if ck in curves:
             #print( 'set zoom case display', ck, state)
-            curves[ck].setVisible(state)
+                curves[ck].setVisible(state)
 
         if not zoom:
             #if s.pickRegionToggle.isChecked() or state == False:
