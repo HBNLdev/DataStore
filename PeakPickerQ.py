@@ -343,6 +343,7 @@ class Picker(QtGui.QMainWindow):
                 print('already on last file')
                 return
 
+        # main plot / drawing portion
         ind = s.app_data['file ind']
         print('load file: #', ind, paths[ind])
         if ind < len(paths):
@@ -429,6 +430,7 @@ class Picker(QtGui.QMainWindow):
                 # main gridplot loop
                 x_gridlines, y_gridlines = s.plot_props['XY gridlines']
                 grid_pen = s.plot_props['grid color']
+                ymin, ymax = s.plot_desc[0][1]['props']['yrange']
                 for elec in [ch for ch in chans if (ch in s.plots) and (ch not in s.ignore)]:
                     plot = s.plots[elec]
                     plot.clear()
@@ -442,6 +444,9 @@ class Picker(QtGui.QMainWindow):
                     # ERP amplitude curves for each case
                     for case in cases:
                         s.curves[(elec, case)] = s.plot_curve(s.plots[elec], elec, case)
+
+                    # set y limits
+                    plot.setYRange(ymin, ymax)
 
                     # electrode label
                     label = pg.TextItem(text=elec, anchor=(0, 0.2))
