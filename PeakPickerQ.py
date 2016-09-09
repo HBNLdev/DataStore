@@ -60,9 +60,11 @@ class Picker(QtGui.QMainWindow):
     if len(sys.argv) > 1:
         user = sys.argv[1]
     # userName for store path
+    userName = user
     if '_' in user:
         userName = user.split('_')[1]
-    else:
+
+    if userName == '':
         userName = 'default'
 
     app_data['user'] = userName
