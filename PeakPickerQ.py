@@ -396,7 +396,10 @@ class Picker(QtGui.QMainWindow):
             s.current_data = data_sourceD
 
             # channel layout determined by this
-            s.plot_desc = eeg.selected_cases_by_channel(mode='server', style='layout')
+            scale_chans = [ch for ch in chans if (ch not in s.show_only+s.ignore)]
+            s.plot_desc = eeg.selected_cases_by_channel(mode='server', style='layout',
+                                                        time_range=s.app_data['display props']['time range'],
+                                                        channels=scale_chans)
 
             if not initialize:
                 s.legend_plot.clear()
