@@ -33,7 +33,7 @@ class Picker(QtGui.QMainWindow):
     repick_modes = ('all', 'single')
     peak_choices = ['P1', 'P2', 'P3', 'P4', 'N1', 'N2', 'N3', 'N4']
 
-    plot_props = {'width': 180, 'height': 110,
+    plot_props = {'width': 232, 'height': 112,
                   'extra_bottom_height': 40,  # for bottom row
                   'min_border': 4,
                   'line colors': [(221, 34, 34), (102, 221, 102), (34, 34, 221), (221, 34, 221)],
@@ -76,6 +76,8 @@ class Picker(QtGui.QMainWindow):
                               'repick mode': repick_modes[0]}
 
     def __init__(s):
+        ''' the init lays out all of the GUI elements, connects interactive elements to call-backs '''
+
         DProps = s.app_data['display props']
         super(Picker, s).__init__()
         s.setGeometry(*DProps['main position'])
@@ -238,6 +240,8 @@ class Picker(QtGui.QMainWindow):
 
         prev_plot = None
         s.legend_plot = None
+        n_rows = len(s.plot_desc)
+        n_columns = len(s.plot_desc[0])
         for rN, prow in enumerate(s.plot_desc):
             if rN == 0:
                 for cN, p_desc in enumerate(prow):
@@ -266,7 +270,7 @@ class Picker(QtGui.QMainWindow):
         s.pickLayout.addLayout(s.controls_1)
         s.pickLayout.addLayout(s.peakControls)
         s.plotsScroll = QtGui.QScrollArea()
-        s.plotsGrid.resize(1150, 1800)
+        s.plotsGrid.resize(n_columns * s.plot_props['width'], n_rows * s.plot_props['height'])
         s.plotsScroll.setWidget(s.plotsGrid)
         s.pickLayout.addWidget(s.plotsScroll)
 
@@ -311,7 +315,7 @@ class Picker(QtGui.QMainWindow):
             s.load_file()
 
     def gather_info(s, eeg):
-        ''' given avgh1 object, gather info about transforms and cases '''
+        ''' given EEGdata.avgh1 object, gather info about transforms and cases '''
 
         eeg.extract_transforms_data()
         eeg.extract_case_data()
@@ -425,7 +429,7 @@ class Picker(QtGui.QMainWindow):
                 # main gridplot loop
                 x_gridlines, y_gridlines = s.plot_props['XY gridlines']
                 grid_pen = s.plot_props['grid color']
-                for elec in [ch for ch in chans if ch not in s.ignore]:
+                for elec in [ch for ch in chans if (ch in s.plots) and (ch not in s.ignore)]:
                     plot = s.plots[elec]
                     plot.clear()
 
@@ -483,6 +487,8 @@ class Picker(QtGui.QMainWindow):
         return curve
 
     def save_mt(s):
+        ''' save the current picks as an HBNL-formatted *.mt text file '''
+
         print('Save mt')
         picked_cp = s.app_data['picks']
         cases_Ns = list(set([(cp[0], s.eeg.case_num_map[cp[0]]) for cp in picked_cp]))
@@ -524,6 +530,7 @@ class Picker(QtGui.QMainWindow):
         print('Saved', fullpath)
 
     def adjust_label(s, viewbox):
+        ''' adjusts position of electrode text label objects to be visible if axis limits change '''
 
         if viewbox in s.plot_labels:
             label = s.plot_labels[viewbox]
@@ -531,13 +538,14 @@ class Picker(QtGui.QMainWindow):
             label.setPos(region[0][0], region[1][1])
 
     def update_ranges(s):
-        ''' Called when axis ranges change 
-        '''
+        ''' called when axis limits change (e.g. on pan/zoom) '''
+
         s.adjust_label(s.sender())
         for el_cs_pk in s.pick_regions:
             s.update_region_label_position(el_cs_pk)
 
     def update_pick_regions(s):
+        ''' called when pick regions are adjusted '''
 
         sender = s.sender()
         region = sender.getRegion()
@@ -617,6 +625,7 @@ class Picker(QtGui.QMainWindow):
 
     def show_state(s, cases='all'):
         ''' display the current pick state as a list of cases, with corresponding picked peaks following in brackets '''
+
         picks = s.app_data['picks']
         if cases == 'all':
             cases = s.eeg.case_list
@@ -633,6 +642,7 @@ class Picker(QtGui.QMainWindow):
 
     def show_zoom_plot(s, ev):
         ''' if a single plot is clicked, show a larger version of the plot on a detached window '''
+
         print('zoom_plot', ev)
         if ev[0].button() == 1 and ev[0].currentItem in s.vb_map:
             elec = s.vb_map[ev[0].currentItem]
@@ -672,8 +682,9 @@ class Picker(QtGui.QMainWindow):
                 for case in s.eeg.case_list:  # unsure why this doesn't work in above loop, maybe timing
                     s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
 
-
     def toggle_regions(s, state=None):
+        ''' toggle display of regions (if peak being picked is changed or the display checkbox is toggled) '''
+
         if state is None:
             state = s.sender().isChecked()
 
@@ -688,20 +699,25 @@ class Picker(QtGui.QMainWindow):
             reg.setVisible(show) 
             s.pick_region_labels[el_cs_pk].setVisible(show)
 
-
     def toggle_peaks(s):
+        ''' toggle display of peak-marking glyphs (if checkbox is toggled) '''
+
         checked = s.sender().isChecked()
         for el_cs_pk, mark in s.peak_markers.items():
             if s.caseToggles[el_cs_pk[1]].isChecked():
                 mark.setVisible(checked)
 
     def toggle_peak_tops(s):
+        ''' toggle display of marking top glyphs above peak-marking glyphs (if checkbox is toggled) '''
+
         checked = s.sender().isChecked()
         for el_cs_pk, top in s.peak_tops.items():
             if s.caseToggles[el_cs_pk[1]].isChecked():
                 top.setVisible(checked)
 
     def toggle_case(s):
+        ''' toggle display of case ERP curves (if checkbox is toggled) '''
+
         sender = s.sender()
         case = sender.text()
         # print('toggle_case',case)
@@ -711,13 +727,16 @@ class Picker(QtGui.QMainWindow):
         #    s.curves[el_cs].setVisible(checked)
 
     def toggle_zoom_case(s):
+        ''' toggle display of case ERP curves inside zoomplot (if checkbox is toggled) '''
+
         sender = s.sender()
         case = sender.text()
         checked = sender.isChecked()
         s.set_case_display(case, checked, zoom=True)
 
-
     def set_case_display(s,case,state,zoom=False):
+        ''' given case string and boolean state, sets display settings  '''
+
         print('set_case_display',case,state,'zoom',zoom)
 
         if zoom:
@@ -746,6 +765,9 @@ class Picker(QtGui.QMainWindow):
                     s.peak_markers[el_cs_pk].setVisible(state)
 
     def mode_toggle(s):
+        ''' toggles between 'all' and 'single' peak picking modes which refer to the scope of actions
+            including applying a pick and adjusting region limits '''
+
         current_mode = s.app_data['pick state']['repick mode']
         current_mode_i = s.repick_modes.index(current_mode)
         s.app_data['pick state']['repick mode'] = \
@@ -753,6 +775,7 @@ class Picker(QtGui.QMainWindow):
         s.pickModeToggle.setText(s.app_data['pick state']['repick mode'])
 
     def show_peaks(s, cases='all'):
+        ''' display chosen extrema as glyphs '''
 
         bar_len = s.app_data['display props']['bar length']
 
@@ -777,6 +800,7 @@ class Picker(QtGui.QMainWindow):
                 top.setVisible(False)
 
     def relabel_peak(s, case, old_peak, new_peak):
+        ''' re-labels a picked peak to have a new pick identity '''
 
         old_keys = [k for k in s.peak_data.keys() if k[1] == case and k[2] == old_peak]
 
@@ -802,6 +826,8 @@ class Picker(QtGui.QMainWindow):
         s.show_state()
 
     def remove_peak(s):
+        ''' callback for Remove button inside Fix button dialog bix '''
+
         case = s.fixCase.currentText()
         peak = s.oldPeak.currentText()
 
@@ -826,7 +852,8 @@ class Picker(QtGui.QMainWindow):
         s.fixDialog.setVisible(False)
 
     def fix_peak(s):
-        ''' callback for main gui button '''
+        ''' callback for Fix button inside Pick tab '''
+
         s.fixCase.clear()
         s.oldPeak.clear()
         s.newPeak.clear()
@@ -836,6 +863,8 @@ class Picker(QtGui.QMainWindow):
         s.fixDialog.show()
 
     def choose_fix_case(s):
+        ''' populates drop-down box of cases to potentially fix '''
+
         case = s.sender().currentText()
         print('choose_fix_case', case, s.app_data['picks'])
         available_peaks = [c_p[1] for c_p in s.app_data['picks'] if c_p[0 == case]]
@@ -843,6 +872,8 @@ class Picker(QtGui.QMainWindow):
             s.oldPeak.addItem(peak)
 
     def choose_old_peak(s):
+        ''' populates drop-down box of peaks to potentially fix '''
+
         case = s.fixCase.currentText()
         old_peak = s.sender().currentText()
         print('choose_old_peak', case, old_peak)
@@ -851,7 +882,8 @@ class Picker(QtGui.QMainWindow):
             s.newPeak.addItem(peak)
 
     def apply_peak_change(s):
-        ''' callback for dialog button '''
+        ''' callback for Apply Change button inside of Fix dialog box '''
+
         case = s.fixCase.currentText()
         old_peak = s.oldPeak.currentText()
         new_peak = s.newPeak.currentText()
@@ -859,6 +891,8 @@ class Picker(QtGui.QMainWindow):
         s.fixDialog.setVisible(False)
 
     def apply_selections(s):
+        ''' find the extremum in the given region '''
+
         case = s.app_data['pick state']['case']
         peak = s.app_data['pick state']['peak']
         polarity = peak[0].lower()
