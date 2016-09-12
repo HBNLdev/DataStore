@@ -334,7 +334,7 @@ class Picker(QtGui.QMainWindow):
         s.app_data['info'] = [filter_info] + case_info
 
     def load_file(s, next_file=False, initialize=False):
-        ''' load an avgh1 object as the current file to be picked '''
+        ''' load an avgh1 object as the current file to be picked and plot its data in the plotgrid '''
 
         paths = s.app_data['file paths']
 
@@ -440,7 +440,7 @@ class Picker(QtGui.QMainWindow):
                     plot = s.plots[elec]
                     plot.clear()
 
-                    # grid lines
+                    # # grid lines
                     for xval in x_gridlines:
                         plot.addLine(x=xval, pen=grid_pen)
                     for yval in y_gridlines:
@@ -453,6 +453,9 @@ class Picker(QtGui.QMainWindow):
                     # set y limits
                     plot.setYRange(ymin, ymax)
 
+                    # link auto-scale button to return to these limits
+                    # plot.autoBtn.clicked.connect(s.default_range)
+
                     # electrode label
                     label = pg.TextItem(text=elec, anchor=(0, 0.2))
                     plot.addItem(label)
@@ -460,7 +463,7 @@ class Picker(QtGui.QMainWindow):
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
 
-                    plot.vb.setMouseEnabled(x=False)
+                    plot.vb.setMouseEnabled(x=False) #, y=False)
 
         s.peak_markers = {}
         s.peak_tops = {}
@@ -485,6 +488,9 @@ class Picker(QtGui.QMainWindow):
         s.pick_regions = {}
         s.pick_region_labels = {}
         s.pick_region_labels_byRegion = {}
+
+    def default_range(s, signal):
+        print(signal)
 
     def plot_curve(s, plot, electrode, case):
         ''' given a plot handle, electrode, and case, return the line plot of its amplitude data '''
