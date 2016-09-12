@@ -51,7 +51,7 @@ class Picker(QtGui.QMainWindow):
                                   'background': (40, 40, 40),
                                   'foreground': (135, 135, 135),
                                   'main position': (50, 50, 1200, 900),
-                                  'zoom position': (300, 200, 780, 650),
+                                  'zoom position': [300, 200, 780, 650],
                                   }}
 
     region_label_html = '<div style="color: #FF0; font-size: 7pt; font-family: Helvetica">__PEAK__</div>'
@@ -185,7 +185,7 @@ class Picker(QtGui.QMainWindow):
         s.peakControls.addWidget(s.peakChooser)
 
         pick_buttons = [('Pick', s.pick_init), ('Apply', s.apply_selections),
-                        ('Fix', s.fix_peak)]
+                        ('Fix', s.fix_peak), ('Rescale', s.rescale_yaxis)]
         # s.add_buttons(s.peakControls,pick_buttons)
         for label, handler in pick_buttons:
             s.buttons[label] = QtGui.QPushButton(label)
@@ -203,6 +203,7 @@ class Picker(QtGui.QMainWindow):
 
         s.plotsGrid = pg.GraphicsLayoutWidget()  # QtGui.QGridLayout()
         s.zoomDialog = QtGui.QDialog(s)
+        s.zoomDialog.closeEvent = s.zoom_close
         s.zoomLayout = QtGui.QVBoxLayout()
         s.zoomDialog.setLayout(s.zoomLayout)
         s.zoomControls = QtGui.QHBoxLayout()
@@ -284,6 +285,12 @@ class Picker(QtGui.QMainWindow):
         s.setCentralWidget(s.tabs)
 
         s.show()
+
+    def zoom_close(s, event):
+        ''' custom handler for the closing of the zoom window (remembers its position) '''
+        s.app_data['display props']['zoom position'][0] = s.zoomDialog.pos().x()
+        s.app_data['display props']['zoom position'][1] = s.zoomDialog.pos().y()
+        QtGui.QDialog.closeEvent(s.zoomDialog, event)
 
     def start_handler(s, signal):
         ''' Start button inside Navigate tab '''
@@ -400,6 +407,7 @@ class Picker(QtGui.QMainWindow):
             s.plot_desc = eeg.selected_cases_by_channel(mode='server', style='layout',
                                                         time_range=s.app_data['display props']['time range'],
                                                         channels=scale_chans)
+            s.ylims = s.plot_desc[0][1]['props']['yrange']
 
             if not initialize:
                 s.legend_plot.clear()
@@ -435,7 +443,7 @@ class Picker(QtGui.QMainWindow):
                 # main gridplot loop
                 x_gridlines, y_gridlines = s.plot_props['XY gridlines']
                 grid_pen = s.plot_props['grid color']
-                ymin, ymax = s.plot_desc[0][1]['props']['yrange']
+
                 for elec in [ch for ch in chans if (ch in s.plots) and (ch not in s.ignore)]:
                     plot = s.plots[elec]
                     plot.clear()
@@ -451,10 +459,7 @@ class Picker(QtGui.QMainWindow):
                         s.curves[(elec, case)] = s.plot_curve(s.plots[elec], elec, case)
 
                     # set y limits
-                    plot.setYRange(ymin, ymax)
-
-                    # link auto-scale button to return to these limits
-                    # plot.autoBtn.clicked.connect(s.default_range)
+                    plot.setYRange(s.ylims[0], s.ylims[1])
 
                     # electrode label
                     label = pg.TextItem(text=elec, anchor=(0, 0.2))
@@ -489,8 +494,10 @@ class Picker(QtGui.QMainWindow):
         s.pick_region_labels = {}
         s.pick_region_labels_byRegion = {}
 
-    def default_range(s, signal):
-        print(signal)
+    def rescale_yaxis(s):
+        ''' set y limits of all plots in plotgrid to the recommended vals '''
+        plot = s.plots['PZ']
+        plot.setYRange(s.ylims[0], s.ylims[1])
 
     def plot_curve(s, plot, electrode, case):
         ''' given a plot handle, electrode, and case, return the line plot of its amplitude data '''
