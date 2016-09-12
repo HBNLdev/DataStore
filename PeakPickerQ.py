@@ -33,7 +33,7 @@ class Picker(QtGui.QMainWindow):
     repick_modes = ('all', 'single')
     peak_choices = ['P1', 'P2', 'P3', 'P4', 'N1', 'N2', 'N3', 'N4']
 
-    plot_props = {'width': 232, 'height': 112,
+    plot_props = {'width': 233, 'height': 112,
                   'extra_bottom_height': 40,  # for bottom row
                   'min_border': 4,
                   'line colors': [(221, 34, 34), (102, 221, 102), (34, 34, 221), (221, 34, 221)],
@@ -204,6 +204,7 @@ class Picker(QtGui.QMainWindow):
         s.plotsGrid = pg.GraphicsLayoutWidget()  # QtGui.QGridLayout()
         s.zoomDialog = QtGui.QDialog(s)
         s.zoomDialog.closeEvent = s.zoom_close
+        s.zoomDialog._open = False
         s.zoomLayout = QtGui.QVBoxLayout()
         s.zoomDialog.setLayout(s.zoomLayout)
         s.zoomControls = QtGui.QHBoxLayout()
@@ -243,6 +244,7 @@ class Picker(QtGui.QMainWindow):
 
         prev_plot = None
         s.legend_plot = None
+        s.status_plot = None
         n_rows = len(s.plot_desc)
         n_columns = len(s.plot_desc[0])
         for rN, prow in enumerate(s.plot_desc):
@@ -269,6 +271,10 @@ class Picker(QtGui.QMainWindow):
                     s.legend_plot = s.plotsGrid.addPlot(rN + 1, cN)
                     s.legend_plot.getAxis('left').hide()
                     s.legend_plot.getAxis('bottom').hide()
+                elif not s.status_plot:
+                    s.status_plot = s.plotsGrid.addPlot(rN + 1, cN)
+                    s.status_plot.getAxis('left').hide()
+                    s.status_plot.getAxis('bottom').hide()
 
         s.pickLayout.addLayout(s.controls_1)
         s.pickLayout.addLayout(s.peakControls)
@@ -286,11 +292,16 @@ class Picker(QtGui.QMainWindow):
 
         s.show()
 
-    def zoom_close(s, event):
-        ''' custom handler for the closing of the zoom window (remembers its position) '''
+    def get_zoompos(s):
+        ''' store the current position of the zoom window '''
         s.app_data['display props']['zoom position'][0] = s.zoomDialog.pos().x()
         s.app_data['display props']['zoom position'][1] = s.zoomDialog.pos().y()
+
+    def zoom_close(s, event):
+        ''' custom handler for the closing of the zoom window that remembers its position '''
+        s.get_zoompos()
         QtGui.QDialog.closeEvent(s.zoomDialog, event)
+        s.zoomDialog._open = False
 
     def start_handler(s, signal):
         ''' Start button inside Navigate tab '''
@@ -368,6 +379,7 @@ class Picker(QtGui.QMainWindow):
             s.app_data['experiment cases'] = eeg.case_list
 
             s.peak_data = {}
+            s.peak_edges = {}
             s.app_data['picks'] = set()
             s.show_state()
 
@@ -468,7 +480,7 @@ class Picker(QtGui.QMainWindow):
                     s.plot_labels[plot.vb] = label
                     s.adjust_label(plot.vb)
 
-                    plot.vb.setMouseEnabled(x=False) #, y=False)
+                    plot.vb.setMouseEnabled(x=False, y=False)
 
         s.peak_markers = {}
         s.peak_tops = {}
@@ -655,9 +667,28 @@ class Picker(QtGui.QMainWindow):
         state_string = ''
         for case in cases:
             state_string += case + ':['
-            state_string += ','.join([cp[1] for cp in picks if cp[0] == case]) + '] '
+            for cp in picks:
+                if cp[0] == case:
+                    state_string += cp[1]
+                    if s.any_casepeak_edges(case, cp[1]):
+                        state_string += '*'
+                    state_string += ','
+            state_string += '] '
 
         s.stateInfo.setText(state_string)
+
+    def any_casepeak_edges(s, case, peak):
+        ''' given a case and peak, check if any of its channels currently picked are at an edge '''
+
+        bool_lst = []
+        for elec_case_peak, is_atedge in s.peak_edges.items():
+            if elec_case_peak[1] == case and elec_case_peak[2] == peak:
+                bool_lst.append(is_atedge)
+
+        if any(bool_lst):
+            return True
+        else:
+            return False
 
     # def scroll_handler(s,ev):
     #     print('scroll handler', ev[0] )
@@ -665,6 +696,9 @@ class Picker(QtGui.QMainWindow):
 
     def show_zoom_plot(s, ev):
         ''' if a single plot is clicked, show a larger version of the plot on a detached window '''
+
+        if s.zoomDialog._open:
+            s.get_zoompos()
 
         print('zoom_plot', ev)
         if ev[0].button() == 1 and ev[0].currentItem in s.vb_map:
@@ -676,6 +710,7 @@ class Picker(QtGui.QMainWindow):
 
             if Pstate['case']:
                 s.zoomDialog.show()
+                s.zoomDialog._open = True
 
                 x_lines, y_lines = s.plot_props['XY gridlines']
                 grid_pen = s.plot_props['grid color']
@@ -797,6 +832,21 @@ class Picker(QtGui.QMainWindow):
             s.repick_modes[(current_mode_i + 1) % len(s.repick_modes)]
         s.pickModeToggle.setText(s.app_data['pick state']['repick mode'])
 
+    def notify_edges(s, case, peak):
+        ''' for a given case / peak combination, check if any peaks are at an edge, and provide a notification'''
+
+        s.status_plot.clear()
+        if s.any_casepeak_edges(case, peak):
+
+            # create HTML to display notification
+            html = '<div><span style="text-align: center; color: #E00; font-size: 8pt; font-family: Helvetica;">'
+            html += 'At least one peak is at an edge'
+            html += '</span><br></div>'
+            print('html', html)
+            info_text = pg.TextItem(html=html, anchor=(-0.05, 0))
+            info_text.setPos(0.2, 0.6)
+            s.status_plot.addItem(info_text)
+
     def show_peaks(s, cases='all'):
         ''' display chosen extrema as glyphs '''
 
@@ -809,6 +859,7 @@ class Picker(QtGui.QMainWindow):
             if el_cs_pk[1] in cases:
                 if el_cs_pk in s.peak_markers:
                     s.plots[el_cs_pk[0]].removeItem(s.peak_markers[el_cs_pk])
+                    # s.plots[el_cs_pk[0]].removeItem(s.peak_tops[el_cs_pk])
 
                 marker = pg.ErrorBarItem(x=[amp_lat[1]], y=[amp_lat[0]],
                                          top=bar_len, bottom=bar_len, beam=0, pen=(255, 255, 255))
@@ -816,8 +867,15 @@ class Picker(QtGui.QMainWindow):
                 s.plots[el_cs_pk[0]].addItem(marker)
 
                 c_ind = s.eeg.case_list.index(el_cs_pk[1])
+                if s.peak_edges[el_cs_pk]:
+                    sym = 'x'
+                    sz = 12
+                else:
+                    sym = 'o'
+                    sz = 4
+
                 top = pg.ScatterPlotItem(x=[amp_lat[1]], y=[amp_lat[0] + bar_len],
-                                         symbol='o', size=4, pen=None, brush=s.plot_props['line colors'][c_ind])
+                                         symbol=sym, size=sz, pen=None, brush=s.plot_props['line colors'][c_ind])
                 s.peak_tops[el_cs_pk] = top
                 s.plots[el_cs_pk[0]].addItem(top)
                 top.setVisible(False)
@@ -940,6 +998,10 @@ class Picker(QtGui.QMainWindow):
             latency = pms[e_ind]
             amplitude = pval[e_ind]
             s.peak_data[(elec, case, peak)] = (amplitude, latency)
+            if (np.fabs(latency - starts[e_ind]) < 3) or (np.fabs(latency - finishes[e_ind]) < 3):
+                s.peak_edges[(elec, case, peak)] = True
+            else:
+                s.peak_edges[(elec, case, peak)] = False
 
             # marker = pg.ErrorBarItem(x=[latency],y=[amplitude],
             #     top=bar_len,bottom=bar_len,beam=0,pen=(255,255,255))
@@ -947,6 +1009,7 @@ class Picker(QtGui.QMainWindow):
             # s.plots[elec].addItem(marker)
 
         s.show_peaks(cases=[case])
+        s.notify_edges(case, peak)
 
         s.show_state()
 
