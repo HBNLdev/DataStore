@@ -223,7 +223,7 @@ def erp_data():
                     list(zip(avgh1_files, datemods)))
     sourceO.store()
 
-def mat_st_inv_data_toc():
+def mat_st_inv_toc():
     # can take a while depending on network traffic
     toc_dir = '/archive/backup/toc.d/'
     toc_str = 'processed_data'
@@ -246,7 +246,7 @@ def mat_st_inv_data_toc():
         matO = O.STransformInverseMats(infoD)
         matO.store()
 
-def mat_st_inv_data_walk(check_update=False,mat_files=None):
+def mat_st_inv_walk(check_update=False, mat_files=None):
     # can take a while depending on network traffic
     if mat_files is None:
         start_base = '/processed_data/mat-files-v'

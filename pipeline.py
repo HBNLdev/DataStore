@@ -10,8 +10,8 @@ import time
 import subprocess
 from tqdm import tqdm
 
-ruby_scripts_byversion = {'6': ('/active_projects/mort/ERO_scripts/')
-                          ('extract_st_bands_v6.0_custom.rb')}
+ruby_scripts_byversion = {'6': ('/active_projects/mort/ERO_scripts/'
+                                'extract_st_bands_v6.0_custom.rb') }
 
 ### Utilities ###
 
