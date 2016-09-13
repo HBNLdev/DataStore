@@ -1,7 +1,7 @@
 '''EEGmaster
 '''
 
-master_path = '/processed_data/master-file/EEG-master-file-19.csv'
+master_path = '/processed_data/master-file/EEG-master-file-20.csv'
 master = None
 
 import os

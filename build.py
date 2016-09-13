@@ -246,23 +246,34 @@ def mat_st_inv_data_toc():
         matO = O.STransformInverseMats(infoD)
         matO.store()
 
-def mat_st_inv_data_walk():
+def mat_st_inv_data_walk(check_update=False,mat_files=None):
     # can take a while depending on network traffic
-    start_base = '/processed_data/mat-files-v'
-    start_fins = ['40','60']
-    glob_expr = '*st.mat'
-    mat_files = []
-    dates = []
-    for fin in start_fins:
-        f_mats, f_dates = FH.identify_files(start_base+fin,glob_expr)
-        mat_files.extend(f_mats)
-        dates.extend(f_dates)
+    if mat_files is None:
+        start_base = '/processed_data/mat-files-v'
+        start_fins = ['40','60']
+        glob_expr = '*st.mat'
+        mat_files = []
+        dates = []
+        for fin in start_fins:
+            f_mats, f_dates = FH.identify_files(start_base+fin,glob_expr)
+            mat_files.extend(f_mats)
+            dates.extend(f_dates)
     for f in tqdm(mat_files):
         infoD = FH.parse_mt_name(f)
         infoD['path'] = f
         infoD['prc_ver'] = f.split(os.path.sep)[2][-2]
         matO = O.STransformInverseMats(infoD)
-        matO.store()
+
+        store = False
+        if check_update:
+            matO.compare(field='path')
+            if matO.new:
+                store = True
+        else:
+            store = True
+
+        if store:
+            matO.store()
 
 def eeg_behavior(files_dms=None):
     # ~8 hours total to parse all *.avg.h1's for behavior
