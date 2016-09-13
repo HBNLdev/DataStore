@@ -4,6 +4,18 @@ import numpy as np
 import itertools
 
 # array functions
+def permute_data(a, a_dimnames, out_dimnames):
+    ''' given array a and a_dimnames, a tuple naming its dimensions,
+        permute it so that its dimensions become out_dimnames '''
+    if set(a_dimnames) != set(out_dimnames):
+        print('the dimensions specifications don''t match')
+        raise
+    transpose_lst = []
+    for dim in a_dimnames:
+        transpose_lst.append(out_dimnames.index(dim))
+    out_a = a.transpose(transpose_lst)
+    return out_a, out_dimnames
+
 def reverse_dimorder(array):
     ''' return version of array with dimensions in reversed order '''
     return np.transpose(array, list(range(len(array.shape)-1, -1, -1)))

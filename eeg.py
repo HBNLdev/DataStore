@@ -282,6 +282,27 @@ class Results:
         print(data.shape)
         return data
 
+    def baseline(s, measure, method, window):
+
+        if measure not in measure_pps:
+            print('measure incorrectly specified'); raise
+
+        if method not in ['subtractive', 'divisive']:
+            print('method incorrectly specified'); raise
+
+        data = getattr(s, measure_pps[measure]['data'])
+        pt_lims = (convert_ms(s.time, window[0]), convert_ms(s.time, window[1]))
+
+        print('baselining {} from {} to {} ms using {} method'.format(
+                    measure, window[0], window[1], method))
+
+        if method == 'subtractive':
+            setattr(s, measure_pps[measure]['data'],
+                baseline_sub(data, pt_lims))
+        elif method == 'divisive':
+            setattr(s, measure_pps[measure]['data'],
+                baseline_div(data, pt_lims))   
+
     def load_erp(s, filt=True, lp_cutoff=16,
                     baseline=True, bl_window=[-100, 0]):
         ''' load, filter, and subtractively baseline ERP data '''
@@ -305,28 +326,7 @@ class Results:
 
         # baseline
         if baseline:
-            s.baseline('erp', 'subtractive', bl_window)
-
-    def baseline(s, measure, method, window):
-
-        if measure not in measure_pps:
-            print('measure incorrectly specified'); raise
-
-        if method not in ['subtractive', 'divisive']:
-            print('method incorrectly specified'); raise
-
-        data = getattr(s, measure_pps[measure]['data'])
-        pt_lims = (convert_ms(s.time, window[0]), convert_ms(s.time, window[1]))
-
-        print('baselining {} from {} to {} ms using {} method'.format(
-                    measure, window[0], window[1], method))
-
-        if method == 'subtractive':
-            setattr(s, measure_pps[measure]['data'],
-                baseline_sub(data, pt_lims))
-        elif method == 'divisive':
-            setattr(s, measure_pps[measure]['data'],
-                baseline_div(data, pt_lims))        
+            s.baseline('erp', 'subtractive', bl_window)     
         
     def prepare_mne(s):
         ''' prepare an mne EvokedArray object from erp data '''
@@ -408,6 +408,8 @@ class Results:
 
 
     def load_coh(s, baseline=True, bl_window=[-500, -200]):
+        ''' load inter-channel phase values, take absolute() of,
+            and subtractively baseline '''
 
         dsets = [h5py.File(fn, 'r')['coh']
                  for fn in s.demog_df['path'].values]
@@ -474,7 +476,10 @@ class Results:
 
 
     def save_mean(s, measure, spec_dict):
-        ''' save data-means and add as columns in s.demog_df '''
+        ''' save data-means and add as columns in s.demog_df. spec_dict is a
+            dict that specifies which values should be taken in each dimension.
+            if a dimension is unspecified, it will be averaged over. '''
+            
         final_dim = 'subject'
 
         if measure in measure_pps.keys():
