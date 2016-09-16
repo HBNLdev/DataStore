@@ -376,7 +376,7 @@ class Picker(QtGui.QMainWindow):
 
             print('Load', experiment, ',', len(paths), 'paths, ind:', ind, ', info:', eeg.file_info)
             s.app_data['current experiment'] = experiment
-            s.app_data['experiment cases'] = eeg.case_list
+            s.app_data['current cases'] = eeg.case_list
 
             s.peak_data = {}
             s.peak_edges = {}
@@ -513,7 +513,7 @@ class Picker(QtGui.QMainWindow):
 
     def plot_curve(s, plot, electrode, case):
         ''' given a plot handle, electrode, and case, return the line plot of its amplitude data '''
-        c_ind = s.eeg.case_list.index(case)
+        c_ind = s.app_data['current cases'].index(case)
         curve = plot.plot(x=s.current_data['times'],
                           y=s.current_data[electrode + '_' + case],
                           pen=s.plot_props['line colors'][c_ind],
@@ -634,7 +634,7 @@ class Picker(QtGui.QMainWindow):
 
                 s.update_region_label_position((elec, case, peak))
 
-        for disp_case in s.eeg.case_list:
+        for disp_case in s.app_data['current cases']:
             s.set_case_display(disp_case, disp_case == case)
 
         s.toggle_regions(True)
@@ -663,7 +663,7 @@ class Picker(QtGui.QMainWindow):
 
         picks = s.app_data['picks']
         if cases == 'all':
-            cases = s.eeg.case_list
+            cases = s.app_data['current cases']
         state_string = ''
         for case in cases:
             state_string += case + ':['
@@ -719,7 +719,7 @@ class Picker(QtGui.QMainWindow):
                 for yval in y_lines:
                     s.zoomPlot.addLine(y=yval, pen=grid_pen)
 
-                for case in s.eeg.case_list:
+                for case in s.app_data['current cases']:
                     s.zoom_curves[case] = s.plot_curve(s.zoomPlot, elec, case)
                     # s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
 
@@ -727,7 +727,7 @@ class Picker(QtGui.QMainWindow):
                 s.zoomDialog.setWindowTitle(elec + ' - ' + \
                                             Pstate['case'] + ' - ' + Pstate['peak'] + '     ')
 
-                c_ind = s.eeg.case_list.index(Pstate['case'])
+                c_ind = s.app_data['current cases'].index(Pstate['case'])
 
                 small_region = s.pick_regions[(elec, Pstate['case'], Pstate['peak'])]
                 start_fin = small_region.getRegion()
@@ -737,7 +737,7 @@ class Picker(QtGui.QMainWindow):
                 s.region_case_peaks[region] = (elec, Pstate['case'], Pstate['peak'])
                 s.zoomPlot.addItem(region)
 
-                for case in s.eeg.case_list:  # unsure why this doesn't work in above loop, maybe timing
+                for case in s.app_data['current cases']:  # unsure why this doesn't work in above loop, maybe timing
                     s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
 
     def toggle_regions(s, state=None):
@@ -792,6 +792,11 @@ class Picker(QtGui.QMainWindow):
         checked = sender.isChecked()
         s.set_case_display(case, checked, zoom=True)
 
+    def sync_case_display(s):
+        for case in s.app_data['current cases']:
+            state = s.caseToggles[case].isChecked()
+            s.set_case_display(case,state)
+
     def set_case_display(s,case,state,zoom=False):
         ''' given case string and boolean state, sets display settings  '''
 
@@ -818,9 +823,10 @@ class Picker(QtGui.QMainWindow):
         if not zoom:
             curves[ck].setVisible(state)
 
-            if s.peakMarkerToggle.isChecked():
-                for el_cs_pk in [ecp for ecp in s.peak_markers if ecp[1] == case]:
-                    s.peak_markers[el_cs_pk].setVisible(state)
+            marker_ck_state =  s.peakMarkerToggle.isChecked()
+            marker_state = state and marker_ck_state
+            for el_cs_pk in [ecp for ecp in s.peak_markers if ecp[1] == case]:
+                s.peak_markers[el_cs_pk].setVisible(marker_state)
 
     def mode_toggle(s):
         ''' toggles between 'all' and 'single' peak picking modes which refer to the scope of actions
@@ -853,20 +859,19 @@ class Picker(QtGui.QMainWindow):
         bar_len = s.app_data['display props']['bar length']
 
         if cases == 'all':
-            cases = s.eeg.case_list
+            cases = s.app_data['current cases']
 
         for el_cs_pk, amp_lat in s.peak_data.items():
             if el_cs_pk[1] in cases:
                 if el_cs_pk in s.peak_markers:
-                    s.plots[el_cs_pk[0]].removeItem(s.peak_markers[el_cs_pk])
-                    # s.plots[el_cs_pk[0]].removeItem(s.peak_tops[el_cs_pk])
+                    s.peak_markers[el_cs_pk].setData(x=[amp_lat[1]],y=[amp_lat[0]])
+                else:
+                    marker = pg.ErrorBarItem(x=[amp_lat[1]], y=[amp_lat[0]],
+                                             top=bar_len, bottom=bar_len, beam=0, pen=(255, 255, 255))
+                    s.peak_markers[el_cs_pk] = marker
+                    s.plots[el_cs_pk[0]].addItem(marker)
 
-                marker = pg.ErrorBarItem(x=[amp_lat[1]], y=[amp_lat[0]],
-                                         top=bar_len, bottom=bar_len, beam=0, pen=(255, 255, 255))
-                s.peak_markers[el_cs_pk] = marker
-                s.plots[el_cs_pk[0]].addItem(marker)
-
-                c_ind = s.eeg.case_list.index(el_cs_pk[1])
+                c_ind = s.app_data['current cases'].index(el_cs_pk[1])
                 if s.peak_edges[el_cs_pk]:
                     sym = 'x'
                     sz = 12
@@ -874,11 +879,18 @@ class Picker(QtGui.QMainWindow):
                     sym = 'o'
                     sz = 4
 
-                top = pg.ScatterPlotItem(x=[amp_lat[1]], y=[amp_lat[0] + bar_len],
+                if el_cs_pk in s.peak_tops:
+                    s.peak_tops[el_cs_pk].setData(x=[amp_lat[1]],y=[amp_lat[0] + bar_len])
+                    s.peak_tops[el_cs_pk].setSymbol(sym)
+                    s.peak_tops[el_cs_pk].setSize(sz)
+                else:
+                    top = pg.ScatterPlotItem(x=[amp_lat[1]], y=[amp_lat[0] + bar_len],
                                          symbol=sym, size=sz, pen=None, brush=s.plot_props['line colors'][c_ind])
-                s.peak_tops[el_cs_pk] = top
-                s.plots[el_cs_pk[0]].addItem(top)
-                top.setVisible(False)
+                    s.peak_tops[el_cs_pk] = top
+                    s.plots[el_cs_pk[0]].addItem(top)
+                s.peak_tops[el_cs_pk].setVisible( s.peakTopToggle.isChecked() )
+
+        s.sync_case_display()
 
     def relabel_peak(s, case, old_peak, new_peak):
         ''' re-labels a picked peak to have a new pick identity '''
@@ -923,10 +935,13 @@ class Picker(QtGui.QMainWindow):
             s.region_case_peaks.pop(region)
             s.pick_region_labels_byRegion.pop(region)
             plot.removeItem(region)
-            label = s.pick_region_labels[el_cs_pk]
+            label = s.pick_region_labels.pop(el_cs_pk)
             plot.removeItem(label)
-            marker = s.peak_markers[el_cs_pk]
+            marker = s.peak_markers.pop(el_cs_pk)
             plot.removeItem(marker)
+            top = s.peak_tops.pop(el_cs_pk)
+            top.setVisible(False)
+            #plot.removeItem(top)
 
         s.app_data['picks'].remove((case, peak))
         s.show_state()
@@ -992,8 +1007,6 @@ class Picker(QtGui.QMainWindow):
         pval, pms = s.eeg.find_peaks(case, elecs,
                                      starts_ms=starts, ends_ms=finishes, polarity=polarity)
         for e_ind, elec in enumerate(elecs):
-            # if (elec,case,peak) in s.peak_markers:
-            #     s.plots[elec].removeItem(s.peak_markers[(elec,case,peak)])
 
             latency = pms[e_ind]
             amplitude = pval[e_ind]
@@ -1013,6 +1026,10 @@ class Picker(QtGui.QMainWindow):
 
         s.show_state()
 
+        ## printing for debug
+        # for i in s.plots['FP1'].items:
+        #     if 'data' in dir(i):
+        #         print( type(i), i.data[:2]  )  
 
 app = QtGui.QApplication(sys.argv)
 GUI = Picker()
