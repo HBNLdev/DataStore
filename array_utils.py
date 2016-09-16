@@ -2,6 +2,7 @@
 
 import numpy as np
 import itertools
+from collections import OrderedDict
 
 # array functions
 def permute_data(a, a_dimnames, out_dimnames):
@@ -85,7 +86,7 @@ def compound_take(a, dimval_tups):
 def basic_slice(a, in_dimval_tups):
     ''' given array a and list of (dim, val) tuples, basic-slice a '''
     slicer = [slice(None)]*len(a.shape) # initialize slicer
-    
+
     # if the elements of the tuples are tuples, unpack and put in series
     dimval_tups = []
     for dvt in in_dimval_tups:
@@ -94,7 +95,7 @@ def basic_slice(a, in_dimval_tups):
                 dimval_tups.append((d, v))
         else:
             dimval_tups.append(dvt)
-    
+
     # build the slice list
     dimval_tups.sort(reverse=True) # sort descending by dims
     print('~~~slice time~~~')
@@ -113,7 +114,7 @@ def basic_slice(a, in_dimval_tups):
             else:
                 slicer[d] = v
             slicer.insert(d+1, np.newaxis)
-    
+
     print(slicer)
     return a[tuple(slicer)]
 
@@ -130,7 +131,7 @@ def handle_pairs(s, pairs_arg):
         print('pairs incorrectly specified')
         raise
 
-def handle_by(s, by_stage, d_dims, d_dimlvls):
+def handle_by(s, by_stage, d_dims, d_dimlvls, ordered=False):
     ''' handle a 'by' argument, which tells a plotting functions what parts
         of the data will be distributed across a plotting object.
         returns lists of the dimension, indices, and labels requested.
@@ -138,16 +139,20 @@ def handle_by(s, by_stage, d_dims, d_dimlvls):
 
     if len(by_stage) > 1:
         # create list versions of the dim, vals, and labels
-        tmp_dims, tmp_vals, tmp_labels = [], [], []
+        tmp_dims, tmp_vals, tmp_labels, stage_lens = [], [], [], []
         for bs in by_stage.items():
             dims, vals, labels = interpret_by(s, bs, d_dims, d_dimlvls)
             tmp_dims.append(dims)
             tmp_vals.append(vals)
             tmp_labels.append(labels)
+            stage_lens.append(len(dims))
         all_dims = list(itertools.product(*tmp_dims))
         all_vals = list(itertools.product(*tmp_vals))
         all_labels = list(itertools.product(*tmp_labels))
-        return all_dims, all_vals, all_labels
+        if ordered:
+            return all_dims, all_vals, all_labels, stage_lens
+        else:
+            return all_dims, all_vals, all_labels
     else:
         return interpret_by(s, tuple(by_stage.items())[0], d_dims, d_dimlvls)
 

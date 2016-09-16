@@ -14,7 +14,7 @@ from plot_utils import (subplot_heuristic, figsize_heuristic,
                     is_nonstr_sequence, nested_strjoin,
                     MidpointNormalize,
                     blank_topo, plot_arcs, ordinalize_one,
-                    ordered_chans)
+                    ordered_chans, n_colors)
 
 ''' initialize matplotlib backend settings '''
 # print(mpl.matplotlib_fname())
@@ -62,7 +62,7 @@ measure_pps = {'erp':   {'data': 'erp', 'd_dims': 'erp_dims',
 def get_data(s, measure):
     ''' given a measure, retrieve data and dimensional info '''
 
-    measure_d = measure_pps[measure]
+    measure_d = s.measure_pps[measure]
     if measure_d['data'] not in dir(s):
         getattr(s, measure_d['load'])()
 
@@ -75,7 +75,7 @@ def get_data(s, measure):
 def get_plotparams(s, measure, lims=None, cmap_override=None):
     ''' given a measure, retrieve default plotting info '''
 
-    measure_d = measure_pps[measure]
+    measure_d = s.measure_pps[measure]
     units       = getattr(s, measure_d['units'])
 
     if lims:
@@ -583,3 +583,81 @@ def connectivity_circle(s, measure='coh',
         
         if savedir:
             save_fig(s, savedir, ptype, measure, f_lbls[fi])
+
+
+# plot functions that worked on saved means
+# can distribute as:
+    # figures
+    # subplots
+        # rows
+        # columns
+    # glyph x-position
+    # glyph color (lineplot)
+
+def bar(s, measure, figure_by=None, subplot_by=None, set_by=None,
+                    member_by=None, figsize_override=None):
+    ptype = 'bar'
+    alpha = 0.4
+    error_config = {'ecolor': '0.3'}
+
+    if measure not in dir(s):
+        print('measure not found')
+        return
+    else:
+        data, d_dims, d_dimlvls = get_data(s, measure)
+        units, lims, cmap = get_plotparams(s, measure)
+
+    f_dim, f_vals, f_lbls = handle_by(s, figure_by, d_dims, d_dimlvls)
+    sp_dim, sp_vals, sp_lbls = handle_by(s, subplot_by, d_dims, d_dimlvls)
+    s_dim, s_vals, s_lbls = handle_by(s, set_by, d_dims, d_dimlvls)
+    m_dim, m_vals, m_lbls = handle_by(s, member_by, d_dims, d_dimlvls)
+
+    n_sets = len(s_vals)
+    swid = len(m_vals)
+    width = 0.7 / swid
+    colors = list(n_colors(len(m_vals)))
+
+    sp_dims = subplot_heuristic(len(sp_vals))
+    if figsize_override:
+        figsize = figsize_override
+    else:
+        figsize = figsize_heuristic(sp_dims)
+        
+    for fi, fval in enumerate(f_vals):
+        f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
+                                sharex=True, sharey=True, figsize=figsize)
+        f.suptitle(f_lbls[fi], fontsize=titlefont_sz, fontweight=titlefont_wt)
+        try:
+            axarr = axarr.ravel()
+        except:
+            axarr = [axarr]
+        for spi, spval in enumerate(sp_vals):
+            for si, sval in enumerate(s_vals):
+                r_lst = []
+                for mi, mval in enumerate(m_vals):
+                    vals = [fval, spval, sval, mval]
+                    dims = [f_dim[fi], sp_dim[spi], s_dim[si], m_dim[mi]]
+                    dimval_tups = [(d,v) for d,v in zip(dims, vals)]
+                    try:
+                        point = basic_slice(data, dimval_tups)
+                        print('slice')
+                    except:
+                        point = compound_take(data, dimval_tups)
+                        print('compound take')
+                    pm = point.squeeze().mean(axis=0)
+                    pe = ss.sem(point.squeeze(), axis=0)
+                    xpos = si + (mi*width)
+                    r = axarr[spi].bar(xpos, pm, width, color=colors[mi], yerr=pe,
+                                       alpha=alpha, error_kw=error_config)
+                    r_lst.append(r)
+            axarr[spi].set_title(sp_lbls[spi], fontweight=stitlefont_wt)
+            # axarr[spi].legend(loc='upper left')
+            axarr[spi].set_xticks(np.arange(n_sets) + width)
+            axarr[spi].set_xticklabels(s_lbls)
+            axarr[spi].set_xlabel(d_dims[s_dim[si]], fontweight=stitlefont_wt)
+            if spi % sp_dims[1] == 0:
+                axarr[spi].set_ylabel(units, fontweight=stitlefont_wt)
+            if spi % sp_dims[1] == len(sp_vals) - 1:
+                axarr[spi].legend(r_lst, m_lbls)
+            
+
