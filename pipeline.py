@@ -10,8 +10,39 @@ import time
 import subprocess
 from tqdm import tqdm
 
+### Info ###
+
 ruby_scripts_byversion = {'6': ('/active_projects/mort/ERO_scripts/'
                                 'extract_st_bands_v6.0_custom.rb') }
+
+extract_st_bands_params = {
+        'b': {'name': 'apply_baseline','options': { '0':'no default', '1':'yes'} },
+        'd': {'name': 'st_type_to_use','options': { '1':'total default', '2':'evoked',
+                         '3':'total-evoked'} },
+        'e': {'name': 'electrode_list_type','options': { '1':'old elec_list default',
+                         '2':'rows across head', '3':'rows within 6 regions', 
+                         'custom':'own elec_list'} },
+        'f': {'name': 'st_mat_filelist_filename'},      
+        'm': {'name': 'calc_val_type ','options': { '1':'mean default', '2':'max',
+                         '3':'centroid', '4':'maxfreq', '5':'maxtime', '6':'sum'} },
+        'o': {'name': 'output_text'}, #,'options': { 'additional information in the ps-file name'} },
+        'p': {'name': 'power_out_type','options': { '1':'power (lin) default',
+                         '2':'amplitude (lin)', '3':'power (ln)', '4':'amplitude (ln)'} },
+        'q': {'name': 'add_baseline_values','options': { '0':'no', '1':'yes default'} },
+        'v': {'name': 'curve_band_type','options': { '1':'bands default',
+                         '2':'single frequencies', '3':'low frequencies',
+                          '4':'high frequencies', 'custom':'freq_file'} },
+        'x': {'name': 'min_win_time_ms','options': { 'int':'300 default'} },
+        'y': {'name': 'max_win_time_ms','options': { 'int':'500 default'} }
+
+        }
+
+log_dir = '/processed_data/EROdbLogs/'
+ero_logs = [ p for p in os.listdir(log_dir) if 'test' not in p]
+
+
+
+
 
 ### Utilities ###
 
@@ -38,7 +69,66 @@ def read_ero_log(filepath, sep='-----'):
 
     return entries[:-1]
 
+def make_file_list_file(name,file_list,limit=None):
+
+    if limit is None:
+        limit = len(file_list)
+        lim_flag = ''
+    else:
+        lim_flag = '_L' + str(limit)
+
+    tstamp = str(int(time.time() * 1000))
+    file_path = '/processed_data/EROprc_lists/' + \
+        name + '_mats-' + tstamp + lim_flag + '.lst'
+    with open(file_path, 'w') as list_file:
+            list_file.writelines([L + '\n' for L in file_list[:limit]])
+
+    return file_path
+
+
 ### Main functions ###
+
+def process_ero_mats_all_params( STinvList, params_by_exp_case, run_now=False,
+                         file_lim=None, proc_lim=10, version='6' ):
+    ''' convert a list of STinverseMat documents to ero mats, using lists of 
+        parameters for each based on the experiment and case
+    '''
+    processes = set()
+    
+    file_lists_by_exp_case = assemble_file_lists('',STinvList)
+
+    for exp_case, mat_files in tqdm(file_lists_by_exp_case.items()):
+        if file_lim is None:
+            file_lim = len(mat_files)
+            lim_flag = ''
+        else:
+            lim_flag = '_L' + str(file_lim)
+
+        ec_st = exp_case[0] + '-' + exp_case[1]
+
+        for param_set in params_by_exp_case[ exp_case ]:
+
+            for pwr_type in ['1','2']: #total, evoked
+
+                params = [ (p[0],p[1]) for p in list(param_set)]
+
+                params.append( ('-d',pwr_type) )
+
+                list_file_path = make_file_list_file(ec_st, mat_files, file_lim)
+                params.append( ('-f', list_file_path) )
+
+                paramL = [flag + ' ' + val for flag, val in params]
+                paramS = ' '.join(paramL)
+                call = [ruby_scripts_byversion[version], paramS]
+                print(' '.join(call))
+
+                # queue the process
+                if run_now:
+                    processes.add(subprocess.Popen(' '.join(call), shell=True))
+                    if len(processes) >= proc_lim:
+                        os.wait()
+                        processes.difference_update(
+                            [p for p in processes if p.poll() is not None])
 
 
 def process_ero_mats_study(study_or_STinvList, run_now=False,
@@ -103,7 +193,7 @@ def process_ero_mats_study(study_or_STinvList, run_now=False,
 
 
 def assemble_file_lists(study, STinv_mats=None, existing_paths=None):
-    ''' given a study string or a list of ST-inverse mats, create a dict
+    ''' given a study string or a list of STinverseMat docs, create a dict
         of lists where the key is an (experiment, case) tuple,
         and the value is a list of the corresponding ST-inverse mats '''
 
