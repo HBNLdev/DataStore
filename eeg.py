@@ -3,6 +3,7 @@
 import os
 from glob import glob
 from datetime import datetime
+from collections import OrderedDict
 
 import h5py
 import dask.array as da
@@ -96,6 +97,7 @@ class Results:
         s.apply_rej(trial_thresh)
         s.save_demogs()
         s.make_scales()
+        s.measure_pps = measure_pps
 
     def get_params(s):
         ''' extract data parameters from opt, relying upon opt_info. '''
@@ -284,23 +286,23 @@ class Results:
 
     def baseline(s, measure, method, window):
 
-        if measure not in measure_pps:
+        if measure not in s.measure_pps:
             print('measure incorrectly specified'); raise
 
         if method not in ['subtractive', 'divisive']:
             print('method incorrectly specified'); raise
 
-        data = getattr(s, measure_pps[measure]['data'])
+        data = getattr(s, s.measure_pps[measure]['data'])
         pt_lims = (convert_ms(s.time, window[0]), convert_ms(s.time, window[1]))
 
         print('baselining {} from {} to {} ms using {} method'.format(
                     measure, window[0], window[1], method))
 
         if method == 'subtractive':
-            setattr(s, measure_pps[measure]['data'],
+            setattr(s, s.measure_pps[measure]['data'],
                 baseline_sub(data, pt_lims))
         elif method == 'divisive':
-            setattr(s, measure_pps[measure]['data'],
+            setattr(s, s.measure_pps[measure]['data'],
                 baseline_div(data, pt_lims))   
 
     def load_erp(s, filt=True, lp_cutoff=16,
@@ -341,7 +343,7 @@ class Results:
         return mne.EvokedArray(chan_erps, info,
                                tmin=s.params['Temporal limits'][0] / 1000)
 
-    def load_power(s, baseline=True, bl_window=[-500, -200]):
+    def load_power(s, baseline=False, bl_window=[-500, -200]):
         ''' load (total) power data and divisively baseline-normalize '''
 
         power = s.load('power', 'wave_totpow', [4, 0, 2, 1, 3])
@@ -362,7 +364,7 @@ class Results:
         if baseline:
             s.baseline('power', 'divisive', bl_window)
 
-    def load_itc(s, baseline=True, bl_window=[-500, -200]):
+    def load_itc(s, baseline=False, bl_window=[-500, -200]):
         ''' load phase data, take absolute() of, and subtractively baseline '''
 
         dsets = [h5py.File(fn, 'r')['wave_evknorm']
@@ -406,8 +408,10 @@ class Results:
 
         s.itc_Z = reverse_dimorder(np.power(itc_rev, 2) * trials_array_rev)
 
+    def load_itc_fisher(s):
+        pass
 
-    def load_coh(s, baseline=True, bl_window=[-500, -200]):
+    def load_coh(s, baseline=False, bl_window=[-500, -200]):
         ''' load inter-channel phase values, take absolute() of,
             and subtractively baseline '''
 
@@ -475,19 +479,28 @@ class Results:
                         s.freq, s.time_tf)
 
 
-    def save_mean(s, measure, spec_dict):
+    def save_mean(s, measure, spec_dict, saveas=None):
         ''' save data-means and add as columns in s.demog_df. spec_dict is a
             dict that specifies which values should be taken in each dimension.
             if a dimension is unspecified, it will be averaged over. '''
             
         final_dim = 'subject'
 
-        if measure in measure_pps.keys():
+        if measure in s.measure_pps.keys():
             data, d_dims, d_dimlvls = get_data(s, measure)
+        else:
+            print('data not recognized')
+            return
 
         # TODO: verify spec_dict accords with data_dims
-        
-        dims, vals, lbls = handle_by(s, spec_dict, d_dims, d_dimlvls)
+
+        if saveas:
+            if ~isinstance(spec_dict, OrderedDict):
+                spec_dict = OrderedDict(spec_dict)
+            dims, vals, lbls, stage_lens = \
+                handle_by(s, spec_dict, d_dims, d_dimlvls, ordered=True)
+        else:
+            dims, vals, lbls = handle_by(s, spec_dict, d_dims, d_dimlvls)
 
         amean_lst = []
         for dim_set, val_set, lbl_set in zip(dims, vals, lbls):
@@ -505,6 +518,31 @@ class Results:
             amean_lst.append(amean)
 
         amean_stack = np.stack(amean_lst, axis=-1)
+
+        if saveas:
+            dim_names = tuple(['subject'] + list(spec_dict.keys()))
+            dim_vals = []
+            for dim in range(len(lbls[0])):
+                uniq_vals = []
+                for tup in lbls:
+                    if tup[dim] not in uniq_vals:
+                        uniq_vals.append(tup[dim])
+                dim_vals.append(uniq_vals)
+            dim_vals = tuple([list(s.demog_df.index)]+dim_vals)
+
+            n_obs = amean_stack.shape[0]
+            reshape_tuple = tuple([n_obs] + stage_lens)
+            amean_hcube = np.reshape(amean_stack, reshape_tuple)
+
+            setattr(s, saveas, amean_hcube)
+            setattr(s, saveas + '_dims', dim_names)
+            setattr(s, saveas + '_dimlvls', dim_vals)
+            s.measure_pps.update({saveas: s.measure_pps[measure]})
+            s.measure_pps[saveas]['data'] = saveas
+            s.measure_pps[saveas]['d_dims'] = saveas + '_dims'
+            s.measure_pps[saveas]['d_dimlvls'] = saveas + '_dimlvls'
+
+
         lbl_lst = [measure+'_'+nested_strjoin(lbl_set) for lbl_set in lbls]
 
         amean_df = pd.DataFrame(amean_stack,

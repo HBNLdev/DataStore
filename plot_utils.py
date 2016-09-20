@@ -1,6 +1,7 @@
 ''' utils that aid plotting but don't fit in plot.py '''
 
 import collections
+import colorsys
 
 import numpy as np
 import matplotlib.colors as colors
@@ -21,6 +22,12 @@ layout = [[None, None, None, 'FP1', 'FPZ', 'FP2', None, None, None],
 ordered_chans = []
 for row in layout:
     ordered_chans.extend([chan for chan in row if chan])
+
+def n_colors(N):
+    ''' given integer N, return generator for N distinct colors '''
+    HSV_tuples = [(x*1.0/N, 0.5, 0.5) for x in range(N)]
+    RGB_tuples = map(lambda x: colorsys.hsv_to_rgb(*x), HSV_tuples)
+    return RGB_tuples
 
 def subplot_heuristic(n):
     ''' for n subplots, determine best grid layout dimensions '''

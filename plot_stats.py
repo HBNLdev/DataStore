@@ -2,7 +2,6 @@
 	that are designed to plot statistical information '''
 
 import os
-import colorsys
 
 import numpy as np
 import matplotlib as mpl
@@ -16,7 +15,7 @@ from plot_utils import (subplot_heuristic, figsize_heuristic,
                     is_nonstr_sequence, nested_strjoin,
                     MidpointNormalize,
                     blank_topo, plot_arcs, ordinalize_one,
-                    ordered_chans, layout)
+                    ordered_chans, layout, n_colors)
 from plot import measure_pps
 
 ''' initialize matplotlib backend settings '''
@@ -30,12 +29,6 @@ titlefont_sz = 16
 titlefont_wt = 'bold'
 stitlefont_sz = 12
 stitlefont_wt = 'medium'
-
-def n_colors(N):
-    ''' given integer N, return generator for N distinct colors '''
-    HSV_tuples = [(x*1.0/N, 0.5, 0.5) for x in range(N)]
-    RGB_tuples = map(lambda x: colorsys.hsv_to_rgb(*x), HSV_tuples)
-    return RGB_tuples
 
 def contig_lims(lst):
     ''' given a list of integers, return a list of tuples containing
