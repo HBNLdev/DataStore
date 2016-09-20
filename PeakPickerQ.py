@@ -591,6 +591,10 @@ class Picker(QtGui.QMainWindow):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                     reg.setRegion(region)
 
+        if sender != s.zoomRegion:
+            s.zoomRegion.setRegion(region)
+
+
     def pick_init(s):
         ''' Pick inside the Pick tab (start picking a certain peak) '''
 
@@ -734,6 +738,7 @@ class Picker(QtGui.QMainWindow):
                 region = pg.LinearRegionItem(values=start_fin, movable=True,
                                              brush=s.app_data['display props']['pick region'])
                 region.sigRegionChangeFinished.connect(s.update_pick_regions)
+                s.zoomRegion = region
                 s.region_case_peaks[region] = (elec, Pstate['case'], Pstate['peak'])
                 s.zoomPlot.addItem(region)
 
