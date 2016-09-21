@@ -76,13 +76,15 @@ class avgh1:
             case_info = s.loaded['file']['run']['case']['case']
             s.cases = OrderedDict()
             s.case_num_map = {}
+            s.case_ind_map = {}
             s.case_list = []
-            for vals in case_info.value:
+            for c_ind,vals in enumerate(case_info.value):
                 dvals = [v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in vals]
                 caseD = {n: v for n, v in zip(case_info.dtype.names, dvals)}
                 s.cases[caseD['case_num']] = caseD
                 s.case_list.append(caseD['case_type'])
                 s.case_num_map[caseD['case_type']] = caseD['case_num']
+                s.case_ind_map[caseD['case_type']] = c_ind
             s.num_case_map = {v: k for k, v in s.case_num_map.items()}
             s.case_ind_D = caseD
         else:
@@ -173,7 +175,7 @@ class avgh1:
 
     def find_peaks(s, case, chan_list, starts_ms, ends_ms, polarity='p'):
 
-        caseN = s.case_num_map[case]-1 
+        caseN = s.case_ind_map[case]
         lats, erps = s.prepare_plot_data()
         n_tms = lats.shape[0]
 
@@ -490,11 +492,13 @@ class avgh1:
         # potentials
         for chan in channels:
             ch_ind = s.electrodes.index(chan)
-            for cs_ind, cs in s.cases.items():
+            for cs_num, cs in s.cases.items():
+                case_name = cs['case_type']
+                cs_ind = s.case_ind_map[case_name]
                 if empty_flag:
-                    pot_source_dict[chan + '_' + cs['case_type']] = []
+                    pot_source_dict[chan + '_' + case_name] = []
                 else:
-                    pot_source_dict[chan + '_' + cs['case_type']] = potentials[cs_ind - 1, ch_ind, :]
+                    pot_source_dict[chan + '_' + case_name] = potentials[cs_ind, ch_ind, :]
 
         # return peak_sourcesD
         return pot_source_dict, peak_sourcesD

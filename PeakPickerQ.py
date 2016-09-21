@@ -46,7 +46,7 @@ class Picker(QtGui.QMainWindow):
                                   'current color': '#ffbc00',
                                   'picked color': '#886308',
                                   'time range': [-10, 850],
-                                  'bar length': np.float64(1),
+                                  'bar length': np.float64(1.25),
                                   'pick region': (80, 80, 80, 50),
                                   'background': (50, 50, 50),
                                   'foreground': (135, 135, 135),
