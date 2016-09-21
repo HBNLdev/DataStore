@@ -48,7 +48,7 @@ class Picker(QtGui.QMainWindow):
                                   'time range': [-10, 850],
                                   'bar length': np.float64(1),
                                   'pick region': (80, 80, 80, 50),
-                                  'background': (40, 40, 40),
+                                  'background': (50, 50, 50),
                                   'foreground': (135, 135, 135),
                                   'main position': (50, 50, 1200, 900),
                                   'zoom position': [300, 200, 780, 650],
@@ -506,6 +506,9 @@ class Picker(QtGui.QMainWindow):
         s.pick_region_labels = {}
         s.pick_region_labels_byRegion = {}
 
+        if not initialize:
+            s.status_message('File loaded')
+
     def rescale_yaxis(s):
         ''' set y limits of all plots in plotgrid to the recommended vals '''
         plot = s.plots['PZ']
@@ -562,6 +565,7 @@ class Picker(QtGui.QMainWindow):
         of.write(s.eeg.mt)
         of.close()
 
+        s.status_message( text='Saved to '+os.path.split(fullpath)[0] )
         print('Saved', fullpath)
 
     def adjust_label(s, viewbox):
@@ -642,7 +646,7 @@ class Picker(QtGui.QMainWindow):
             s.set_case_display(disp_case, disp_case == case)
 
         s.toggle_regions(True)
-
+        s.status_message(text="Picking "+case+','+peak)
         print('pick_init finish')
 
     def update_region_label_position(s, reg_key=None):
@@ -843,20 +847,37 @@ class Picker(QtGui.QMainWindow):
             s.repick_modes[(current_mode_i + 1) % len(s.repick_modes)]
         s.pickModeToggle.setText(s.app_data['pick state']['repick mode'])
 
+    def status_message(s, text='', color='#EEE'):
+        ''' Clears message by default'''
+
+        html = '''<div style="width:__width__; word-wrap:break-word;">
+                    <span style="text-align: center; color: __color__; font-size: 8pt; font-family: Helvetica;">
+                '''
+        html += text
+        html += '</span><br></div>'
+        html = html.replace('__width__', str(s.plot_props['width']-10) )
+ 
+        html = html.replace('__color__',color)
+
+        if 'info_text' not in dir(s):
+            s.info_text = pg.TextItem(html=html, anchor=(-0.05, 0) )            
+            s.info_text.setPos(0.15, 0.8)
+            s.status_plot.addItem(s.info_text)
+        else:
+            s.info_text.setHtml(html)
+
+        print('status_message', html)
+        
+
+
     def notify_edges(s, case, peak):
         ''' for a given case / peak combination, check if any peaks are at an edge, and provide a notification'''
 
-        s.status_plot.clear()
         if s.any_casepeak_edges(case, peak):
 
-            # create HTML to display notification
-            html = '<div><span style="text-align: center; color: #E00; font-size: 8pt; font-family: Helvetica;">'
-            html += 'At least one peak is at an edge'
-            html += '</span><br></div>'
-            print('html', html)
-            info_text = pg.TextItem(html=html, anchor=(-0.05, 0))
-            info_text.setPos(0.2, 0.6)
-            s.status_plot.addItem(info_text)
+            text = 'At least one peak is at an edge'
+
+        s.status_message(text=text, color='#E00')
 
     def show_peaks(s, cases='all'):
         ''' display chosen extrema as glyphs '''
