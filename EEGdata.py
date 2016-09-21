@@ -84,7 +84,7 @@ class avgh1:
                 s.case_list.append(caseD['case_type'])
                 s.case_num_map[caseD['case_type']] = caseD['case_num']
             s.num_case_map = {v: k for k, v in s.case_num_map.items()}
-
+            s.case_ind_D = caseD
         else:
             return
 
@@ -173,7 +173,7 @@ class avgh1:
 
     def find_peaks(s, case, chan_list, starts_ms, ends_ms, polarity='p'):
 
-        caseN = s.case_list.index(case)
+        caseN = s.case_num_map[case]-1 
         lats, erps = s.prepare_plot_data()
         n_tms = lats.shape[0]
 
