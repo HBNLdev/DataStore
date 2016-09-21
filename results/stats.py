@@ -10,7 +10,7 @@ from mne.stats import (permutation_cluster_1samp_test,
                        spatio_temporal_cluster_test)
 
 from .plot import measure_pps, get_data
-from .array_utils import permute_data
+from ._array_utils import permute_data
 
 # should be able to do:
 # - 1-sample deviation from 0 (OK for ERP, power)

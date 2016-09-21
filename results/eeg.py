@@ -12,10 +12,10 @@ import pandas as pd
 import mne
 from mne.channels import read_ch_connectivity
 
-from .array_utils import (convert_ms, baseline_sub, baseline_div, handle_by,
-                             basic_slice, compound_take, reverse_dimorder)
 from .plot import measure_pps, get_data
-from .plot_utils import nested_strjoin
+from ._plot_utils import nested_strjoin
+from ._array_utils import (convert_ms, baseline_sub, baseline_div, handle_by,
+                             basic_slice, compound_take, reverse_dimorder)
 
 # values are tuples of h5py fieldname and datatype
 opt_info = {'Options path':                 ('optpath', 'text'),

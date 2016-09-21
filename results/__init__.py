@@ -1,1 +1,5 @@
-__all__ = ['array_utils', 'eeg', 'plot', 'plot_stats', 'plot_utils', 'stats']
+__all__ = ['eeg', 'plot', 'plot_stats']
+
+from . import eeg
+from . import plot
+from . import plot_stats

@@ -9,8 +9,8 @@ import scipy.stats as ss
 import mne
 from mne.viz import plot_connectivity_circle
 
-from .array_utils import basic_slice, compound_take, handle_by, handle_pairs
-from .plot_utils import (subplot_heuristic, figsize_heuristic,
+from ._array_utils import basic_slice, compound_take, handle_by, handle_pairs
+from ._plot_utils import (subplot_heuristic, figsize_heuristic,
                     is_nonstr_sequence, nested_strjoin,
                     MidpointNormalize,
                     blank_topo, plot_arcs, ordinalize_one,

@@ -10,13 +10,13 @@ import scipy.stats as ss
 import mne
 from mne.viz import plot_connectivity_circle
 
-from .array_utils import basic_slice, compound_take, handle_by, handle_pairs
-from .plot_utils import (subplot_heuristic, figsize_heuristic,
+from .plot import measure_pps
+from ._plot_utils import (subplot_heuristic, figsize_heuristic,
                     is_nonstr_sequence, nested_strjoin,
                     MidpointNormalize,
                     blank_topo, plot_arcs, ordinalize_one,
                     ordered_chans, layout, n_colors)
-from .plot import measure_pps
+from ._array_utils import basic_slice, compound_take, handle_by, handle_pairs
 
 ''' initialize matplotlib backend settings '''
 # print(mpl.matplotlib_fname())
