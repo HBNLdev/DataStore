@@ -76,6 +76,7 @@ class Picker(QtGui.QMainWindow):
     app_data['file ind'] = 0
     app_data['pick state'] = {'case': None, 'peak': None,
                               'repick mode': repick_modes[0]}
+    app_data['regions by filepath'] = {}
 
     def __init__(s):
         ''' the init lays out all of the GUI elements, connects interactive elements to call-backs '''
@@ -356,6 +357,9 @@ class Picker(QtGui.QMainWindow):
 
         paths = s.app_data['file paths']
 
+        if 'applied_regions' in dir(s) and s.applied_regions is not None:
+            s.app_data['regions by filepath'][ paths[s.app_data['file ind']] ] = s.applied_regions
+
         if next_file:
             if s.app_data['file ind'] < len(paths) - 1:
                 s.app_data['file ind'] += 1
@@ -373,6 +377,10 @@ class Picker(QtGui.QMainWindow):
             s.gather_info(eeg)
             cases = eeg.case_list
             chans = eeg.electrodes
+
+            s.applied_regions = None
+            if paths[ind] in s.app_data['regions by filepath']:
+                s.applied_regions = s.app_data['regions by filepath'][paths[ind]]
 
             print('Load', experiment, ',', len(paths), 'paths, ind:', ind, ', info:', eeg.file_info)
             s.app_data['current experiment'] = experiment
@@ -415,10 +423,11 @@ class Picker(QtGui.QMainWindow):
             s.current_data = data_sourceD
 
             # channel layout determined by this
-            scale_chans = [ch for ch in chans if (ch not in s.show_only+s.ignore)]
+            s.app_data['displayed channels'] = [ ch for ch in chans if ( ch not in s.ignore  ) ]
+            s.app_data['active channels'] = [ ch for ch in chans if (ch not in s.show_only+s.ignore) ]
             s.plot_desc = eeg.selected_cases_by_channel(mode='server', style='layout',
                                                         time_range=s.app_data['display props']['time range'],
-                                                        channels=scale_chans)
+                                                        channels=s.app_data['active channels'])
             s.ylims = s.plot_desc[0][1]['props']['yrange']
 
             if not initialize:
@@ -456,7 +465,7 @@ class Picker(QtGui.QMainWindow):
                 x_gridlines, y_gridlines = s.plot_props['XY gridlines']
                 grid_pen = s.plot_props['grid color']
 
-                for elec in [ch for ch in chans if (ch in s.plots) and (ch not in s.ignore)]:
+                for elec in s.app_data['displayed channels']:
                     plot = s.plots[elec]
                     plot.clear()
 
@@ -503,6 +512,7 @@ class Picker(QtGui.QMainWindow):
             s.show_state()
 
         s.pick_regions = {}
+        s.applied_region_limits = {}
         s.pick_region_labels = {}
         s.pick_region_labels_byRegion = {}
 
@@ -578,10 +588,11 @@ class Picker(QtGui.QMainWindow):
 
     def update_ranges(s):
         ''' called when axis limits change (e.g. on pan/zoom) '''
-
+        Pstate = s.app_data['pick state']
         s.adjust_label(s.sender())
         for el_cs_pk in s.pick_regions:
-            s.update_region_label_position(el_cs_pk)
+            if el_cs_pk[1] == Pstate['case'] and el_cs_pk[2] == Pstate['peak']:
+                s.update_region_label_position(el_cs_pk)
 
     def update_pick_regions(s):
         ''' called when pick regions are adjusted '''
@@ -621,9 +632,14 @@ class Picker(QtGui.QMainWindow):
 
         if (case, peak) not in pick_case_peaks:
             peak_center_ms = 100 * int(peak[1])
-            start_range = (peak_center_ms-75,peak_center_ms+75)
-            for elec in [ p for p in s.plots if p not in s.show_only ]:
-                region = pg.LinearRegionItem(values=start_range,movable=True,
+            
+            existing_lim_CPs = set([ (ecp[1],ecp[2]) for ecp in s.applied_region_limits ])
+            if (case, peak) in existing_lim_CPs:
+                start_ranges = { el:s.applied_region_limits[(el,case,peak)] }
+            else:
+                start_ranges = { el:(peak_center_ms-75,peak_center_ms+75) for el in s.app_data['active channels']}
+            for elec in s.app_data['active channels']:#[ p for p in s.plots if p not in s.show_only ]:
+                region = pg.LinearRegionItem(values=start_ranges[elec],movable=True,
                         brush=s.app_data['display props']['pick region'])
 
                 region.sigRegionChanged.connect(s.update_region_label_position)
@@ -876,8 +892,7 @@ class Picker(QtGui.QMainWindow):
         if s.any_casepeak_edges(case, peak):
 
             text = 'At least one peak is at an edge'
-
-        s.status_message(text=text, color='#E00')
+            s.status_message(text=text, color='#E00')
 
     def show_peaks(s, cases='all'):
         ''' display chosen extrema as glyphs '''
@@ -944,6 +959,8 @@ class Picker(QtGui.QMainWindow):
 
         s.show_state()
 
+        s.status_message('Changed '+case+' , '+old_peak+'  to  '+new_peak)
+
     def remove_peak(s):
         ''' callback for Remove button inside Fix button dialog bix '''
 
@@ -955,23 +972,26 @@ class Picker(QtGui.QMainWindow):
             if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                 s.peak_data.pop(el_cs_pk)
 
-            plot = s.plots[el_cs_pk[0]]
-            region = s.pick_regions[el_cs_pk]
-            s.pick_regions.pop(el_cs_pk)
-            s.region_case_peaks.pop(region)
-            s.pick_region_labels_byRegion.pop(region)
-            plot.removeItem(region)
-            label = s.pick_region_labels.pop(el_cs_pk)
-            plot.removeItem(label)
-            marker = s.peak_markers.pop(el_cs_pk)
-            plot.removeItem(marker)
-            top = s.peak_tops.pop(el_cs_pk)
-            top.setVisible(False)
-            #plot.removeItem(top)
+                plot = s.plots[el_cs_pk[0]]
+                region = s.pick_regions[el_cs_pk]
+                s.pick_regions.pop(el_cs_pk)
+                s.region_case_peaks.pop(region)
+                s.pick_region_labels_byRegion.pop(region)
+                plot.removeItem(region)
+                label = s.pick_region_labels.pop(el_cs_pk)
+                plot.removeItem(label)
+                marker = s.peak_markers.pop(el_cs_pk)
+                marker.setVisible(False) # to improve display responsiveness
+                plot.removeItem(marker)
+                top = s.peak_tops.pop(el_cs_pk)
+                top.setVisible(False)
+                #plot.removeItem(top)
 
         s.app_data['picks'].remove((case, peak))
         s.show_state()
         s.fixDialog.setVisible(False)
+
+        s.status_message('Removed '+case+' , '+peak)
 
     def fix_peak(s):
         ''' callback for Fix button inside Pick tab '''
@@ -1029,6 +1049,8 @@ class Picker(QtGui.QMainWindow):
                 elecs.append(elec_case_peak[0])
                 starts.append(start_finish[0])
                 finishes.append(start_finish[1])
+                s.applied_region_limits[elec_case_peak] = start_finish
+
         # print('starts:',starts)
         pval, pms = s.eeg.find_peaks(case, elecs,
                                      starts_ms=starts, ends_ms=finishes, polarity=polarity)
