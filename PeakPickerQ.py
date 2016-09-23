@@ -125,7 +125,7 @@ class Picker(QtGui.QMainWindow):
 
         s.pickLayout = QtGui.QVBoxLayout()
 
-        s.controls_1 = QtGui.QHBoxLayout()
+        s.dispNstatus = QtGui.QHBoxLayout()
 
         # Display controls
         s.dispLayout = QtGui.QHBoxLayout()
@@ -146,28 +146,26 @@ class Picker(QtGui.QMainWindow):
         s.dispLayout.addWidget(s.peakTopToggle)
         disp_cases_label = QtGui.QLabel("cases:")
         s.casesLayout.addWidget(disp_cases_label)
-        s.controls_1.addLayout(s.dispLayout)
-        s.controls_1.addLayout(s.casesLayout)
+        s.dispNstatus.addLayout(s.dispLayout)
+        s.dispNstatus.addLayout(s.casesLayout)
+
+        s.buttons['Rescale'] = QtGui.QPushButton('Rescale')#, sizeHint=QtCore.QSize(60,25) )
+        s.buttons['Rescale'].clicked.connect(s.rescale_yaxis)
+        s.rescaleLayout = QtGui.QHBoxLayout()
+        s.rescaleLayout.addWidget(s.buttons['Rescale'])
+        s.rescaleLayout.setAlignment(Qt.AlignLeft)
+        s.dispNstatus.addLayout(s.rescaleLayout)
+
 
         # Picks display
         s.stateLayout = QtGui.QHBoxLayout()
-        s.stateLayout.setAlignment(Qt.AlignRight)
+        s.stateLayout.setAlignment(Qt.AlignLeft)
         state_label = QtGui.QLabel("Picked:")
         s.stateInfo = QtGui.QLabel()
         s.stateInfo.setAlignment(Qt.AlignLeft)
         s.stateLayout.addWidget(state_label)
         s.stateLayout.addWidget(s.stateInfo)
-        s.controls_1.addLayout(s.stateLayout)
-
-        buttons_1 = [('Save', s.save_mt),
-                     ('Prev', s.previous_file),
-                     ('Next', s.next_file)]
-
-        for label, handler in buttons_1:
-            s.buttons[label] = QtGui.QPushButton(label)
-            s.controls_1.addWidget(s.buttons[label])
-            if handler:
-                s.buttons[label].clicked.connect(handler)
+        s.dispNstatus.addLayout(s.stateLayout)
 
         s.caseToggles = {}  # checkboxes populated for each file
         s.zoomCaseToggles = {}
@@ -176,31 +174,52 @@ class Picker(QtGui.QMainWindow):
         s.peakMarkerToggle.stateChanged.connect(s.toggle_peaks)
         s.peakTopToggle.stateChanged.connect(s.toggle_peak_tops)
 
+
+        pick_label = QtGui.QLabel("Pick:")
         s.caseChooser = QtGui.QComboBox()
         s.peakChooser = QtGui.QComboBox()
         for peak in s.peak_choices:
-            s.peakChooser.addItem(peak)
+            s.peakChooser.addItem('  '+peak+'  ')
 
-        s.peakControls = QtGui.QHBoxLayout()
-        s.peakControls.addWidget(s.caseChooser)
-        s.peakControls.addWidget(s.peakChooser)
+        s.pickNavControls = QtGui.QHBoxLayout()
+        s.pickNavControls.setAlignment(Qt.AlignLeft)
+        s.pickNavControls.addWidget(pick_label)
+        s.pickNavControls.addWidget(s.caseChooser)
+        s.pickNavControls.addWidget(s.peakChooser)
 
         pick_buttons = [('Pick', s.pick_init), ('Apply', s.apply_selections),
-                        ('Fix', s.fix_peak), ('Rescale', s.rescale_yaxis)]
-        # s.add_buttons(s.peakControls,pick_buttons)
+                        ('Fix', s.fix_peak)]
+        # s.add_buttons(s.pickNavControls,pick_buttons)
         for label, handler in pick_buttons:
             s.buttons[label] = QtGui.QPushButton(label)
-            s.peakControls.addWidget(s.buttons[label])
+            s.pickNavControls.addWidget(s.buttons[label])
             if handler:
                 s.buttons[label].clicked.connect(handler)
+
 
         all_single_label = QtGui.QLabel("repick mode:")
         all_single_label.setAlignment(Qt.AlignRight)
         s.pickModeToggle = QtGui.QPushButton(s.app_data['pick state']['repick mode'])
-        s.peakControls.addWidget(all_single_label)
-        s.peakControls.addWidget(s.pickModeToggle)
+        s.pickNavControls.addWidget(all_single_label)
+        s.pickNavControls.addWidget(s.pickModeToggle)
+        spacer = QtGui.QSpacerItem(40,1)
+        s.pickNavControls.addItem(spacer)
 
         s.pickModeToggle.clicked.connect(s.mode_toggle)
+
+        nav_buttons = [('Save', s.save_mt),
+                     ('Prev', s.previous_file),
+                     ('Next', s.next_file)]
+
+        s.navLayout = QtGui.QHBoxLayout()
+        for label, handler in nav_buttons:
+            s.buttons[label] = QtGui.QPushButton(label)
+            s.navLayout.addWidget(s.buttons[label])
+            if handler:
+                s.buttons[label].clicked.connect(handler)
+
+        s.pickNavControls.addLayout(s.navLayout)
+
 
         s.plotsGrid = pg.GraphicsLayoutWidget()  # QtGui.QGridLayout()
         s.zoomDialog = QtGui.QDialog(s)
@@ -277,8 +296,8 @@ class Picker(QtGui.QMainWindow):
                     s.status_plot.getAxis('left').hide()
                     s.status_plot.getAxis('bottom').hide()
 
-        s.pickLayout.addLayout(s.controls_1)
-        s.pickLayout.addLayout(s.peakControls)
+        s.pickLayout.addLayout(s.pickNavControls)
+        s.pickLayout.addLayout(s.dispNstatus)
         s.plotsScroll = QtGui.QScrollArea()
         s.plotsGrid.resize(n_columns * s.plot_props['width'], n_rows * s.plot_props['height'])
         s.plotsScroll.setWidget(s.plotsGrid)
@@ -405,7 +424,7 @@ class Picker(QtGui.QMainWindow):
             s.caseToggles = {}
             s.zoomCaseToggles = {}
             for case in cases:
-                s.caseChooser.addItem(case)
+                s.caseChooser.addItem('  '+case+'  ')
                 case_toggle = QtGui.QCheckBox(case)
                 case_toggle.setChecked(True)
                 case_toggle.stateChanged.connect(s.toggle_case)
@@ -616,8 +635,8 @@ class Picker(QtGui.QMainWindow):
         ffs = ['Verdana', 'Arial', 'Helvetica', 'sans-serif', 'Times', 'Times New Roman', 'Georgia', 'serif',
                'Lucida Console', 'Courier', 'monospace']
         ffind = 0
-        case = s.caseChooser.currentText()
-        peak = s.peakChooser.currentText()
+        case = s.caseChooser.currentText().strip()
+        peak = s.peakChooser.currentText().strip()
         s.app_data['pick state']['case'] = case
         s.app_data['pick state']['peak'] = peak
 
@@ -775,7 +794,6 @@ class Picker(QtGui.QMainWindow):
         print('toggle_regions',state, Pstate)
 
         for el_cs_pk,reg in s.pick_regions.items():
-            #if el_cs_pk[1] == s.caseChooser.currentText():
             show = False
             if state and el_cs_pk[1] == Pstate['case'] and el_cs_pk[2] == Pstate['peak']:
                 show = True
