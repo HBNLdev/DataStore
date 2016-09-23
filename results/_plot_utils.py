@@ -18,6 +18,7 @@ layout = [[None, None, None, 'FP1', 'FPZ', 'FP2', None, None, None],
           ['P7', 'P5', 'P3', 'P1', 'PZ', 'P2', 'P4', 'P6', 'P8'],
           [None, None, 'PO7', 'PO1', 'POZ', 'PO2', 'PO8', None, None],
           [None, None, None, 'O1', 'OZ', 'O2', None, None, None]]
+layout = np.array(layout)
 
 ordered_chans = []
 for row in layout:

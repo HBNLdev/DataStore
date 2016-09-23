@@ -161,7 +161,7 @@ class Results:
 
     def retrieve_behavior(s, experiment):
         ''' given 3-letter experiment designation, retrieve behavioral data '''
-        import compilation as C
+        from db import compilation as C
         
         wanted_fields = ['ID', 'session', experiment]
         proj = {wf:1 for wf in wanted_fields}
@@ -553,9 +553,11 @@ class Results:
             s.measure_pps[saveas]['data'] = saveas
             s.measure_pps[saveas]['d_dims'] = saveas + '_dims'
             s.measure_pps[saveas]['d_dimlvls'] = saveas + '_dimlvls'
+        else:
+            saveas = measure
 
 
-        lbl_lst = [measure+'_'+nested_strjoin(lbl_set) for lbl_set in lbls]
+        lbl_lst = [saveas+'_'+nested_strjoin(lbl_set) for lbl_set in lbls]
 
         amean_df = pd.DataFrame(amean_stack,
                         index=s.demog_df.index, columns=lbl_lst)

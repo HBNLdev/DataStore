@@ -7,8 +7,7 @@ import h5py, os
 from bokeh.palettes import brewer
 from collections import OrderedDict
 
-import study_info as SI
-import file_handling as FH
+from db import file_handling as FH
 
 class avgh1:
 

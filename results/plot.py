@@ -192,6 +192,7 @@ def tf(s, measure='power',
           figure_by={'POP': 'all', 'channel': ['FZ']},
           subplot_by={'condition': 'all'},
           lims='absmax', cmap_override=None,
+          lbl_override=None,
           savedir=None):
     ''' plot time-frequency data as a rectangular contour image '''
     ptype = 'tf'
@@ -205,6 +206,15 @@ def tf(s, measure='power',
 
     f_dim, f_vals, f_lbls = handle_by(s, figure_by, d_dims, d_dimlvls)
     sp_dim, sp_vals, sp_lbls = handle_by(s, subplot_by, d_dims, d_dimlvls)
+
+    ld = {'f_lbls': f_lbls, 'sp_lbls': sp_lbls}
+    if lbl_override:
+        for var_name, new_vals in lbl_override.items():
+            if var_name in ld:
+                ld[var_name] = new_vals
+            else:
+                print('label not found')
+                return
 
     sp_dims = subplot_heuristic(len(sp_vals))
     figsize = figsize_heuristic(sp_dims)
