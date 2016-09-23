@@ -38,7 +38,8 @@ class Picker(QtGui.QMainWindow):
                   'min_border': 4,
                   'line colors': [(221, 34, 34), (102, 221, 102), (34, 34, 221), (221, 34, 221)],
                   'XY gridlines': ([0, 200, 400, 600, 800], [0]),
-                  'grid color': '#555'}
+                  'grid color': '#555',
+                  'label size':20}
 
     app_data = {'display props': {'marker size': 8,
                                   'pick dash': [4, 1],
@@ -48,7 +49,7 @@ class Picker(QtGui.QMainWindow):
                                   'time range': [-10, 850],
                                   'bar length': np.float64(1.25),
                                   'pick region': (80, 80, 80, 50),
-                                  'background': (50, 50, 50),
+                                  'background': (0, 0, 0),
                                   'foreground': (135, 135, 135),
                                   'main position': (50, 50, 1200, 900),
                                   'zoom position': [300, 200, 780, 650],
@@ -487,6 +488,8 @@ class Picker(QtGui.QMainWindow):
                 for elec in s.app_data['displayed channels']:
                     plot = s.plots[elec]
                     plot.clear()
+                    if plot.vb in s.plot_labels:
+                        plot.vb.removeItem( s.plot_labels[plot.vb] )
 
                     # # grid lines
                     for xval in x_gridlines:
@@ -502,11 +505,15 @@ class Picker(QtGui.QMainWindow):
                     plot.setYRange(s.ylims[0], s.ylims[1])
 
                     # electrode label
-                    label = pg.TextItem(text=elec, anchor=(0, 0.2))
-                    plot.addItem(label)
+                    #label = pg.TextItem(text=elec, anchor=(0, 0.2))
+                    #plot.addItem(label)
 
-                    s.plot_labels[plot.vb] = label
-                    s.adjust_label(plot.vb)
+                    bLabel = pg.ButtonItem(imageFile=os.path.join('chanlogos',elec+'.png'),
+                                    width=s.plot_props['label size'], parentItem=plot )
+                    bLabel.setPos(12,-8)
+
+                    s.plot_labels[plot.vb] = bLabel
+                    #s.adjust_label(plot.vb)
 
                     plot.vb.setMouseEnabled(x=False, y=False)
 
@@ -608,7 +615,7 @@ class Picker(QtGui.QMainWindow):
     def update_ranges(s):
         ''' called when axis limits change (e.g. on pan/zoom) '''
         Pstate = s.app_data['pick state']
-        s.adjust_label(s.sender())
+        #s.adjust_label(s.sender())
         for el_cs_pk in s.pick_regions:
             if el_cs_pk[1] == Pstate['case'] and el_cs_pk[2] == Pstate['peak']:
                 s.update_region_label_position(el_cs_pk)
