@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 import h5py
 import numpy as np
+from scipy.signal import argrelextrema
 import os
 import pandas as pd
 from bokeh.palettes import brewer
@@ -175,6 +176,22 @@ class avgh1:
 
     def find_peaks(s, case, chan_list, starts_ms, ends_ms, polarity='p'):
 
+        def peak_alg(erp_array, polarity):
+            if polarity == 'p':
+                comparator = np.greater
+                fallback_func = np.argmax
+            elif polarity == 'n':
+                comparator = np.less
+                fallback_func = np.argmin
+            local_maxima_inds = argrelextrema(erp_array, comparator)[0]
+            if local_maxima_inds.shape[0] == 0: # no local extremum
+                max_lmi = fallback_func(erp_array)
+            else:
+                local_maxima_vals = erp_array[local_maxima_inds]
+                max_local_maximum_tmp_ind = np.argmax(local_maxima_vals)
+                max_lmi = local_maxima_inds[max_local_maximum_tmp_ind]
+            return max_lmi
+
         caseN = s.case_ind_map[case]
         lats, erps = s.prepare_plot_data()
         n_tms = lats.shape[0]
@@ -205,10 +222,7 @@ class avgh1:
             start_pt = start_pts[ci]
             end_pt = end_pts[ci]
             erp = erpa[start_pt:end_pt + 1]
-            if polarity == 'p':  # find the max
-                peak_pt = np.argmax(erp, axis=0)
-            elif polarity == 'n':  # find the min
-                peak_pt = np.argmin(erp, axis=0)
+            peak_pt = peak_alg(erp, polarity)
             peak_vals.append(erp[peak_pt])
             peak_pts.append(int(peak_pt + start_pt))
 
@@ -244,6 +258,7 @@ class avgh1:
         else:
             return  # error, the peak polarity is not correctly specified
 
+        '''
         # check if at edge
         if chan_scope == 'one':  # test
             if peak_pt == start_pt or peak_pt == end_pt:
@@ -251,6 +266,7 @@ class avgh1:
         elif chan_scope == 'all':
             if any(peak_pt == start_pt) or any(peak_pt == end_pt):
                 pass  # at least one peak is at an edge
+        '''
 
         peak_ms = lats[peak_pt]  # convert to ms if necessary
 
