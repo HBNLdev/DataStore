@@ -645,7 +645,7 @@ class Picker(QtGui.QMainWindow):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                     reg.setRegion(region)
 
-        if sender != s.zoomRegion:
+        if 'zoomRegion' in dir(s) and sender != s.zoomRegion:
             s.zoomRegion.setRegion(region)
 
 
@@ -674,7 +674,8 @@ class Picker(QtGui.QMainWindow):
             
             existing_lim_CPs = set([ (ecp[1],ecp[2]) for ecp in s.applied_region_limits ])
             if (case, peak) in existing_lim_CPs:
-                start_ranges = { el:s.applied_region_limits[(el,case,peak)] }
+                print('using existing limits')
+                start_ranges = { el:s.applied_region_limits[(el,case,peak)] for el in s.app_data['active channels'] }
             else:
                 start_ranges = { el:(peak_center_ms-75,peak_center_ms+75) for el in s.app_data['active channels']}
             for elec in s.app_data['active channels']:#[ p for p in s.plots if p not in s.show_only ]:
