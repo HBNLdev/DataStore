@@ -401,6 +401,7 @@ class Picker(QtGui.QMainWindow):
             chans = eeg.electrodes
 
             s.applied_regions = None
+            s.previous_peak_limits = {}
             if paths[ind] in s.app_data['regions by filepath']:
                 s.applied_regions = s.app_data['regions by filepath'][paths[ind]]
 
@@ -665,6 +666,7 @@ class Picker(QtGui.QMainWindow):
         s.app_data['picks'].add((case, peak))
 
         pick_case_peaks = set([(ecp[1], ecp[2]) for ecp in s.pick_regions])
+        previous_peaks = set([ el_pk[1] for el_pk in s.previous_peak_limits ])
 
         for ztcase, checkbox in s.zoomCaseToggles.items():
                 checkbox.setChecked( True ) #ztcase == case )
@@ -674,10 +676,13 @@ class Picker(QtGui.QMainWindow):
             
             existing_lim_CPs = set([ (ecp[1],ecp[2]) for ecp in s.applied_region_limits ])
             if (case, peak) in existing_lim_CPs:
-                print('using existing limits')
                 start_ranges = { el:s.applied_region_limits[(el,case,peak)] for el in s.app_data['active channels'] }
+            elif peak in previous_peaks:
+                print( 'using previous peak range' )
+                start_ranges = { el:s.previous_peak_limits[(el,peak)] for el in s.app_data['active channels'] } 
             else:
                 start_ranges = { el:(peak_center_ms-75,peak_center_ms+75) for el in s.app_data['active channels']}
+            
             for elec in s.app_data['active channels']:#[ p for p in s.plots if p not in s.show_only ]:
                 region = pg.LinearRegionItem(values=start_ranges[elec],movable=True,
                         brush=s.app_data['display props']['pick region'])
@@ -1114,6 +1119,7 @@ class Picker(QtGui.QMainWindow):
                 starts.append(start_finish[0])
                 finishes.append(start_finish[1])
                 s.applied_region_limits[elec_case_peak] = start_finish
+                s.previous_peak_limits[ (elec_case_peak[0], peak) ] = start_finish
 
         # print('starts:',starts)
         pval, pms = s.eeg.find_peaks(case, elecs,
