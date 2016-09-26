@@ -666,7 +666,7 @@ class Picker(QtGui.QMainWindow):
         pick_case_peaks = set([(ecp[1], ecp[2]) for ecp in s.pick_regions])
 
         for ztcase, checkbox in s.zoomCaseToggles.items():
-                checkbox.setChecked( ztcase == case )
+                checkbox.setChecked( True ) #ztcase == case )
 
         if (case, peak) not in pick_case_peaks:
             peak_center_ms = 100 * int(peak[1])
