@@ -36,7 +36,7 @@ class Picker(QtGui.QMainWindow):
     plot_props = {'width': 233, 'height': 112,
                   'extra_bottom_height': 40,  # for bottom row
                   'min_border': 4,
-                  'line colors': [(221, 34, 34), (102, 221, 102), (34, 34, 221), (221, 34, 221)],
+                  'line colors': [(221, 34, 34), (102, 221, 102), (55, 160, 255), (221, 34, 221)],
                   'XY gridlines': ([0, 200, 400, 600, 800], [0]),
                   'grid color': '#555',
                   'label size':20}
@@ -560,6 +560,17 @@ class Picker(QtGui.QMainWindow):
 
         return curve
 
+    def update_curve_weights(s):
+        ps = s.app_data['pick state']
+        for elec_case, curve in s.curves.items():
+            weight = 1
+            if elec_case[1] == ps['case']:
+                weight = 2
+            c_ind = s.app_data['current cases'].index(elec_case[1])
+            pen = pg.mkPen( color=s.plot_props['line colors'][c_ind],
+                            width=weight ) 
+            curve.setPen( pen )
+
     def save_mt(s):
         ''' save the current picks as an HBNL-formatted *.mt text file '''
 
@@ -684,8 +695,9 @@ class Picker(QtGui.QMainWindow):
 
                 s.update_region_label_position((elec, case, peak))
 
-        for disp_case in s.app_data['current cases']:
-            s.set_case_display(disp_case, disp_case == case)
+        # for disp_case in s.app_data['current cases']:
+        #     s.set_case_display(disp_case, disp_case == case)
+        s.update_curve_weights()
 
         s.toggle_regions(True)
         s.status_message(text="Picking "+case+','+peak)
