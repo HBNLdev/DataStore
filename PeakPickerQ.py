@@ -77,6 +77,7 @@ class Picker(QtGui.QMainWindow):
     app_data['file ind'] = 0
     app_data['pick state'] = {'case': None, 'peak': None,
                               'repick mode': repick_modes[0]}
+    app_data['zoom electrode'] = None
     app_data['regions by filepath'] = {}
 
     def __init__(s):
@@ -765,6 +766,7 @@ class Picker(QtGui.QMainWindow):
         print('zoom_plot', ev)
         if ev[0].button() == 1 and ev[0].currentItem in s.vb_map:
             elec = s.vb_map[ev[0].currentItem]
+            s.app_data['zoom electrode'] = elec
             Pstate = s.app_data['pick state']
 
             print(elec)
@@ -784,6 +786,11 @@ class Picker(QtGui.QMainWindow):
                 for case in s.app_data['current cases']:
                     s.zoom_curves[case] = s.plot_curve(s.zoomPlot, elec, case)
                     # s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
+                    peak_keys = [ ecp for ecp in s.peak_data.keys() if ecp[0]==elec and ecp[1]==case ]
+                    for pK in peak_keys:
+                        zkey = ( pK[0]+'_zoom', pK[1], pK[2] )
+                        marker = s.show_zoom_marker( s.peak_data[pK] )
+                        s.peak_markers[zkey] = marker
 
                 s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
                 s.zoomDialog.setWindowTitle(elec + ' - ' + \
@@ -931,6 +938,13 @@ class Picker(QtGui.QMainWindow):
             text = 'At least one peak is at an edge'
             s.status_message(text=text, color='#E00')
 
+    def show_zoom_marker(s,amp_lat):
+        bar_len = s.app_data['display props']['bar length']
+        marker = pg.ErrorBarItem(x=[amp_lat[1]], y=[amp_lat[0]],
+                            top=bar_len/5, bottom=bar_len/5, beam=0, pen=(255, 255, 255))
+        s.zoomPlot.addItem(marker)
+        return marker
+
     def show_peaks(s, cases='all'):
         ''' display chosen extrema as glyphs '''
 
@@ -943,11 +957,22 @@ class Picker(QtGui.QMainWindow):
             if el_cs_pk[1] in cases:
                 if el_cs_pk in s.peak_markers:
                     s.peak_markers[el_cs_pk].setData(x=[amp_lat[1]],y=[amp_lat[0]])
+                    if s.app_data['zoom electrode'] == el_cs_pk[0]:
+                        zkey = (el_cs_pk[0]+'_zoom',el_cs_pk[1],el_cs_pk[2])
+                        if zkey in s.peak_markers:
+                            s.peak_markers[zkey].setData(x=[amp_lat[1]],y=[amp_lat[0]])
+                        else:
+                            zoom_marker = s.show_zoom_marker( amp_lat )
+                            s.peak_markers[ zkey ] = zoom_marker
                 else:
                     marker = pg.ErrorBarItem(x=[amp_lat[1]], y=[amp_lat[0]],
                                              top=bar_len, bottom=bar_len, beam=0, pen=(255, 255, 255))
                     s.peak_markers[el_cs_pk] = marker
                     s.plots[el_cs_pk[0]].addItem(marker)
+                    if s.app_data['zoom electrode'] == el_cs_pk[0]:
+                        zoom_marker = s.show_zoom_marker( amp_lat )
+                        zkey = (el_cs_pk[0]+'_zoom',el_cs_pk[1],el_cs_pk[2])
+                        s.peak_markers[ zkey ] = zoom_marker
 
                 c_ind = s.app_data['current cases'].index(el_cs_pk[1])
                 if s.peak_edges[el_cs_pk]:
