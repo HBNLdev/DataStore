@@ -15,6 +15,7 @@ Qt = QtCore.Qt
 
 class Picker(QtGui.QMainWindow):
     ''' main GUI '''
+    module_path = os.path.split(__file__)[0]
 
     init_files_by_exp = {'ant': 'ant_0_a0_11111111_avg.h1',
                          'vp3': 'vp3_0_a0_11111111_avg.h1',
@@ -509,7 +510,7 @@ class Picker(QtGui.QMainWindow):
                     #label = pg.TextItem(text=elec, anchor=(0, 0.2))
                     #plot.addItem(label)
 
-                    bLabel = pg.ButtonItem(imageFile=os.path.join('chanlogos',elec+'.png'),
+                    bLabel = pg.ButtonItem(imageFile=os.path.join( s.module_path, os.path.join('chanlogos',elec+'.png') ),
                                     width=s.plot_props['label size'], parentItem=plot )
                     bLabel.setPos(12,-8)
 
