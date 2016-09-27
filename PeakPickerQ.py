@@ -143,10 +143,13 @@ class Picker(QtGui.QMainWindow):
         s.peakMarkerToggle.setChecked(True)
         s.peakTopToggle = QtGui.QCheckBox("markers")
         s.peakTopToggle.setChecked(False)
+        s.textToggle = QtGui.QCheckBox("values")
+        s.textToggle.setChecked(True)
         s.dispLayout.addWidget(disp_label)
         s.dispLayout.addWidget(s.pickRegionToggle)
         s.dispLayout.addWidget(s.peakMarkerToggle)
         s.dispLayout.addWidget(s.peakTopToggle)
+        s.dispLayout.addWidget(s.textToggle)
         disp_cases_label = QtGui.QLabel("cases:")
         s.casesLayout.addWidget(disp_cases_label)
         s.dispNstatus.addLayout(s.dispLayout)
@@ -176,6 +179,7 @@ class Picker(QtGui.QMainWindow):
         s.pickRegionToggle.stateChanged.connect(s.toggle_regions)
         s.peakMarkerToggle.stateChanged.connect(s.toggle_peaks)
         s.peakTopToggle.stateChanged.connect(s.toggle_peak_tops)
+        s.textToggle.stateChanged.connect(s.toggle_value_texts)
 
 
         pick_label = QtGui.QLabel("Pick:")
@@ -258,6 +262,7 @@ class Picker(QtGui.QMainWindow):
         s.pick_electrodes = []
         s.plots = {}
         s.plot_labels = {}
+        s.plot_texts = {}
         s.curves = {}
         s.zoom_curves = {}
         s.vb_map = {}
@@ -507,16 +512,18 @@ class Picker(QtGui.QMainWindow):
                     # set y limits
                     plot.setYRange(s.ylims[0], s.ylims[1])
 
-                    # electrode label
-                    #label = pg.TextItem(text=elec, anchor=(0, 0.2))
-                    #plot.addItem(label)
+                    # peak text
+                    peak_text = pg.TextItem(text='', anchor=(-0.1, 0.3))
+                    plot.addItem(peak_text)
+                    s.plot_texts[plot.vb] = peak_text
+                    s.adjust_text(plot.vb)
 
                     bLabel = pg.ButtonItem(imageFile=os.path.join( s.module_path, os.path.join('chanlogos',elec+'.png') ),
                                     width=s.plot_props['label size'], parentItem=plot )
                     bLabel.setPos(12,-8)
 
                     s.plot_labels[plot.vb] = bLabel
-                    #s.adjust_label(plot.vb)
+                    
 
                     plot.vb.setMouseEnabled(x=False, y=False)
 
@@ -618,13 +625,14 @@ class Picker(QtGui.QMainWindow):
         s.status_message( text='Saved to '+os.path.split(fullpath)[0] )
         print('Saved', fullpath)
 
-    def adjust_label(s, viewbox):
+    def adjust_text(s, viewbox):
         ''' adjusts position of electrode text label objects to be visible if axis limits change '''
 
-        if viewbox in s.plot_labels:
-            label = s.plot_labels[viewbox]
+        if viewbox in s.plot_texts:
+            text = s.plot_texts[viewbox]
             region = viewbox.getState()['viewRange']
-            label.setPos(region[0][0], region[1][1])
+            #reg_height = region[1][1]-region[1][0]
+            text.setPos(region[0][0], region[1][1])#+reg_height/10)
 
     def update_ranges(s):
         ''' called when axis limits change (e.g. on pan/zoom) '''
@@ -692,7 +700,7 @@ class Picker(QtGui.QMainWindow):
 
                 region_label = pg.TextItem(
                     html=s.region_label_html.replace('__PEAK__', peak),
-                    anchor=(-0.025, 0.2))
+                    anchor=(-0.025, -0.2))
 
                 s.pick_regions[(elec, case, peak)] = region
                 s.pick_region_labels[(elec, case, peak)] = region_label
@@ -700,6 +708,8 @@ class Picker(QtGui.QMainWindow):
                 s.region_case_peaks[region] = (elec, case, peak)
                 s.plots[elec].addItem(region)
                 s.plots[elec].addItem(region_label)
+
+                s.plot_texts[ s.plots[elec].vb ].setHtml('')
 
                 s.update_region_label_position((elec, case, peak))
 
@@ -848,6 +858,13 @@ class Picker(QtGui.QMainWindow):
         for el_cs_pk, top in s.peak_tops.items():
             if s.caseToggles[el_cs_pk[1]].isChecked():
                 top.setVisible(checked)
+
+    def toggle_value_texts(s):
+        ''' toggle display of amplitude latency text (if checkbox is toggled) '''
+
+        checked = s.sender().isChecked()
+        for vb,text in s.plot_texts.items():
+            text.setVisible(checked)
 
     def toggle_case(s):
         ''' toggle display of case ERP curves (if checkbox is toggled) '''
@@ -1127,6 +1144,7 @@ class Picker(QtGui.QMainWindow):
 
             latency = pms[e_ind]
             amplitude = pval[e_ind]
+            s.plot_texts[ s.plots[elec].vb ].setHtml('<div style="font-size: 8pt; font-family: Helvetica; font-weigth: bolder">'+'%.3f'%amplitude+', '+'%.1f'%latency+'</div>')
             s.peak_data[(elec, case, peak)] = (amplitude, latency)
             if (np.fabs(latency - starts[e_ind]) < 3) or (np.fabs(latency - finishes[e_ind]) < 3):
                 s.peak_edges[(elec, case, peak)] = True
