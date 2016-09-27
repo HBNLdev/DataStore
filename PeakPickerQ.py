@@ -933,17 +933,16 @@ class Picker(QtGui.QMainWindow):
         else:
             s.info_text.setHtml(html)
 
-        print('status_message', html)
-        
 
-
-    def notify_edges(s, case, peak):
+    def notify_applied_ckEdges(s, case, peak):
         ''' for a given case / peak combination, check if any peaks are at an edge, and provide a notification'''
 
         if s.any_casepeak_edges(case, peak):
 
             text = 'At least one peak is at an edge'
             s.status_message(text=text, color='#E00')
+        else: 
+            s.status_message(text=case+' , '+peak+' applied. All peaks within range.')
 
     def show_zoom_marker(s,amp_lat):
         bar_len = s.app_data['display props']['bar length']
@@ -1140,7 +1139,7 @@ class Picker(QtGui.QMainWindow):
             # s.plots[elec].addItem(marker)
 
         s.show_peaks(cases=[case])
-        s.notify_edges(case, peak)
+        s.notify_applied_ckEdges(case, peak)
 
         s.show_state()
 
