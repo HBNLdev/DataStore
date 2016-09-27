@@ -460,6 +460,8 @@ class Picker(QtGui.QMainWindow):
 
             if not initialize:
                 s.legend_plot.clear()
+                if 'items' in dir(s.legend_plot.legend):
+                    s.legend_plot.legend.items = []
 
                 file_info = s.app_data['info']
                 case_info = file_info[-1]
