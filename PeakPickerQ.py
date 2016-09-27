@@ -646,7 +646,7 @@ class Picker(QtGui.QMainWindow):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                     reg.setRegion(region)
 
-        if 'zoomRegion' in dir(s) and sender != s.zoomRegion:
+        if 'zoomRegion' in dir(s) and sender != s.zoomRegion and elec == s.app_data['zoom electrode']:
             s.zoomRegion.setRegion(region)
 
 
