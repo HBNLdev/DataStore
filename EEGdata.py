@@ -183,14 +183,17 @@ class avgh1:
             elif polarity == 'n':
                 comparator = np.less
                 fallback_func = np.argmin
-            local_maxima_inds = argrelextrema(erp_array, comparator)[0]
-            if local_maxima_inds.shape[0] == 0: # no local extremum
-                max_lmi = fallback_func(erp_array)
+            local_extreme_inds = argrelextrema(erp_array, comparator)[0]
+            if local_extreme_inds.shape[0] == 0: # no local extremum
+                ext_lmi = fallback_func(erp_array)
             else:
-                local_maxima_vals = erp_array[local_maxima_inds]
-                max_local_maximum_tmp_ind = np.argmax(local_maxima_vals)
-                max_lmi = local_maxima_inds[max_local_maximum_tmp_ind]
-            return max_lmi
+                local_extreme_vals = erp_array[local_extreme_inds]
+                if polarity == 'p':
+                    local_extreme_tmp_ind = np.argmax(local_extreme_vals)
+                elif polarity == 'n':
+                    local_extreme_tmp_ind = np.argmin(local_extreme_vals)
+                ext_lmi = local_extreme_inds[local_extreme_tmp_ind]
+            return ext_lmi
 
         caseN = s.case_ind_map[case]
         lats, erps = s.prepare_plot_data()
@@ -204,7 +207,6 @@ class avgh1:
 
         if type(starts_ms) == list:
             starts_ms = np.matrix(starts_ms).transpose()
-            print('transposed starts')
         if type(ends_ms) == list:
             ends_ms = np.matrix(ends_ms).transpose()
 

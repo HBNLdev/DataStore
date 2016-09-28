@@ -720,6 +720,9 @@ class Picker(QtGui.QMainWindow):
         s.update_curve_weights()
 
         s.toggle_regions(True)
+
+        s.update_zoom_region()
+
         s.status_message(text="Picking "+case+','+peak)
         print('pick_init finish')
 
@@ -815,19 +818,36 @@ class Picker(QtGui.QMainWindow):
                 s.zoomDialog.setWindowTitle(elec + ' - ' + \
                                             Pstate['case'] + ' - ' + Pstate['peak'] + '     ')
 
-                c_ind = s.app_data['current cases'].index(Pstate['case'])
-
-                small_region = s.pick_regions[(elec, Pstate['case'], Pstate['peak'])]
-                start_fin = small_region.getRegion()
-                region = pg.LinearRegionItem(values=start_fin, movable=True,
-                                             brush=s.app_data['display props']['pick region'])
-                region.sigRegionChangeFinished.connect(s.update_pick_regions)
-                s.zoomRegion = region
-                s.region_case_peaks[region] = (elec, Pstate['case'], Pstate['peak'])
-                s.zoomPlot.addItem(region)
+                #c_ind = s.app_data['current cases'].index(Pstate['case'])
+                s.update_zoom_region()
+                # small_region = s.pick_regions[(elec, Pstate['case'], Pstate['peak'])]
+                # start_fin = small_region.getRegion()
+                # region = pg.LinearRegionItem(values=start_fin, movable=True,
+                #                              brush=s.app_data['display props']['pick region'])
+                # region.sigRegionChangeFinished.connect(s.update_pick_regions)
+                # s.zoomRegion = region
+                # s.region_case_peaks[region] = (elec, Pstate['case'], Pstate['peak'])
+                # s.zoomPlot.addItem(region)
 
                 for case in s.app_data['current cases']:  # unsure why this doesn't work in above loop, maybe timing
                     s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
+
+    def update_zoom_region(s):
+
+        elec = s.app_data['zoom electrode']
+        if elec is not None:
+            if 'zoomRegion' in dir(s) and s.zoomRegion in s.zoomPlot.items:
+                s.zoomPlot.removeItem( s.zoomRegion )
+            Pstate = s.app_data['pick state']
+            small_region = s.pick_regions[(elec, Pstate['case'], Pstate['peak'])]
+            start_fin = small_region.getRegion()
+            region = pg.LinearRegionItem(values=start_fin, movable=True,
+                                         brush=s.app_data['display props']['pick region'])
+            region.sigRegionChangeFinished.connect(s.update_pick_regions)
+            s.zoomRegion = region
+            s.region_case_peaks[region] = (elec, Pstate['case'], Pstate['peak'])
+            s.zoomPlot.addItem(region)
+            
 
     def toggle_regions(s, state=None):
         ''' toggle display of regions (if peak being picked is changed or the display checkbox is toggled) '''
@@ -895,7 +915,7 @@ class Picker(QtGui.QMainWindow):
     def set_case_display(s,case,state,zoom=False):
         ''' given case string and boolean state, sets display settings  '''
 
-        print('set_case_display',case,state,'zoom',zoom)
+        #print('set_case_display',case,state,'zoom',zoom)
 
         if zoom:
             toggles = s.zoomCaseToggles
