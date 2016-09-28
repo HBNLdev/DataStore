@@ -392,6 +392,7 @@ class Picker(QtGui.QMainWindow):
                 s.app_data['file ind'] += 1
             else:
                 print('already on last file')
+                s.status_message('already on last file')
                 return
 
         # main plot / drawing portion
@@ -508,6 +509,7 @@ class Picker(QtGui.QMainWindow):
                         plot.addLine(y=yval, pen=grid_pen)
 
                     # ERP amplitude curves for each case
+                    s.curves= {}
                     for case in cases:
                         s.curves[(elec, case)] = s.plot_curve(s.plots[elec], elec, case)
 
@@ -528,6 +530,13 @@ class Picker(QtGui.QMainWindow):
                     
 
                     plot.vb.setMouseEnabled(x=False, y=False)
+
+                # update zoom plot
+                s.zoom_curves = {}
+                s.pick_regions = {}
+                if s.app_data['zoom electrode'] is not None:
+                    s.show_zoom_plot( s.app_data['zoom electrode'] )
+
 
         s.peak_markers = {}
         s.peak_tops = {}
@@ -779,18 +788,26 @@ class Picker(QtGui.QMainWindow):
     #     print('scroll handler', ev[0] )
     #     print(dir(ev[0]))
 
-    def show_zoom_plot(s, ev):
+    def show_zoom_plot(s, ev_or_elec):
         ''' if a single plot is clicked, show a larger version of the plot on a detached window '''
 
         if s.zoomDialog._open:
             s.get_zoompos()
 
-        print('zoom_plot', ev)
-        if ev[0].button() == 1 and ev[0].currentItem in s.vb_map:
-            elec = s.vb_map[ev[0].currentItem]
-            s.app_data['zoom electrode'] = elec
-            Pstate = s.app_data['pick state']
+        print('zoom_plot', ev_or_elec)
 
+        Pstate = s.app_data['pick state']
+
+        proceed = False
+        if type(ev_or_elec) == str:
+            elec = ev_or_elec
+            proceed = True
+        elif ev_or_elec[0].button() == 1 and ev_or_elec[0].currentItem in s.vb_map:
+            elec = s.vb_map[ev_or_elec[0].currentItem]
+            s.app_data['zoom electrode'] = elec
+            proceed = True 
+
+        if proceed:
             print(elec)
             s.zoomPlot.clear()
 
@@ -818,16 +835,8 @@ class Picker(QtGui.QMainWindow):
                 s.zoomDialog.setWindowTitle(elec + ' - ' + \
                                             Pstate['case'] + ' - ' + Pstate['peak'] + '     ')
 
-                #c_ind = s.app_data['current cases'].index(Pstate['case'])
                 s.update_zoom_region()
-                # small_region = s.pick_regions[(elec, Pstate['case'], Pstate['peak'])]
-                # start_fin = small_region.getRegion()
-                # region = pg.LinearRegionItem(values=start_fin, movable=True,
-                #                              brush=s.app_data['display props']['pick region'])
-                # region.sigRegionChangeFinished.connect(s.update_pick_regions)
-                # s.zoomRegion = region
-                # s.region_case_peaks[region] = (elec, Pstate['case'], Pstate['peak'])
-                # s.zoomPlot.addItem(region)
+
 
                 for case in s.app_data['current cases']:  # unsure why this doesn't work in above loop, maybe timing
                     s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
@@ -839,15 +848,17 @@ class Picker(QtGui.QMainWindow):
             if 'zoomRegion' in dir(s) and s.zoomRegion in s.zoomPlot.items:
                 s.zoomPlot.removeItem( s.zoomRegion )
             Pstate = s.app_data['pick state']
-            small_region = s.pick_regions[(elec, Pstate['case'], Pstate['peak'])]
-            start_fin = small_region.getRegion()
-            region = pg.LinearRegionItem(values=start_fin, movable=True,
-                                         brush=s.app_data['display props']['pick region'])
-            region.sigRegionChangeFinished.connect(s.update_pick_regions)
-            s.zoomRegion = region
-            s.region_case_peaks[region] = (elec, Pstate['case'], Pstate['peak'])
-            s.zoomPlot.addItem(region)
-            
+            reg_key = (elec, Pstate['case'], Pstate['peak'])
+            if reg_key in s.pick_regions:
+                small_region = s.pick_regions[reg_key]
+                start_fin = small_region.getRegion()
+                region = pg.LinearRegionItem(values=start_fin, movable=True,
+                                             brush=s.app_data['display props']['pick region'])
+                region.sigRegionChangeFinished.connect(s.update_pick_regions)
+                s.zoomRegion = region
+                s.region_case_peaks[region] = (elec, Pstate['case'], Pstate['peak'])
+                s.zoomPlot.addItem(region)
+                
 
     def toggle_regions(s, state=None):
         ''' toggle display of regions (if peak being picked is changed or the display checkbox is toggled) '''
