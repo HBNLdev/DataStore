@@ -37,7 +37,15 @@ class Picker(QtGui.QMainWindow):
     plot_props = {'width': 233, 'height': 112,
                   'extra_bottom_height': 40,  # for bottom row
                   'min_border': 4,
-                  'line colors': [(221, 34, 34), (102, 221, 102), (55, 160, 255), (221, 34, 221)],
+                  'line colors': [  (221, 34, 34), # red
+                                    (102, 221, 102), # green
+                                    (55, 160, 255), # light blue
+                                    (221, 34, 221), # magenta
+                                    (255, 200, 20), # orange
+                                    (200, 255, 40), # yellow-green
+                                    (20, 255, 200), # blue green
+                                    (160, 0, 188), # gray
+                                ],
                   'XY gridlines': ([0, 200, 400, 600, 800], [0]),
                   'grid color': '#555',
                   'label size':20}
@@ -468,10 +476,11 @@ class Picker(QtGui.QMainWindow):
                 case_info = file_info[-1]
                 sep_cases = case_info.split(',')
                 print('sep cases', sep_cases)
-                if len(sep_cases) > 2:
-                    case_lines = [' '.join(sep_cases[:2]), ' '.join(sep_cases[2:])]
-                else:
-                    case_lines = [case_info]
+                nC = len(sep_cases)
+                if nC % 2 != 0:
+                    sep_cases.append('')
+                case_lines = [ ' '.join(sep_cases[si*2:si*2+2]) for si in range( int(len(sep_cases)/2) ) ]
+
 
                 # create HTML to display the current file's info in top-left
                 html = '<div>'
@@ -481,7 +490,7 @@ class Picker(QtGui.QMainWindow):
                 html += '</div>'
                 print('html', html)
                 info_text = pg.TextItem(html=html, anchor=(-0.05, 0))
-                info_text.setPos(-0.1, 1.1)
+                info_text.setPos(-0.1, 1.18)
                 s.legend_plot.addItem(info_text)
 
                 # create color-coded case legend
