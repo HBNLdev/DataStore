@@ -495,7 +495,7 @@ class Picker(QtGui.QMainWindow):
                 # main gridplot loop
                 x_gridlines, y_gridlines = s.plot_props['XY gridlines']
                 grid_pen = s.plot_props['grid color']
-
+                s.curves= {}
                 for elec in s.app_data['displayed channels']:
                     plot = s.plots[elec]
                     plot.clear()
@@ -509,7 +509,6 @@ class Picker(QtGui.QMainWindow):
                         plot.addLine(y=yval, pen=grid_pen)
 
                     # ERP amplitude curves for each case
-                    s.curves= {}
                     for case in cases:
                         s.curves[(elec, case)] = s.plot_curve(s.plots[elec], elec, case)
 
