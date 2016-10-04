@@ -34,7 +34,7 @@ class Picker(QtGui.QMainWindow):
     repick_modes = ('all', 'single')
     peak_choices = ['P1', 'P2', 'P3', 'P4', 'N1', 'N2', 'N3', 'N4']
 
-    plot_props = {'width': 233, 'height': 112,
+    plot_props = {'width': 233, 'height': 102,
                   'extra_bottom_height': 40,  # for bottom row
                   'min_border': 4,
                   'line colors': [  (221, 34, 34), # red
@@ -60,7 +60,7 @@ class Picker(QtGui.QMainWindow):
                                   'pick region': (80, 80, 80, 50),
                                   'background': (0, 0, 0),
                                   'foreground': (135, 135, 135),
-                                  'main position': (50, 50, 1200, 900),
+                                  'main position': (50, 50, 1200, 942),
                                   'zoom position': [300, 200, 780, 650],
                                   }}
 
@@ -165,10 +165,16 @@ class Picker(QtGui.QMainWindow):
 
         s.buttons['Rescale'] = QtGui.QPushButton('Rescale')#, sizeHint=QtCore.QSize(60,25) )
         s.buttons['Rescale'].clicked.connect(s.rescale_yaxis)
-        s.rescaleLayout = QtGui.QHBoxLayout()
-        s.rescaleLayout.addWidget(s.buttons['Rescale'])
-        s.rescaleLayout.setAlignment(Qt.AlignLeft)
-        s.dispNstatus.addLayout(s.rescaleLayout)
+        s.buttons['First31'] = QtGui.QPushButton('1-31')
+        s.buttons['First31'].clicked.connect(s.scroll_to_top)
+        s.buttons['Last31'] = QtGui.QPushButton('32-62')
+        s.buttons['Last31'].clicked.connect(s.scroll_to_bottom)
+        s.viewControlLayout = QtGui.QHBoxLayout()
+        s.viewControlLayout.addWidget(s.buttons['Rescale'])
+        s.viewControlLayout.addWidget(s.buttons['First31'])
+        s.viewControlLayout.addWidget(s.buttons['Last31'])
+        s.viewControlLayout.setAlignment(Qt.AlignLeft)
+        s.dispNstatus.addLayout(s.viewControlLayout)
 
 
         # Picks display
@@ -338,6 +344,14 @@ class Picker(QtGui.QMainWindow):
         s.get_zoompos()
         QtGui.QDialog.closeEvent(s.zoomDialog, event)
         s.zoomDialog._open = False
+
+    def scroll_to_top(s):
+        vert_scroll = s.plotsScroll.verticalScrollBar()
+        vert_scroll.setValue( 1 )
+
+    def scroll_to_bottom(s):
+        vert_scroll = s.plotsScroll.verticalScrollBar()
+        vert_scroll.setValue( vert_scroll.maximum() )
 
     def start_handler(s, signal):
         ''' Start button inside Navigate tab '''
