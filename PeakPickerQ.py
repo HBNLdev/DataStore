@@ -167,7 +167,7 @@ class Picker(QtGui.QMainWindow):
         s.buttons['Rescale'].clicked.connect(s.rescale_yaxis)
         s.buttons['First31'] = QtGui.QPushButton('1-31')
         s.buttons['First31'].clicked.connect(s.scroll_to_top)
-        s.buttons['Last31'] = QtGui.QPushButton('32-62')
+        s.buttons['Last31'] = QtGui.QPushButton('33-61')
         s.buttons['Last31'].clicked.connect(s.scroll_to_bottom)
         s.viewControlLayout = QtGui.QHBoxLayout()
         s.viewControlLayout.addWidget(s.buttons['Rescale'])
@@ -455,9 +455,12 @@ class Picker(QtGui.QMainWindow):
             # connect case toggles
             s.caseToggles = {}
             s.zoomCaseToggles = {}
-            for case in cases:
+            for ci, case in enumerate(cases):
                 s.caseChooser.addItem('  '+case+'  ')
                 case_toggle = QtGui.QCheckBox(case)
+                color_str = 'rgb'+str(s.plot_props['line colors'][ci])
+                style_string = "background:"+color_str+";"
+                case_toggle.setStyleSheet(style_string)
                 case_toggle.setChecked(True)
                 case_toggle.stateChanged.connect(s.toggle_case)
                 s.casesLayout.addWidget(case_toggle)
