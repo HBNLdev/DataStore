@@ -122,15 +122,15 @@ def ordinalize_one(num, size, lims, mid=None):
 
     if mid is not None:
         if num < 0:
-            abs_prop = np.fabs( (num - mid) / vmin )
+            data_prop = np.fabs( (num - mid) / vmin )
         else:
-            abs_prop = np.fabs( (num - mid) / vmax )
+            data_prop = np.fabs( (num - mid) / vmax )
 
     if data_prop_ind < 0:
         data_prop_ind = 0
     elif data_prop_ind > size - 1:
         data_prop_ind = size - 1
-    return data_prop_ind, abs_prop
+    return data_prop_ind, data_prop
 
 def ordinalize_many(data, size=256, lims=[0, 0.25]):
     ''' given data, ordinalize it to a given index size '''

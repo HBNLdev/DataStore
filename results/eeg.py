@@ -420,7 +420,13 @@ class Results:
         s.itc_Z = reverse_dimorder(np.power(itc_rev, 2) * trials_array_rev)
 
     def load_itc_fisher(s):
-        pass
+        ''' calculate and store Fisher-Z-transformed version of ITC data '''
+
+        if 'itc' not in dir(s):
+            print('load ITC first')
+            raise
+
+        s.itc_fisher = np.arctanh(s.itc)
 
     def load_coh(s, baseline=False, bl_window=[-500, -200],
                     avgcond_baseline=False):
@@ -466,6 +472,15 @@ class Results:
         trials_array_rev = reverse_dimorder(trials_array)
 
         s.coh_Z = reverse_dimorder(np.power(coh_rev, 2) * trials_array_rev)
+
+    def load_coh_fisher(s):
+        ''' calculate and store Fisher-Z-transformed version of COH data '''
+
+        if 'coh' not in dir(s):
+            print('load COH first')
+            raise
+
+        s.coh_fisher = np.arctanh(s.coh)
 
     def load_phi(s):
         ''' load phase data, take angle() of '''

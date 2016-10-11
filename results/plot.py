@@ -45,6 +45,10 @@ measure_pps = {'erp':   {'data': 'erp', 'd_dims': 'erp_dims',
                          'd_dimlvls': 'tf_dim_lsts', 'units': 'z_units',
                          'lims': 'z_lims', 'cmap': plt.cm.PuOr,
                          'load': 'load_itc_Z'},
+               'itc_fisher': {'data': 'itc_fisher', 'd_dims': 'tf_dims',
+                         'd_dimlvls': 'tf_dim_lsts', 'units': 'itc_units',
+                         'lims': 'itc_lims', 'cmap': plt.cm.PuOr,
+                         'load': 'load_itc_fisher'},
                'coh':   {'data': 'coh', 'd_dims': 'coh_dims',
                          'd_dimlvls': 'coh_dim_lsts', 'units': 'coh_units',
                          'lims': 'coh_lims', 'cmap': plt.cm.PuOr,
@@ -53,6 +57,10 @@ measure_pps = {'erp':   {'data': 'erp', 'd_dims': 'erp_dims',
                          'd_dimlvls': 'coh_dim_lsts', 'units': 'z_units',
                          'lims': 'z_lims', 'cmap': plt.cm.PuOr,
                          'load': 'load_coh_Z'},
+               'coh_fisher': {'data': 'coh_fisher', 'd_dims': 'coh_dims',
+                         'd_dimlvls': 'coh_dim_lsts', 'units': 'coh_units',
+                         'lims': 'coh_lims', 'cmap': plt.cm.PuOr,
+                         'load': 'load_coh_fisher'},
                'phi':   {'data': 'phi', 'd_dims': 'tf_dims',
                          'd_dimlvls': 'tf_dim_lsts', 'units': 'phi_units',
                          'lims': 'phi_lims', 'cmap': plt.cm.PuOr,
@@ -99,6 +107,21 @@ def get_plotparams(s, measure, lims=None, cmap_override=None):
 
     return units, lims, cmap
 
+def get_timeparams(s, measure):
+    ''' given a measure, return the correct time tick / lims information '''
+
+    if measure == 'erp':
+        ticks = s.time_ticks_pt_erp        
+        zero = s.zero
+        xlims = s.time_plotlims
+    else:
+        ticks = s.time_ticks_pt_tf
+        zero = s.zero_tf
+        xlims = s.time_tf_plotlims
+
+    return ticks, zero, xlims
+
+
 def save_fig(s, savedir, ptype, measure, label, form='svg'):
     ''' name and save the current figure to a target directory
         by default, we use SVG because it typically works the best '''
@@ -123,19 +146,24 @@ def gen_figname(s, ptype, measure, label):
 
 # plot functions that accept an eeg results object
 
-def erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
-           subplot_by={'POP': 'all'},
-           glyph_by={'condition': 'all'},
-           savedir=None):
+def line(s, measure='erp',
+            figure_by={'channel': ['FZ', 'CZ', 'PZ']},
+            subplot_by={'POP': 'all'},
+            glyph_by={'condition': 'all'},
+            plot_error=True,
+            ylim_override=None,
+            savedir=None):
     ''' plot ERPs as lines '''
     ptype = 'line'
-    measure = 'erp'
+    final_dims = ('subject', 'timepoint')
 
-    if 'erp' not in dir(s):
-        s.load_erp()
-    data = s.erp
-    d_dims = s.erp_dims
-    d_dimlvls = s.erp_dim_lsts
+    if measure in ['erp', 'power', 'itc', 'itc_Z', 'coh', 'coh_Z']:
+        data, d_dims, d_dimlvls = get_data(s, measure)
+        units, lims, cmap = get_plotparams(s, measure)
+        xticks, xzero, xlims = get_timeparams(s, measure)
+    else:
+        print('data not recognized')
+        return
 
     f_dim, f_vals, f_lbls = handle_by(s, figure_by, d_dims, d_dimlvls)
     sp_dim, sp_vals, sp_lbls = handle_by(s, subplot_by, d_dims, d_dimlvls)
@@ -162,29 +190,30 @@ def erp(s, figure_by={'channel': ['FZ', 'CZ', 'PZ']},
                 except:
                     line = compound_take(data, dimval_tups)
                     print('compound take')
-                while len(line.shape) > 1:
-                    line = line.mean(axis=0)
-                    err = ss.sem(line, axis=0)
-                    # err = np.std(line, axis=0, ddof=1)
-                    print(line.shape)
+                mean_dims = np.where([d not in final_dims for d in d_dims])[0]
+                line_bysub = line.mean(axis=tuple(mean_dims))
+                line = line_bysub.mean(axis=0)
                 l, = axarr[spi].plot(np.arange(len(line)), line,
                                 label=g_lbls[gi])
-                axarr[spi].fill_between(np.arange(len(line)),
-                                line - err, line + err,
-                                alpha=0.5, linewidth=0,
-                                facecolor=l.get_color())
+                if plot_error:
+                    err = ss.sem(line_bysub, axis=0)
+                    axarr[spi].fill_between(np.arange(len(line)),
+                                    line - err, line + err,
+                                    alpha=0.5, linewidth=0,
+                                    facecolor=l.get_color())
             axarr[spi].grid(True)
             axarr[spi].set_title(sp_lbls[spi], fontweight=stitlefont_wt)
-            axarr[spi].legend(loc='upper left')
-            axarr[spi].set_xticks(s.time_ticks_pt_erp)
+            axarr[spi].legend(loc='upper right')
+            axarr[spi].set_xticks(xticks)
             axarr[spi].set_xticklabels(s.time_ticks_ms)
             axarr[spi].set_xlabel('Time (s)', fontweight=stitlefont_wt)
             if spi % sp_dims[1] == 0:
-                axarr[spi].set_ylabel('Potential (' + s.pot_units + ')',
-                                                fontweight=stitlefont_wt)
+                axarr[spi].set_ylabel(units, fontweight=stitlefont_wt)
             axarr[spi].axhline(0, color='k', linestyle='--')
-            axarr[spi].axvline(s.zero, color='k', linestyle='--')
-            axarr[spi].set_xlim(s.time_plotlims)
+            axarr[spi].axvline(xzero, color='k', linestyle='--')
+            axarr[spi].set_xlim(xlims)
+            if ylim_override:
+                axarr[spi].set_xlim(ylim_override)
         if savedir:
             save_fig(s, savedir, ptype, measure, f_lbls[fi])
 
@@ -268,7 +297,8 @@ def tf(s, measure='power',
             ''' labels and title '''
             axarr[spi].set_xlabel('Time (s)', fontweight=stitlefont_wt)
             if spi % sp_dims[1] == 0:
-                axarr[spi].set_ylabel('Frequency (Hz)', fontweight=stitlefont_wt)
+                axarr[spi].set_ylabel('Frequency (Hz)',
+                    fontweight=stitlefont_wt)
             axarr[spi].set_title(sp_lbls[spi], fontweight=stitlefont_wt)
 
         norm = None
@@ -606,7 +636,7 @@ def connectivity_circle(s, measure='coh',
 
 def bar(s, measure, figure_by=None, subplot_by=None, set_by=None,
                     member_by=None, figsize_override=None,
-                    lbl_override=None):
+                    lbl_override=None, savedir=None):
     ptype = 'bar'
     alpha = 0.4
     error_config = {'ecolor': '0.3'}
@@ -681,5 +711,87 @@ def bar(s, measure, figure_by=None, subplot_by=None, set_by=None,
                 axarr[spi].set_ylabel(units, fontweight=stitlefont_wt)
             if spi % sp_dims[1] == len(sp_vals) - 1:
                 axarr[spi].legend(r_lst, ld['m_lbls'])
-            
 
+        if savedir:
+            save_fig(s, savedir, ptype, measure, f_lbls[fi])
+
+
+def boxplot(s, measure, figure_by=None, subplot_by=None, set_by=None,
+                    member_by=None, figsize_override=None,
+                    lbl_override=None, savedir=None):
+    ptype = 'boxplot'
+
+    if measure not in dir(s):
+        print('measure not found')
+        return
+    else:
+        data, d_dims, d_dimlvls = get_data(s, measure)
+        units, lims, cmap = get_plotparams(s, measure)
+
+    f_dim, f_vals, f_lbls = handle_by(s, figure_by, d_dims, d_dimlvls)
+    sp_dim, sp_vals, sp_lbls = handle_by(s, subplot_by, d_dims, d_dimlvls)
+    s_dim, s_vals, s_lbls = handle_by(s, set_by, d_dims, d_dimlvls)
+    m_dim, m_vals, m_lbls = handle_by(s, member_by, d_dims, d_dimlvls)
+
+    ld = {'f_lbls': f_lbls, 'sp_lbls': sp_lbls, 's_lbls': s_lbls,
+            'm_lbls': m_lbls}
+    if lbl_override:
+        for var_name, new_vals in lbl_override.items():
+            if var_name in ld:
+                ld[var_name] = new_vals
+            else:
+                print('label not found')
+                return
+
+    n_sets = len(s_vals)
+    swid = len(m_vals)
+    width = 0.3 / swid
+
+    sp_dims = subplot_heuristic(len(sp_vals))
+    if figsize_override:
+        figsize = figsize_override
+    else:
+        figsize = figsize_heuristic(sp_dims)
+        
+    for fi, fval in enumerate(f_vals):
+        f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
+                                sharex=True, sharey=True, figsize=figsize)
+        f.suptitle(ld['f_lbls'][fi], fontsize=titlefont_sz,
+                                    fontweight=titlefont_wt)
+        try:
+            axarr = axarr.ravel()
+        except:
+            axarr = [axarr]
+        for spi, spval in enumerate(sp_vals):
+            points_lst = []
+            pos_lst = []
+            wid_lst = []
+            for si, sval in enumerate(s_vals):
+                for mi, mval in enumerate(m_vals):
+                    vals = [fval, spval, sval, mval]
+                    dims = [f_dim[fi], sp_dim[spi], s_dim[si], m_dim[mi]]
+                    dimval_tups = [(d,v) for d,v in zip(dims, vals)]
+                    try:
+                        points = basic_slice(data, dimval_tups)
+                        print('slice')
+                    except:
+                        points = compound_take(data, dimval_tups)
+                        print('compound take')
+                    points_lst.append(points)
+                    xpos = si + (mi*width)
+                    pos_lst.append(xpos)
+                    wid_lst.append(width)
+            r = axarr[spi].boxplot(points_lst,
+                                positions=pos_lst, widths=wid_lst)
+            axarr[spi].set_title(ld['sp_lbls'][spi], fontweight=stitlefont_wt)
+            # axarr[spi].legend(loc='upper left')
+            axarr[spi].set_xticks(np.arange(n_sets) + width)
+            axarr[spi].set_xticklabels(ld['s_lbls'])
+            axarr[spi].set_xlabel(d_dims[s_dim[si]], fontweight=stitlefont_wt)
+            if spi % sp_dims[1] == 0:
+                axarr[spi].set_ylabel(units, fontweight=stitlefont_wt)
+            if spi % sp_dims[1] == len(sp_vals) - 1:
+                axarr[spi].legend(r, ld['m_lbls'])
+                
+        if savedir:
+            save_fig(s, savedir, ptype, measure, f_lbls[fi])
