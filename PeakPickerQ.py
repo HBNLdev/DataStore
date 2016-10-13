@@ -577,7 +577,7 @@ class Picker(QtGui.QMainWindow):
             for elec in s.pick_electrodes:
                 for cs_pk in s.eeg.case_peaks:
                     # print(elec,cs_pk,  s.eeg.get_peak_data( elec, cs_pk[0], cs_pk[1] ) )
-                    s.peak_data[(elec, cs_pk[0], cs_pk[1])] = \
+                    s.peak_data[(elec, s.eeg.case_letter_from_number(cs_pk[0]), cs_pk[1])] = \
                         tuple([float(v) for v in s.eeg.get_peak_data(elec, cs_pk[0], cs_pk[1])])
             print('picks', s.app_data['picks'])
             s.show_peaks()
@@ -1033,7 +1033,7 @@ class Picker(QtGui.QMainWindow):
 
         if cases == 'all':
             cases = s.app_data['current cases']
-
+            
         for el_cs_pk, amp_lat in s.peak_data.items():
             if el_cs_pk[1] in cases:
                 if el_cs_pk in s.peak_markers:
@@ -1056,7 +1056,7 @@ class Picker(QtGui.QMainWindow):
                         s.peak_markers[ zkey ] = zoom_marker
 
                 c_ind = s.app_data['current cases'].index(el_cs_pk[1])
-                if s.peak_edges[el_cs_pk]:
+                if el_cs_pk in s.peak_edges and s.peak_edges[el_cs_pk]:
                     sym = 'x'
                     sz = 12
                 else:

@@ -274,6 +274,9 @@ class avgh1:
 
         return peak_val, peak_ms
 
+    def case_letter_from_number(s,number):
+        return s.cases[int(number)]['case_type']
+
     def get_yscale(s, potentials=None, channels=None):
         if potentials is None:
             dummy, potentials = s.prepare_plot_data()
