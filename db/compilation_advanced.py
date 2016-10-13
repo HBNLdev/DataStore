@@ -171,8 +171,8 @@ def fill_join(comp_df, session_frame, collection, subcoll):
                                                                 joined_cols)
     postfill_cvg = comp_dfj_out[joined_cols].count() / comp_dfj_out.shape[0]
     fill_factor = postfill_cvg / prefill_cvg
-    print('coverage after filling is {:.1f} to {:.1f} times higher'.\
-                    format(fill_factor.min(), fill_factor.max()))
+    print('coverage after filling is up to {:.1f} times higher'.format(
+                                                            fill_factor.max()))
 
     comp_dfj_out[joined_cols].dropna(axis=0, how='all')
     return comp_dfj_out

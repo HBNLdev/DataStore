@@ -293,7 +293,7 @@ def match_fups2sessions(qname, knowledge_dict, path, q_collection):
     # determine matching session letters (across followups)
     if type(i['date_lbl']) == list:
         i['date_lbl'] = '-'.join(i['date_lbl'])
-    session_datecols = [letter + '-date' for letter in 'abcdefg']
+    session_datecols = [letter + '-date' for letter in 'abcdefgh']
     s = Mdb['subjects']
     q = Mdb[q_collection]
     qc = q.find({'questname': qname})

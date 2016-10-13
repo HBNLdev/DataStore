@@ -87,16 +87,6 @@ def calc_nearestsession(row):
     except:
         return np.nan
 
-def determine_session(row, df, datediff_col, target_col):
-    ''' given a row, dataframe, a date difference column, and a target column,
-        determine the nearest session '''
-    ID, session = row.name
-    ID_df = df.loc[ID].reset_index()
-    row_ind = ID_df[datediff_col].argmin()
-    correct_fup = ID_df.loc[row_ind, target_col]
-    return correct_fup
-
-
 # the following functions operate on a subject/session-collection-based
 # dataframe that is indexed by ID and session
 

@@ -88,6 +88,7 @@ def sessions():
         if sessionDF.empty:
             continue
         else:
+            print(char)
             sessionDF.loc[:, 'session'] = char
             sessionDF.loc[:, 'followup'] = \
                 sessionDF.apply(calc_followupcol, axis=1)
