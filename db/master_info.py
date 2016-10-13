@@ -2,7 +2,6 @@
 '''
 
 master_path = '/processed_data/master-file/EEG-master-file-20.csv'
-master = None
 
 import os
 from datetime import datetime
@@ -68,7 +67,9 @@ def site_fromIDstr(IDstr):
 
 
 def load_master(preloaded=None, force_reload=False, custom_path=None):
-    global master
+    
+    master = None
+
     if type(preloaded) == pd.core.frame.DataFrame and not custom_path:
         master = preloaded
         return
@@ -102,7 +103,7 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
     master_mtime = datetime.fromtimestamp(
         os.path.getmtime(master_path_use))	
 
-    return master_mtime
+    return master, master_mtime
 
 
 def masterYOB():

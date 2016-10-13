@@ -4,14 +4,14 @@ from datetime import timedelta
 
 import pandas as pd
 
-from .master_info import load_master, master, master_path
+from .master_info import load_master, master_path
 from .file_handling import identify_files, mt_file
 from .organization import Mdb, Subject, SourceInfo, Session, ERPPeak
 
 
 def subjects():
 
-    mi_mtime = load_master()
+    master, mi_mtime = load_master()
     source_rec = Mdb['subjects'].find({'_source': {'$exists': True}})
 
     # compare source file names and date modified
@@ -42,7 +42,7 @@ def subjects():
 
 def sessions():
 
-    mi_mtime = load_master()
+    master, mi_mtime = load_master()
     source_rec = Mdb['sessions'].find({'_source': {'$exists': True}})
 
     if master_path == source_rec[0]['_source'][0] and \

@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from .master_info import load_master, master, master_path
+from .master_info import load_master, master_path
 from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123,
     import_questfolder, import_questfolder_ssaga,
     match_fups2sessions, df_fromcsv)
@@ -72,7 +72,7 @@ def get_dates(files):
 
 def subjects():
     # fast
-    master_mtime = load_master()
+    master, master_mtime = load_master()
     for rec in tqdm(master.to_dict(orient='records')):
         so = Subject(rec)
         so.storeNaTsafe()
@@ -82,7 +82,7 @@ def subjects():
 
 def sessions():
     # fast
-    master_mtime = load_master()
+    master, master_mtime = load_master()
     for char in 'abcdefghijk':
         sessionDF = master[master[char + '-run'].notnull()]
         if sessionDF.empty:
