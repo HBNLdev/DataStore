@@ -125,19 +125,29 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols):
 # main function (for now)
 
 
-def fill_join(comp_df, session_frame, collection, subcoll):
-    ''' join a collection / subcollection while handling duplicates,
-        situations where multiple follow-ups assigned to the same session,
-        and fill info from followups to the nearest session in time '''
+def careful_join(comp_df, collection, subcoll, do_fill=False,
+                 session_datecol_in='date'):
+    ''' given a compilation dataframe indexed by ID/session (comp_df)
+        with a session date column named by session_datecol_in,
+        join a collection / subcollection while handling:
+        1.) duplicate ID-followup combinations,
+        2.) multiple follow-ups assigned to the same session.
+        if desired, fill info from followups to nearest session in time '''
+
+    # handle the dx subcolls
+    if 'dx_' in subcoll:
+        subcoll_safe = subcoll[3:]
+    else:
+        subcoll_safe = subcoll
 
     # parse the target name to get knowledge about it
-    i = get_kdict(collection, subcoll)
+    i = get_kdict(collection, subcoll_safe)
     if isinstance(i['date_lbl'], list):
-        old_datecol = subcoll[:3] + '_' + '-'.join(i['date_lbl'])
+        old_datecol = subcoll_safe[:3] + '_' + '-'.join(i['date_lbl'])
     else:
-        old_datecol = subcoll[:3] + '_' + i['date_lbl']
-    new_datecol = subcoll[:3] + '_date'
-    fup_col = subcoll[:3] + '_followup'
+        old_datecol = subcoll_safe[:3] + '_' + i['date_lbl']
+    new_datecol = subcoll_safe[:3] + '_date'
+    fup_col = subcoll_safe[:3] + '_followup'
 
     # prepare data to join, rename the date column, and
     # drop rows which have the same ID and followup number
@@ -150,9 +160,9 @@ def fill_join(comp_df, session_frame, collection, subcoll):
     join_df.sort_index(inplace=True)
 
     # join in session date info from a sessions-collection-based df
-    join_df_sdate = join_df.join(session_frame['date'])
+    join_df_sdate = join_df.join(comp_df[session_datecol_in])
     session_datecol = 'session_date'
-    join_df_sdate.rename(columns={'date': session_datecol,
+    join_df_sdate.rename(columns={session_datecol_in: session_datecol,
                                   old_datecol: new_datecol}, inplace=True)
 
     # handle follow-ups which were assigned to the same session letter
@@ -165,14 +175,17 @@ def fill_join(comp_df, session_frame, collection, subcoll):
 
     # fill sessions in a "nearest in time" manner within IDs
     # assess info coverage before and after
-    joined_cols = [col for col in comp_dfj.columns if subcoll[:3] + '_' in col]
-    prefill_cvg = comp_dfj[joined_cols].count() / comp_dfj.shape[0]
-    comp_dfj_out = time_proximal_fill_fast(comp_dfj, new_datecol, fup_col,
-                                                                joined_cols)
-    postfill_cvg = comp_dfj_out[joined_cols].count() / comp_dfj_out.shape[0]
-    fill_factor = postfill_cvg / prefill_cvg
-    print('coverage after filling is up to {:.1f} times higher'.format(
-                                                            fill_factor.max()))
+    joined_cols = [col for col in comp_dfj.columns if subcoll_safe[:3] + '_' in col]
+    if do_fill:
+        prefill_cvg = comp_dfj[joined_cols].count() / comp_dfj.shape[0]
+        comp_dfj_out = time_proximal_fill_fast(comp_dfj, new_datecol, fup_col,
+                                                                    joined_cols)
+        postfill_cvg = comp_dfj_out[joined_cols].count() / comp_dfj_out.shape[0]
+        fill_factor = postfill_cvg / prefill_cvg
+        print('coverage after filling is up to {:.1f} times higher'.format(
+                                                                fill_factor.max()))
+    else:
+        comp_dfj_out = comp_dfj
 
     comp_dfj_out[joined_cols].dropna(axis=0, how='all')
     return comp_dfj_out

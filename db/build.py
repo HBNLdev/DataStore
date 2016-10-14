@@ -147,9 +147,19 @@ def questionnaires_ph4():
     kmap = map_ph4
     path = '/processed_data/zork/zork-phase4-69/session/'
     for qname in kmap.keys():
-        print(qname)
-        import_questfolder(qname, kmap, path)
-        match_fups2sessions(qname, kmap, path, Questionnaire.collection)
+            print(qname)
+            import_questfolder(qname, kmap, path)
+            match_fups2sessions(qname, kmap, path, Questionnaire.collection)
+
+def questionnaires_ssaga():
+    ''' import all session-based questionnaire info related to SSAGA '''
+    # SSAGA
+    kmap = map_ph4_ssaga
+    path = '/processed_data/zork/zork-phase4-69/session/'
+    for qname in kmap.keys():
+            print(qname)
+            import_questfolder_ssaga(qname, kmap, path)
+            match_fups2sessions(qname, kmap, path, SSAGA.collection)
 
 def core():
     # fast
@@ -312,18 +322,6 @@ def eeg_behavior(files_dms=None):
     sourceO.store()
 
 # not recommended / graveyard below
-
-def questionnaires_ssaga():
-    ''' import all session-based questionnaire info related to SSAGA
-        i recommend not using this unless absolutely necessary because
-        most of this info is in the core phenotype file '''
-    # SSAGA
-    path = '/processed_data/zork/zork-phase4-69/session/'
-    kmap = map_ph4_ssaga
-    for qname in kmap.keys():
-        print(qname)
-        import_questfolder_ssaga(qname, kmap, path)
-        match_fups2sessions(qname, kmap, path, SSAGA.collection)
 
 def questionnaires_ph123():
     ''' import all session-based questionnaire info from phase 4

@@ -225,6 +225,8 @@ def prepare_joindata(keyDF, coll, subcoll=None, add_query={}, add_proj={},
     if not prefix and prefix != '':
         if subcoll is not None:
             prefix = subcoll[:3] + '_'
+            if prefix == 'dx__': # catch the dx subcollections
+                prefix = subcoll[3:6] + '_'
         else:
             prefix = coll[:3] + '_'
 

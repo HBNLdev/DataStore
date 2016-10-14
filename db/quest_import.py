@@ -1,5 +1,4 @@
-# formalize process by which a questionnaire gets added to a collection
-# and all things that happen to it after that
+''' tools for adding questionnaire data to mongo '''
 
 import os
 from datetime import datetime, timedelta
@@ -40,24 +39,21 @@ map_ph4 = {'achenbach':   {'file_pfixes': ['asr4', 'ysr4'],
              'dependence':  {'file_pfixes': ['dpndnce4']},
              'neo':         {'file_pfixes': ['neo4']},
              'sensation':   {'file_pfixes': ['sssc4', 'ssv4']},
-             'sre':         {'file_pfixes': ['sre_score4']},
-             }
+             'sre':         {'file_pfixes': ['sre_score4']}
+           }
 
 # for ssaga questionnaires, the multiple file_fpixes are perfectly overlapping,
 # so we end up joining them
 map_ph4_ssaga = {
              'cssaga':      {'file_pfixes': ['cssaga4', 'dx_cssaga4'],
                              'date_lbl': 'IntvDate',
-                             'id_lbl': 'IND_ID',
-                             'join_fupfiles': True},
+                             'id_lbl': 'IND_ID'},
              'pssaga':      {'file_pfixes': ['pssaga4', 'dx_pssaga4'],
                              'date_lbl': 'IntvDate',
-                             'id_lbl': 'ind_id',
-                             'join_fupfiles': True},
+                             'id_lbl': 'ind_id'},
              'ssaga':       {'file_pfixes': ['ssaga4', 'dx_ssaga4'],
                              'date_lbl': 'IntvDate',
-                             'id_lbl': 'IND_ID',
-                             'join_fupfiles': True},
+                             'id_lbl': 'IND_ID'},
              }
 
 map_ph123 = {'aeq':         {'file_pfixes': ['aeq', 'aeqa', 'aeq3', 'aeqa3'],
@@ -98,7 +94,7 @@ def quest_pathfollowup(path, file_pfixes, file_ext, max_fups):
 
     return fn_dict
 
-def quest_pathfollowup_join(path, file_pfixes, file_ext, max_fups):
+def quest_pathfollowup_ssaga(path, file_pfixes, file_ext, max_fups):
     ''' build dict of followups to filepaths '''
 
     fn_dict = defaultdict(list)
@@ -170,8 +166,13 @@ def import_questfolder(qname, kmap, path):
     i['path'] = path
     print(i)
 
+    if 'dx_' in qname:
+        subfolder = qname[3:]
+    else:
+        subfolder = qname
+
     # get dict of filepaths and followup numbers
-    file_dict = quest_pathfollowup(i['path'] + qname + '/',
+    file_dict = quest_pathfollowup(i['path'] + subfolder + '/',
                                 i['file_pfixes'], i['file_ext'], i['max_fups'])
     print(file_dict)
     if not file_dict:
@@ -226,8 +227,8 @@ def import_questfolder_ssaga(qname, kmap, path):
     print(i)
 
     # get dict of filepaths and followup numbers
-    file_dict = quest_pathfollowup_join(i['path'] + qname + '/',
-                                i['file_pfixes'],i['file_ext'], i['max_fups'])
+    file_dict = quest_pathfollowup_ssaga(i['path'] + qname + '/',
+                                         i['file_pfixes'], i['file_ext'], i['max_fups'])
     print(file_dict)
     if not file_dict:
         print('There were no files in the path specified.')
@@ -237,6 +238,7 @@ def import_questfolder_ssaga(qname, kmap, path):
         join_df = pd.DataFrame()
         
         for f in files:
+            fname = os.path.split(f)[1]
             print(f)
             # read csv in as dataframe
             df = df_fromcsv(os.path.join(i['path'], f),
@@ -263,21 +265,39 @@ def import_questfolder_ssaga(qname, kmap, path):
                     # print('date format failed for', c)
                     # if c == 'IntvDate':
                         # raise
-            
-            df.set_index('ID', inplace=True)
+
+            # df.set_index('ID', inplace=True)
             df.drop(i['id_lbl'], axis=1, inplace=True)
+
+            if fname[:3] == 'dx_':
+                dx_cols = df.columns
+            else:
+                nondx_cols = df.columns
                 
             if join_df.empty:
                 join_df = df
             else:
                 join_df = join_df.join(df, rsuffix='extra')
-        
+
+        # tmp_qname = qname
+        # if qname in ['ssaga', 'cssaga', 'pssaga']:
+        #     filename = os.path.split(tmp_path)[1]
+        #     if filename[:2] == 'dx':
+        #         tmp_qname = 'dx_' + qname
+
         join_df.reset_index(inplace=True)
         print(join_df.shape)
-        # convert to records and store in mongo coll, noting followup_num
-        for drec in join_df.to_dict(orient='records'):
+        # convert to records and store in mongo coll, noting followup_num,
+        # and separately for the full questionnaire and diagnoses
+
+        for drec in join_df[list(nondx_cols) + ['ID']].to_dict(orient='records'):
             ro = SSAGA(qname, followup_num, info=drec)
             ro.storeNaTsafe()
+
+        for drec in join_df[list(dx_cols) + ['ID', i['date_lbl']]].to_dict(orient='records'):
+            ro = SSAGA('dx_' + qname, followup_num, info=drec)
+            ro.storeNaTsafe()
+
         datemod = datetime.fromtimestamp(os.path.getmtime(i['path']))
         sourceO = SourceInfo('ssaga', (i['path'], datemod), qname)
         sourceO.store()
@@ -296,7 +316,10 @@ def match_fups2sessions(qname, knowledge_dict, path, q_collection):
     session_datecols = [letter + '-date' for letter in 'abcdefgh']
     s = Mdb['subjects']
     q = Mdb[q_collection]
-    qc = q.find({'questname': qname})
+    if 'ssaga' in qname:
+        qc = q.find({'questname': {'$in': [qname, 'dx_'+qname]}})
+    else:
+        qc = q.find({'questname': qname})
     print('matching fups to sessions')
     for qrec in tqdm(qc):
         testdate = qrec[i['date_lbl']]
