@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 # change this output folder to what you want
-folder = '/export/home/mike/pyfigs/chanlogos/'
+folder = '/active_projects/mort/peak_picker/chanlogos/'
 
 layout = [[None, 'FP1', 'Y', 'FP2', 'X'],
           ['F7', 'AF1', None, 'AF2', 'F8'],
@@ -38,6 +38,7 @@ def make_logo(txt, folder):
     f = plt.figure(figsize=(width, height))
     ax = f.add_axes([0, 0, 1, 1])
     ax.set_axis_bgcolor('black')
+    #ax.set_axis_off()
     ax.text(0.5, 0.5, txt,
            color='white',
            family='monospace',
@@ -58,4 +59,4 @@ def make_smaller(file, size):
 def __main__():    
     for chan in chans:
         make_logo(chan, folder)
-        make_smaller(folder+chan+'.png', (32, 32))
+        make_smaller(folder+chan+'.png', (20, 20))
