@@ -203,6 +203,23 @@ def parse_mt_name(file_or_path):
     
     return parts
 
+
+def parse_STinv_path(path):
+    path, fn = os.path.split(path)
+
+    info = {}
+
+    path_parts = path.split(os.path.sep)
+    info['prc_ver'] = path_parts[2][-2]
+    info['param_string'] = path_parts[-2]
+
+    base_ext = fn.split('.')
+    fn_parts = parse_filename(base_ext[0])
+    fn_parts['case'] = base_ext[2]
+    info.update(fn_parts)
+
+    return info
+
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
     file_list = []
     date_list = []

@@ -17,7 +17,7 @@ from .organization import (Subject, SourceInfo, Session, ERPPeak, Neuropsych,
     Questionnaire, Core, Internalizing, Externalizing, FHAM, EEGData, ERPData,
     STransformInverseMats, EEGBehavior, SSAGA, Mdb, EROcsv, EROcsvresults)
 from .file_handling import (identify_files, mt_file, neuropsych_xml,
-    cnth1_file, avgh1_file, parse_mt_name, tolt_summary_file,
+    cnth1_file, avgh1_file, parse_STinv_path, tolt_summary_file,
     cbst_summary_file, ERO_csv)
 
 # utility functions
@@ -258,7 +258,7 @@ def mat_st_inv_toc():
     mat_files = verify_files(files)
     # dates = get_dates(files)
     for f in tqdm(mat_files):
-        infoD = parse_mt_name(f)
+        infoD = parse_STinv_path(f)
         infoD['path'] = f
         infoD['prc_ver'] = f.split(os.path.sep)[2][-2]
         matO = STransformInverseMats(infoD)
@@ -277,9 +277,8 @@ def mat_st_inv_walk(check_update=False, mat_files=None):
             mat_files.extend(f_mats)
             dates.extend(f_dates)
     for f in tqdm(mat_files):
-        infoD = parse_mt_name(f)
+        infoD = parse_STinv_path(f)
         infoD['path'] = f
-        infoD['prc_ver'] = f.split(os.path.sep)[2][-2]
         matO = STransformInverseMats(infoD)
 
         store = False

@@ -38,6 +38,9 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                                 {'$in': ['a', 'b', 'c', 'd']}},
                     'p-subjects': {'POP': 'P'},
                     'smokeScreen': {'SmS': {'$ne': np.nan}},
+                    'bigsmokeScreen': {'$or': [{'SmS': {'$ne': np.nan}},
+                                               {'AAfamGWAS': 'x'},
+                                               {'EAfamGWAS': 'x'}]},
                     'wave12': {'Wave12': 'x'},
                     }
 
