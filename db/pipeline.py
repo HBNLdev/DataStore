@@ -7,12 +7,6 @@ import time
 import subprocess
 from collections import defaultdict
 
-from tqdm import tqdm
-
-from .organization import Mdb
-from .compilation import get_subjectdocs
-
-
 # processing parameters cheatsheet
 
 # v4.0_center9  = prc_ver='4', e4-n10-s9-t100-v800
@@ -53,7 +47,6 @@ from .compilation import get_subjectdocs
 # can ignore
 # --
 # o is output text, can ignore
-# p is power_out_type, should always be 1 (linear power)
 # x and y are time window lims, can ignore
 
 # fixed but cannot ignore
@@ -61,8 +54,9 @@ from .compilation import get_subjectdocs
 # d is power type, should iterate over 1 and 2 for total/evoked
 # q is add_baseline, should always be 0
 # v is frequencies to iterate, should always be 5 (do 1 frequency)
+# p is power_out_type, should always be 1 (linear power)
 
-# variable?
+# variable
 # --
 # e is electrode list:
 #   in v6-all, it's always 1
@@ -80,9 +74,9 @@ default_params = {'-p': '1',
 
 ### Info ###
 
-version_info = {'4': {'ruby script': '/active_projects/mort/ERO_scripts/extract_st_bands_v4.0_custom.rb',
+version_info = {'4': {'ruby script': '/active_projects/ERO_scripts/extract_st_bands_v4.0_custom.rb',
                       'storage path': '/processed_data/ero-mats-V4/'},
-                '6': {'ruby script': '/active_projects/mort/ERO_scripts/extract_st_bands_v6.0_custom.rb',
+                '6': {'ruby script': '/active_projects/ERO_scripts/extract_st_bands_v6.0_custom.rb',
                       'storage path': '/processed_data/ero-mats-V6/'},
                 }
 
@@ -108,10 +102,12 @@ extract_st_bands_params = {
                           'custom':'freq_file'} },
         'x': {'name': 'min_win_time_ms','options': { 'int':'300 default'} },
         'y': {'name': 'max_win_time_ms','options': { 'int':'500 default'} }
-
         }
 
-
+# maps expected number of chans to the calculated number
+chan_mapping = {'21': '20',
+                '32': '32',
+                '64': '62'}
 
 ### Utilities ###
 
@@ -122,9 +118,9 @@ def txt2list(path):
     return lst
 
 
-def make_STlistfile(exp_case, file_list, limit=None):
-    ''' given an experiment-case name, a list of st-inverse-mat files,
-        and a file limit, create a text file with those st-inverse-mats,
+def make_STlistfile(ver_ps_exp_case_nchans, file_list, limit=None):
+    ''' given a batch-identifying 5-tuple, a list of st-inverse-mat files,
+        and a file limit: create a text file with those st-inverse-mats,
         and return its path '''
 
     if limit is None:
@@ -133,9 +129,11 @@ def make_STlistfile(exp_case, file_list, limit=None):
     else:
         lim_flag = '_L' + str(limit)
 
+    batch_id = '-'.join([p for p in ver_ps_exp_case_nchans])
+
     tstamp = str(int(time.time() * 1000))
     list_path = '/processed_data/EROprc_lists/' + \
-                exp_case + '_mats-' + tstamp + lim_flag + '.lst'
+                batch_id + '_mats-' + tstamp + lim_flag + '.lst'
     with open(list_path, 'w') as list_file:
             list_file.writelines([L + '\n' for L in file_list[:limit]])
 
@@ -145,7 +143,14 @@ def hasbeen_calculated(d):
     ''' given a doc containing info about an STinverseMat, determine if its already been calculated '''
 
     parent_dir = version_info[d['prc_ver']]['storage path']
-    path_start = os.path.join(parent_dir, d['param_string'], d['n_chans'], d['experiment'])
+
+    # handle the expected number of channels
+    if '-s9-' in d['param_string']:
+        n_chans = '20'
+    else:
+        n_chans = chan_mapping[d['n_chans']]
+
+    path_start = os.path.join(parent_dir, d['param_string'], n_chans, d['experiment'])
     fname_start = '_'.join( [ d['id'], d['session'], d['experiment'], d['case'] ] )
     target_paths = (os.path.join(path_start, fname_start + '_tot.mat'),
                     os.path.join(path_start, fname_start + '_evo.mat'))
@@ -155,8 +160,8 @@ def hasbeen_calculated(d):
         return False
 
 def organize_docs(docs):
-    ''' given a mongo cursor of STinverseMats docs, organize them into a dictionary whose keys are 4-tuples of
-        (processing version, parameter string, experiment, case) combinations and whose values are lists
+    ''' given a mongo cursor of STinverseMats docs, organize them into a dictionary whose keys are 5-tuples of
+        (processing version, parameter string, experiment, case, n_chans) combinations and whose values are lists
         of file paths in that category '''
     batch_dict = defaultdict(list)
     for d in docs:
@@ -164,7 +169,8 @@ def organize_docs(docs):
             batch_dict[(d['prc_ver'],
                         d['param_string'],
                         d['experiment'],
-                        d['case'])].append(d['path'])
+                        d['case'],
+                        d['n_chans'])].append(d['path'])
     return batch_dict
 
 def add_stringparams(params, param_str):
@@ -178,13 +184,18 @@ def add_stringparams(params, param_str):
 
 ### Main functions ###
 
-def create_3dmats(docs, run_now=False, file_lim=None, proc_lim=10):
+def create_3dmats(docs, file_lim=None, run_now=False, proc_lim=10):
+    ''' given a pymongo cursor of STinverseMat docs, create lists of at most <file_lim> files, organized by
+        (ERO version, parameter string, experiment, case, number of chans) tuples. then construct the command-line
+        calls to execute those calculations. if run_now is True, administer those calls into a process pool with
+        at most proc_lim processes running simultaneously. returns a list of the command-line calls when done '''
 
     processes = set()
+    call_lst = []
 
     batch_dict = organize_docs(docs)
 
-    for ver_ps_exp_case, STmat_lst in batch_dict.items():
+    for ver_ps_exp_case_nchans, STmat_lst in batch_dict.items():
         if file_lim is None:
             file_lim = len(STmat_lst)
             lim_flag = ''
@@ -194,15 +205,14 @@ def create_3dmats(docs, run_now=False, file_lim=None, proc_lim=10):
         if not STmat_lst:  # if empty, continue to next
             continue
 
-        version, param_str, exp, case = ver_ps_exp_case
+        version, param_str, exp, case, n_chans = ver_ps_exp_case_nchans
 
         ruby_file = version_info[version]['ruby script']
 
         params = default_params.copy()
         params = add_stringparams(params, param_str)  # adds -e param (center 9 or not)
 
-        ec_st = exp + '-' + case
-        list_file_path = make_STlistfile(ec_st, STmat_lst, file_lim)
+        list_file_path = make_STlistfile(ver_ps_exp_case_nchans, STmat_lst, file_lim)
         params['-f'] = list_file_path  # adds -f param (file list)
 
         for pwr_type in ['1', '2']:  # total, evoked
@@ -212,83 +222,41 @@ def create_3dmats(docs, run_now=False, file_lim=None, proc_lim=10):
             paramL = [flag + ' ' + val for flag, val in params.items()]
             paramS = ' '.join(paramL)
             call = [ruby_file, paramS]
-            print(' '.join(call))
+            call_string = ' '.join(call)
+            print(call_string)
 
             # queue the process
+            call_lst.append(call_string)
             if run_now:
-                processes.add(subprocess.Popen(' '.join(call), shell=True))
+                processes.add(subprocess.Popen(call_string, shell=True))
+                time.sleep(2)
                 if len(processes) >= proc_lim:
                     os.wait()
                     processes.difference_update(
                         [p for p in processes if p.poll() is not None])
+                
+    return call_lst
 
 
-def process_ero_mats_all_params( STinvList, params_by_exp_case, run_now=False,
-                         file_lim=None, proc_lim=10, version='6' ):
-    ''' convert a list of STinverseMat documents to ero mats, using lists of 
-        parameters for each based on the experiment and case
-    '''
-    processes = set()
+def run_calls(call_lst, proc_lim=10):
+    ''' given a list of complete command-line call strings, administer them into a pool of processes.
+        use when a list of calls is accessible but the mongo db is not (e.g. on mp3 or mp6). '''
     
-    file_lists_by_exp_case = assemble_file_lists('',STinvList)
+    processes = set()
 
-    for exp_case, mat_files in tqdm(file_lists_by_exp_case.items()):
-        if file_lim is None:
-            file_lim = len(mat_files)
-            lim_flag = ''
-        else:
-            lim_flag = '_L' + str(file_lim)
+    for call_ind, call_string in enumerate(call_lst):
 
-        ec_st = exp_case[0] + '-' + exp_case[1]
-        # doesn't need to be a loop like this
-        for param_set in params_by_exp_case[ exp_case ]: # but would have to assemble params elsehow
+        processes.add(subprocess.Popen(call_string, shell=True))
+        print(call_ind)
+        print(call_string)
 
-            for pwr_type in ['1','2']: #total, evoked
+        time.sleep(2)
 
-                params = [ (p[0],p[1]) for p in list(param_set)] # should be dict?
+        if len(processes) >= proc_lim:
+            os.wait()
+            processes.difference_update(
+                [p for p in processes if p.poll() is not None])
 
-                params.append( ('-d',pwr_type) )
-
-                list_file_path = make_STlistfile(ec_st, mat_files, file_lim)
-                params.append( ('-f', list_file_path) )
-
-                paramL = [flag + ' ' + val for flag, val in params]
-                paramS = ' '.join(paramL)
-                call = [rubyscripts_byversion[version], paramS]
-                print(' '.join(call))
-
-                # queue the process
-                if run_now:
-                    processes.add(subprocess.Popen(' '.join(call), shell=True))
-                    if len(processes) >= proc_lim:
-                        os.wait()
-                        processes.difference_update(
-                            [p for p in processes if p.poll() is not None])
-
-
-def assemble_file_lists(study, STinv_mats=None, existing_paths=None):
-    ''' given a study string or a list of STinverseMat docs, create a dict
-        of lists where the key is an (experiment, case) tuple,
-        and the value is a list of the corresponding ST-inverse mats '''
-
-    if STinv_mats is None:
-        subs = get_subjectdocs(study)
-        ids = [s['ID'] for s in subs]
-        inv_mats = list(Mdb['STinverseMats'].find({'id': {'$in': ids}}))
-    else:
-        inv_mats = STinv_mats
-
-    exp_cases = set([(d['experiment'], d['case']) for d in inv_mats])
-    mat_lists = {ec:
-                 [d['path'] for d in inv_mats
-                  if '/' + ec[0] + '-' + ec[1] + '/' in d['path']]
-                 for ec in exp_cases}
-
-    # if existing_paths is not None:
-    #     for ec,lst in mat_lists:
-    #         mat_lists[ec] =  [ p for p in lst if ]
-
-    return mat_lists
 
 '''
 code for compiling custom list for High Risk sample:

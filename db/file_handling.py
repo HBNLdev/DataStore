@@ -212,6 +212,7 @@ def parse_STinv_path(path):
     path_parts = path.split(os.path.sep)
     info['prc_ver'] = path_parts[2][-2]
     info['param_string'] = path_parts[-2]
+    info['n_chans'] = path_parts[-5][-2:]
 
     base_ext = fn.split('.')
     fn_parts = parse_filename(base_ext[0])
