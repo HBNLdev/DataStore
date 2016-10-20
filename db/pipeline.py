@@ -109,6 +109,9 @@ chan_mapping = {'21': '20',
                 '32': '32',
                 '64': '62'}
 
+powertype_mapping = {'total': 'tot',
+                     'evoked': 'evo'}
+
 ### Utilities ###
 
 def txt2list(path):
@@ -138,6 +141,30 @@ def make_STlistfile(ver_ps_exp_case_nchans, file_list, limit=None):
             list_file.writelines([L + '\n' for L in file_list[:limit]])
 
     return list_path
+
+def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
+    ''' apply function designed to operate on a dataframe indexed by ID and session.
+        given processing version, parameter string, number of channels in the raw data, experiment,
+        case, power type, ID, and session, generate the path to the expected 3d ero mat '''
+
+    ID = rec.name[0]
+    session = rec.name[1]
+
+    parent_dir = version_info[prc_ver]['storage path']
+
+    # handle the expected number of channels
+    if '-s9-' in param_str:
+        n_chans = '20'
+    else:
+        n_chans = chan_mapping[raw_chans]
+
+    path_start = os.path.join(parent_dir, param_str, n_chans, exp)
+    fname = '_'.join( [ ID, session, exp, case, powertype_mapping[power_type] ] )
+    ext = '.mat'
+
+    path = os.path.join(path_start, fname + ext)
+
+    return path
 
 def hasbeen_calculated(d):
     ''' given a doc containing info about an STinverseMat, determine if its already been calculated '''
