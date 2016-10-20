@@ -26,7 +26,7 @@ opt_info = {'Add baseline':             ('add_baseline',    'array'),
             'Session':                  ('file_session',    'text'),
             'File index':               ('i_file',          'array'),
             'Natural log':              ('ln_calc',         'array'),
-            '# of channels':            ('n_chans',         'array'),
+            '# of channels':            ('n_chans_present', 'array'),
             'Output type':              ('out_type',        'array'),
             'Output type name':         ('out_type_name',   'text'),
             # 'Output text':            ('output_text',     'text'),
@@ -105,24 +105,30 @@ def convert_scale(scale_array, scale_val):
 
 class EROStack:
 
-    def __init__(s, path_lst):
+    def __init__(s, path_lst, touch_db=False):
         ''' represents a list of .mat's as a dask stack '''
-        s.init_df(path_lst)
+        s.init_df(path_lst, touch_db=touch_db)
         s.get_params()
-        s.load_stack()
 
-    def init_df(s, path_lst):
+    def init_df(s, path_lst, touch_db=False):
         row_lst = []
+        missing_count = 0
         for fp in path_lst:
             em = EROMat(fp)
-            em.prepare_row()
-            row_lst.append(em.row_data)
+            if touch_db:
+                em.prepare_row()
+            if em.exists:
+                row_lst.append(em.info)
+            else:
+                missing_count += 1
+                
+        print(missing_count, 'files missing')
 
         s.data_df = pd.DataFrame.from_records(row_lst)
         s.data_df.set_index(['ID', 'session', 'experiment'], inplace=True)
 
     def get_params(s):
-        em = EROMat(s.data_df.iloc[0]['path'])
+        em = EROMat(s.data_df.ix[0, 'path'])
         em.get_params()
         s.params = em.params
 
@@ -131,6 +137,11 @@ class EROStack:
         arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
         s.stack = da.stack(arrays, axis=-1)
         print(s.stack.shape)
+
+    def load_stack_np(s):
+        arrays = [h5py.File(fp, 'r')['data'][:] for fp in s.data_df['path'].values]
+        s.stack_np = np.stack(arrays, axis=-1)
+        print(s.stack_np.shape)
 
     def tf_mean(s, times, freqs):
         time_lims = [convert_scale(s.params['Times'], time) for time in times]
@@ -153,6 +164,26 @@ class EROStack:
         mean_df = pd.DataFrame(out_array.T, index=s.data_df.index, columns=lbls)
         return mean_df
 
+    def tf_mean_np(s, times, freqs):
+        time_lims = [convert_scale(s.params['Times'], time) for time in times]
+        freq_lims = [convert_scale(s.params['Frequencies'], freq)
+                                for freq in freqs]
+        print(time_lims)
+        print(freq_lims)
+        tf_slice = s.stack_np[:, time_lims[0]:time_lims[1]+1,
+                              freq_lims[0]:freq_lims[1]+1, :]
+        print('slice', tf_slice.shape)
+        tf_mean = tf_slice.mean(axis=(1,2))
+        print('mean', tf_mean.shape)
+
+        time_lbl = '-'.join([str(t) for t in times])+'ms'
+        freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
+        lbls = ['_'.join([chan, time_lbl, freq_lbl])
+                        for chan in s.params['Channels']]
+
+        mean_df = pd.DataFrame(tf_mean.T, index=s.data_df.index, columns=lbls)
+        return mean_df
+
     def retrieve_dbdata(s, times, freqs):
         # for mat in s.data_df.iterrows():
         #     proj = C.format_EROprojection()
@@ -164,8 +195,15 @@ class EROMat:
         ''' represents h5-compatible mat containing 3d ERO data and options '''
         s.filepath = path
         s.parse_path()
-        s.get_params()
-        
+        s.exists = s.check_existence()
+        # s.get_params()
+    
+    def check_existence(s):
+        if os.path.exists(s.filepath):
+            return True
+        else:
+            return False
+
     def parse_path(s):
         ''' parse file info from path '''
         filedir, filename = os.path.split(s.filepath)
@@ -177,7 +215,8 @@ class EROMat:
         name, ext = filename.split('.')
         ID, session, experiment, condition, measure = name.split('_')
         
-        s.info = {'n_chans': n_chans,
+        s.info = {'path': s.filepath,
+                  'n_chans': n_chans,
                   'param_string': param_string,
                   'ID': ID,
                   'session': session,
@@ -186,12 +225,11 @@ class EROMat:
                   'measure': measure}
 
     def prepare_row(s):
-        ''' get info for row in dataframe '''
+        ''' get info for row in dataframe from database '''
         s.retrieve_csvdoc()
-        s.row_data = s.info.copy()
-        s.row_data.update({'_id':   s._id,
-                           'path':  s.filepath,
-                           'matpath': s.params['Mat file']})
+        s.info.update({'_id':   s._id,
+                       'path':  s.filepath,
+                       'matpath': s.params['Mat file']})
     
     def get_params(s):
         ''' extract data parameters from opt, relying upon opt_info. '''
