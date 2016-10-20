@@ -8,6 +8,18 @@ import numpy as np
 
 from .file_handling import site_hash
 
+# dataframe filter functions
+
+def latest_sessions(in_df):
+    ''' given a datframe with an (ID, session) index, return a version in which
+        only the latest sessions is kept for each '''
+    out_df = in_df.copy()
+    out_df['session'] = out_df.index.get_level_values('session')
+    g = out_df.groupby(level=out_df.index.names[0]) # ID
+    out_df = g.last()
+    out_df.set_index('session', append=True, inplace=True)
+    return out_df
+
 # single value or column apply functions
 
 def conv_nan(v):
@@ -35,6 +47,16 @@ def convert_date(datestr, dateform='%m/%d/%Y'):
     ''' convert a date string with a given format '''
     try:
         return datetime.strptime(datestr, dateform)
+    except:
+        return np.nan
+
+def num_chans(h1_path):
+    ''' given the path to an h1-file (avgh1 or cnth1), extract the number of channels '''
+    try:
+        path_parts = os.path.split(h1_path)
+        chan_part = path_parts[-2]
+        n_chans = int(chan_part[-2:])
+        return n_chans
     except:
         return np.nan
 
@@ -109,7 +131,11 @@ def raw_folder(rec):
     ''' determine the path to the folder containing raw data '''
     base_path = '/raw_data/'
     ID = rec.name[0]
-    site = site_hash[ID[0]]
+    try:
+        site = site_hash[ID[0]]
+    except:
+        print('site not recognized')
+        return np.nan
     session = rec.name[1]
     folder = rec[session+'-raw']
     try:
@@ -136,3 +162,33 @@ def raw_folder(rec):
         except:
             return np.nan
 
+def raw_folder_achp(rec):
+    ''' version of the above that is safe to use on the SUNY Brain Dysfunction (achp) subjects '''
+    base_path = '/raw_data/'
+    ID = rec.name[0]
+    site = 'suny'
+    session = rec.name[1]
+    folder = rec[session+'-raw']
+    try:
+        folder = int(folder)
+    except:
+        pass
+    if isinstance(folder, str):
+        system = 'neuroscan'
+    elif isinstance(folder, int):
+        system = 'masscomp'
+    else:
+        return np.nan
+    if system is 'neuroscan':
+        try:
+            fullpath = os.path.join(base_path,system,site,folder,ID)
+            return fullpath
+        except:
+            return np.nan
+    else:
+        pop = rec['POP'][:4].lower()
+        try:
+            fullpath = os.path.join(base_path,system,pop,site,ID)
+            return fullpath
+        except:
+            return np.nan
