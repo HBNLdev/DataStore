@@ -229,7 +229,7 @@ def create_3dmats(docs, file_lim=None, run_now=False, proc_lim=10):
         else:
             lim_flag = '_L' + str(file_lim)
 
-        if not STmat_lst:  # if empty, continue to next
+        if len(STmat_lst) <= 10:  # if empty or small, continue to next
             continue
 
         version, param_str, exp, case, n_chans = ver_ps_exp_case_nchans

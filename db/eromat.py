@@ -101,16 +101,49 @@ def convert_scale(scale_array, scale_val):
     ''' given array, find index nearest to given value '''
     return np.argmin(np.fabs(scale_array - scale_val))
 
+# utility function 
+
+def check_existence(path):
+    ''' return boolean of existence of file '''
+    if os.path.exists(path):
+        return True
+    else:
+        return False
+
+def parse_newEROpath(path):
+    ''' parse file info from new 3d ERO .mat path '''
+    filedir, filename = os.path.split(path)
+    
+    dirparts = filedir.split(os.path.sep)
+    n_chans = dirparts[-2]
+    param_string = dirparts[-3]
+    
+    name, ext = os.path.splitext(filename)
+    ID, session, experiment, condition, measure = name.split('_')
+    
+    info = {'path': path,
+              'n_chans': n_chans,
+              'param_string': param_string,
+              'ID': ID,
+              'session': session,
+              'experiment': experiment,
+              'condition': condition,
+              'measure': measure}
+
+    return info
+
 # main classes
 
 class EROStack:
+    ''' represents a list of .mat's as a dask stack '''
 
     def __init__(s, path_lst, touch_db=False):
-        ''' represents a list of .mat's as a dask stack '''
         s.init_df(path_lst, touch_db=touch_db)
         s.get_params()
 
     def init_df(s, path_lst, touch_db=False):
+        ''' given, a list of paths, intializes the dataframe that represents each existent EROmat.
+            pulls info out of the path of each. '''
         row_lst = []
         missing_count = 0
         for fp in path_lst:
@@ -184,6 +217,32 @@ class EROStack:
         mean_df = pd.DataFrame(tf_mean.T, index=s.data_df.index, columns=lbls)
         return mean_df
 
+    def tf_mean_lowmem(s, times, freqs):
+        time_lims = [convert_scale(s.params['Times'], time) for time in times]
+        freq_lims = [convert_scale(s.params['Frequencies'], freq)
+                                for freq in freqs]
+        print(time_lims)
+        print(freq_lims)
+
+        n_chans = int(s.params['# of channels'][0][0])
+        n_files = len(s.data_df['path'].values)
+        mean_array = np.zeros((n_files, n_chans))
+
+        for fpi, fp in enumerate(s.data_df['path'].values):
+            file_pointer = h5py.File(fp, 'r')
+            mean_array[fpi, :] = file_pointer['data']\
+                                [:, time_lims[0]:time_lims[1]+1,
+                                    freq_lims[0]:freq_lims[1]+1].mean(axis=(1,2))
+            file_pointer.close()
+
+        time_lbl = '-'.join([str(t) for t in times])+'ms'
+        freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
+        lbls = ['_'.join([chan, time_lbl, freq_lbl])
+                        for chan in s.params['Channels']]
+
+        mean_df = pd.DataFrame(mean_array, index=s.data_df.index, columns=lbls)
+        return mean_df
+
     def retrieve_dbdata(s, times, freqs):
         # for mat in s.data_df.iterrows():
         #     proj = C.format_EROprojection()
@@ -194,35 +253,9 @@ class EROMat:
     def __init__(s, path):
         ''' represents h5-compatible mat containing 3d ERO data and options '''
         s.filepath = path
-        s.parse_path()
-        s.exists = s.check_existence()
+        s.info = parse_newEROpath(path)
+        s.exists = check_existence(path)
         # s.get_params()
-    
-    def check_existence(s):
-        if os.path.exists(s.filepath):
-            return True
-        else:
-            return False
-
-    def parse_path(s):
-        ''' parse file info from path '''
-        filedir, filename = os.path.split(s.filepath)
-        
-        dirparts = filedir.split(os.path.sep)
-        n_chans = dirparts[-2]
-        param_string = dirparts[-3]
-        
-        name, ext = filename.split('.')
-        ID, session, experiment, condition, measure = name.split('_')
-        
-        s.info = {'path': s.filepath,
-                  'n_chans': n_chans,
-                  'param_string': param_string,
-                  'ID': ID,
-                  'session': session,
-                  'experiment': experiment,
-                  'condition': condition,
-                  'measure': measure}
 
     def prepare_row(s):
         ''' get info for row in dataframe from database '''
