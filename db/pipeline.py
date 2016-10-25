@@ -7,6 +7,8 @@ import time
 import subprocess
 from collections import defaultdict
 
+from .organization import Mdb
+
 # processing parameters cheatsheet
 
 # v4.0_center9  = prc_ver='4', e4-n10-s9-t100-v800
@@ -120,28 +122,6 @@ def txt2list(path):
         lst = [line.strip() for line in f]
     return lst
 
-
-def make_STlistfile(ver_ps_exp_case_nchans, file_list, limit=None):
-    ''' given a batch-identifying 5-tuple, a list of st-inverse-mat files,
-        and a file limit: create a text file with those st-inverse-mats,
-        and return its path '''
-
-    if limit is None:
-        limit = len(file_list)
-        lim_flag = ''
-    else:
-        lim_flag = '_L' + str(limit)
-
-    batch_id = '-'.join([p for p in ver_ps_exp_case_nchans])
-
-    tstamp = str(int(time.time() * 1000))
-    list_path = '/processed_data/EROprc_lists/' + \
-                batch_id + '_mats-' + tstamp + lim_flag + '.lst'
-    with open(list_path, 'w') as list_file:
-            list_file.writelines([L + '\n' for L in file_list[:limit]])
-
-    return list_path
-
 def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
     ''' apply function designed to operate on a dataframe indexed by ID and session.
         given processing version, parameter string, number of channels in the raw data, experiment,
@@ -165,6 +145,30 @@ def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
     path = os.path.join(path_start, fname + ext)
 
     return path
+
+def doc_exists(path):
+    ''' given a path to a new ero-mat, determine if a corresponding STinverseMats doc exists '''
+    filedir, filename = os.path.split(path)
+    dirparts = filedir.split(os.path.sep)
+
+    param_string = dirparts[-3]
+    prc_ver = dirparts[-4][-1]
+    
+    name, ext = os.path.splitext(filename)
+    ID, session, experiment, condition, measure = name.split('_')
+
+    query = {'ID': ID, 'session': session, 'experiment': experiment,
+             'prc_ver': prc_ver, 'param_string': param_string}
+
+    docs = Mdb['STinverseMats'].find(query)
+
+    if docs.count() > 1:
+        print('multiple docs matched', path)
+        return True
+    elif docs.count() == 1:
+        return True
+    else:
+        return False
 
 def hasbeen_calculated(d):
     ''' given a doc containing info about an STinverseMat, determine if its already been calculated '''
@@ -208,6 +212,27 @@ def add_stringparams(params, param_str):
     else:
         params.update({'-e': '1'})
     return params
+
+def make_STlistfile(ver_ps_exp_case_nchans, file_list, limit=None):
+    ''' given a batch-identifying 5-tuple, a list of st-inverse-mat files,
+        and a file limit: create a text file with those st-inverse-mats,
+        and return its path '''
+
+    if limit is None:
+        limit = len(file_list)
+        lim_flag = ''
+    else:
+        lim_flag = '_L' + str(limit)
+
+    batch_id = '-'.join([p for p in ver_ps_exp_case_nchans])
+
+    tstamp = str(int(time.time() * 1000))
+    list_path = '/processed_data/EROprc_lists/' + \
+                batch_id + '_mats-' + tstamp + lim_flag + '.lst'
+    with open(list_path, 'w') as list_file:
+            list_file.writelines([L + '\n' for L in file_list[:limit]])
+
+    return list_path
 
 ### Main functions ###
 

@@ -2,6 +2,7 @@
 
 import os
 
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import h5py
@@ -101,37 +102,6 @@ def convert_scale(scale_array, scale_val):
     ''' given array, find index nearest to given value '''
     return np.argmin(np.fabs(scale_array - scale_val))
 
-# utility function 
-
-def check_existence(path):
-    ''' return boolean of existence of file '''
-    if os.path.exists(path):
-        return True
-    else:
-        return False
-
-def parse_newEROpath(path):
-    ''' parse file info from new 3d ERO .mat path '''
-    filedir, filename = os.path.split(path)
-    
-    dirparts = filedir.split(os.path.sep)
-    n_chans = dirparts[-2]
-    param_string = dirparts[-3]
-    
-    name, ext = os.path.splitext(filename)
-    ID, session, experiment, condition, measure = name.split('_')
-    
-    info = {'path': path,
-              'n_chans': n_chans,
-              'param_string': param_string,
-              'ID': ID,
-              'session': session,
-              'experiment': experiment,
-              'condition': condition,
-              'measure': measure}
-
-    return info
-
 # main classes
 
 class EROStack:
@@ -147,10 +117,10 @@ class EROStack:
         row_lst = []
         missing_count = 0
         for fp in path_lst:
-            em = EROMat(fp)
-            if touch_db:
-                em.prepare_row()
-            if em.exists:
+            if os.path.exists(fp):
+                em = EROMat(fp)
+                if touch_db:
+                    em.prepare_row()
                 row_lst.append(em.info)
             else:
                 missing_count += 1
@@ -226,7 +196,7 @@ class EROStack:
 
         n_chans = int(s.params['# of channels'][0][0])
         n_files = len(s.data_df['path'].values)
-        mean_array = np.zeros((n_files, n_chans))
+        mean_array = np.empty((n_files, n_chans))
 
         for fpi, fp in enumerate(s.data_df['path'].values):
             file_pointer = h5py.File(fp, 'r')
@@ -243,6 +213,45 @@ class EROStack:
         mean_df = pd.DataFrame(mean_array, index=s.data_df.index, columns=lbls)
         return mean_df
 
+    def tf_mean_lowmem_multiwin(s, windows):
+        ''' given a list of tf windows, which are 4-tuples of (t1, t2, f1, f2),
+            calculate means in those windows for all channels and subjects '''
+        win_inds = []
+        win_lbls = []
+        for win in windows:
+            winds = ( convert_scale(s.params['Times'], win[0]),
+                      convert_scale(s.params['Times'], win[1]),
+                      convert_scale(s.params['Frequencies'], win[2]),
+                      convert_scale(s.params['Frequencies'], win[3]) )
+            time_lbl = '-'.join([str(t) for t in win[0:2]])+'ms'
+            freq_lbl = '-'.join([str(f) for f in win[2:4]])+'Hz'
+            lbls = ['_'.join([chan, time_lbl, freq_lbl])
+                        for chan in s.params['Channels']]
+            print(winds)
+            win_inds.append(winds)
+            win_lbls.extend(lbls)
+
+        n_files = len(s.data_df['path'].values)
+        n_windows = len(windows)
+        n_chans = int(s.params['# of channels'][0][0])
+        mean_array = np.empty((n_files, n_windows, n_chans))
+
+        for fpi, fp in tqdm(enumerate(s.data_df['path'].values)):
+            file_pointer = h5py.File(fp, 'r')
+            for wi, winds in enumerate(win_inds):
+                mean_array[fpi, wi, :] = file_pointer['data']\
+                                    [:, winds[0]:winds[1]+1,
+                                        winds[2]:winds[3]+1].mean(axis=(1,2))
+            file_pointer.close()
+
+        mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows*n_chans))
+
+        mean_df = pd.DataFrame(mean_array_reshaped, index=s.data_df.index, columns=win_lbls)
+        return mean_df
+
+    def tf_mean_nosubs(s, times, freqs):
+        pass
+
     def retrieve_dbdata(s, times, freqs):
         # for mat in s.data_df.iterrows():
         #     proj = C.format_EROprojection()
@@ -253,9 +262,28 @@ class EROMat:
     def __init__(s, path):
         ''' represents h5-compatible mat containing 3d ERO data and options '''
         s.filepath = path
-        s.info = parse_newEROpath(path)
-        s.exists = check_existence(path)
+        s.parse_path()
         # s.get_params()
+
+    def parse_path(s):
+        ''' parse file info from new 3d ERO .mat path '''
+        filedir, filename = os.path.split(s.filepath)
+        
+        dirparts = filedir.split(os.path.sep)
+        n_chans = dirparts[-2]
+        param_string = dirparts[-3]
+        
+        name, ext = os.path.splitext(filename)
+        ID, session, experiment, condition, measure = name.split('_')
+        
+        s.info = {'path': s.filepath,
+                  'n_chans': n_chans,
+                  'param_string': param_string,
+                  'ID': ID,
+                  'session': session,
+                  'experiment': experiment,
+                  'condition': condition,
+                  'measure': measure}
 
     def prepare_row(s):
         ''' get info for row in dataframe from database '''
