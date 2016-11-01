@@ -94,7 +94,7 @@ def handle_parse(dset, dset_field, field_type):
 # dataframe functions
 
 def join_columns(row, columns):
-    return '_'.join([row[col] for col in columns])
+    return '_'.join([row[field] for field in columns])
 
 # array functions
 
@@ -341,3 +341,286 @@ class EROMat:
         s.csv_doc = next(c)
         s._id = s.csv_doc['_id']
         # extract _id and store in dataframe?
+
+
+# Post processing tools to manage output and compare with old compilations
+
+def find_column_groups(column_list,exclusions=['trial','age'],var_ind=-1):
+    ''' group columns with similar values across all fields except the one specified by var_ind
+
+        this is meant to parse old style labellings to set up groups for comparison
+    '''
+    process_list = column_list.copy()
+    for ex in exclusions:
+        process_list = [ c for c in process_list if ex not in c]
+    
+    col_lists = [ c.split('_') for c in process_list ]
+    [ cl.pop(var_ind) for cl in col_lists  ]
+    col_tups = [ tuple(cl) for cl in col_lists ]
+    col_types = set(col_tups)
+    col_groups = { ct:[] for ct in col_types }
+    for ct, field in zip(col_tups,process_list):
+        col_groups[ct].append(field)
+    
+    return col_groups
+
+    # Tools to extract order from column names and produce them flexibly - aiming at more generalization
+        # Information to guide processing 
+experiments = Mdb.STinverseMats.distinct('experiment')
+case_name_aliases = {'tt':'target','nv':'novel','nt':'nontarget'}
+cases_db = Mdb.STinverseMats.distinct('case')
+cases = []
+for case in cases_db:
+    cases.append(case)
+    if case in case_name_aliases:
+        cases.append(case_name_aliases[case])
+        
+powers = ['tot-pwr','evo-pwr','total','evoked']
+units = ['ms','Hz']
+method_descriptor_type = type(str.lower)
+function_type = type(lambda x: x)
+
+        # utility functions
+def num_drop_units(st):
+    stD = st
+    found_unit = None
+    for unit in units:
+        if unit in stD:
+            stD = stD.replace(unit,'')
+            found_unit = unit
+    return float(stD), found_unit
+
+def split_label( label, sep='_' ):
+    parts = label.split(sep)
+    return parts
+
+
+def parse_col_group(col_list,field_names,sep='_'):
+
+    all_pieces = [ split_label(c,sep) for c in col_list ]
+    num_parts = set([ len(pcs) for pcs in all_pieces ])
+    if len(num_parts) > 1:
+        return 'non_uniform'
+    else: num_parts = list(num_parts)[0]
+    options = [ set() for  i in range(num_parts)]
+    for col_pcs in all_pieces:
+        [ options[i].add(pc) for i,pc in enumerate(col_pcs) ]
+    options = [ list(o) for o in options ]
+
+
+    part_names = field_names.copy() #set([k for k in def_desc.keys()])
+    #identify part meanings
+    part_order = []
+    parsed_opts = []
+    unitsD = {}
+    for opts in options:
+        if len(part_names) == 1: # handle the final remaining field
+            part_order.append( list(part_names)[0] )
+            parsed_opts.append( opts )
+        elif opts[0] in cases:
+            part_order.append('case')
+            part_names.remove('case')
+            parsed_opts.append(opts)
+        elif opts[0] in experiments or opts[0] in [ e.upper() for e in experiments ]:
+            part_order.append('experiment')
+            part_names.remove('experiment')
+            parsed_opts.append(opts)
+        elif opts[0] in powers:
+            part_order.append('power')
+            part_names.remove('power')
+            parsed_opts.append( opts )            
+        elif '-' in opts[0] and 'pwr' not in opts[0]:
+            nums_pieces = opts[0].split('-')
+            nums = []
+            this_unit = ''
+            for numS in nums_pieces:
+                val, unit = num_drop_units(numS)
+                nums.append(val)
+                if unit:
+                    this_unit = unit
+            if nums[1] - nums[0] < 40:
+                part_order.append('frequency')
+                part_names.remove('frequency')
+
+            else:
+                part_order.append('time')
+                part_names.remove('time')
+
+            parsed_opts.append( [ tuple(nums) ] )
+            unitsD[part_order[-1]] = this_unit
+
+        else:
+            part_order.append('channels')
+            part_names.remove('channels')
+            parsed_opts.append( opts )
+
+    return part_order, parsed_opts, unitsD
+
+
+        # Representational class to parse and produce labels
+class EROpheno_label_set:
+    '''normally  a set for one phenotype across electordes
+    '''
+    # Default example descirption - used for filling gaps - these are overriden by 
+    # 'implicit_values' argument on initialization
+    field_desc = {'experiment':['vp3'],
+                'case':['target'],
+               'time':[(300,700)],
+                'frequency':[(3.0,7.0)],
+               'channels':['FZ','PZ','CZ','F3','F4','C3','C4','P3','P4'],
+               'power':['total']}
+    def_order = ['experiment','case','frequency','time','power','channels']
+    
+    
+    def __init__(s,description={}, fields = None, implicit_values = {}, sep='_' ):
+        s.in_sep = sep
+        s.units = {}
+        s.implicit_values = implicit_values
+        
+        if fields is None:
+            fields = s.def_order
+        
+        if type(description) == list:
+            s.in_cols = description.copy()
+            parse_out = parse_col_group(s.in_cols, fields, sep='_')
+            if type(parse_out) != tuple:
+                print(parse_out)
+                return
+            else:
+                field_order, options, units = parse_out
+            s.units = units
+        # need to normalize custom description
+        
+        s.parsed_desc = { fd:desc for fd,desc in zip(field_order,options) }
+        
+        s.parsed_order = field_order 
+        
+    def produce_column_names(s,order=def_order, units=False, dec_funs={'frequency':"%.1f", 'time':"%.0f"},
+                            translators = {'experiment':str.lower}, sep='_'):
+        '''Output list of column names with 
+            translators is nested dict by fields and values
+        '''
+        if order == 'parsed':
+            order = s.parsed_order
+        
+        # note input column order 
+        sort_fields = [ f for f,opts in s.parsed_desc.items() if len(opts)>1 ]   
+        if 'in_cols' in dir(s):
+            in_orders = {fd:[] for fd in sort_fields}
+            in_sort = []
+            for incol in s.in_cols:
+                parsed = { fd:val for fd,val in zip(s.parsed_order,incol.split(s.in_sep)) }
+                for sf in sort_fields:
+                    in_sort.append( tuple([ parsed[fd] for fd in sort_fields ]) )
+
+        full_desc = s.field_desc.copy()
+        full_desc.update(s.implicit_values)
+        full_desc.update(s.parsed_desc)
+        #print(full_desc)
+        
+        opt_lens = [ len(v) for k,v in  full_desc.items() ]
+        n_cols = np.product(opt_lens)
+        Wcols = n_cols*[ '' ]
+        out_sorts = [ [] for n in range(n_cols) ]
+        joiner = ''
+        for field in order:
+            translator = None
+            if field in translators:
+                translator = translators[field]
+            if field in s.parsed_desc:
+                opts = s.parsed_desc[field]
+            else:
+                opts = full_desc[field]
+            if field in ['time','frequency']:
+                nums_st = []
+                for v in opts[0]:
+                    #print(v,  "dec_places[field])+"f")
+                    nums_st.append( dec_funs[field] % v )
+                opt_st = '-'.join(nums_st)
+                if units and field in s.units:
+                    opt_st = opt_st+s.units[field]
+                optL = [opt_st]
+                
+            else:
+                optL = opts
+            if len(optL) == 1:
+                optL = n_cols*optL
+
+            #print(optL)
+            cols = []; ind = -1
+            for cs,opt in zip(Wcols,optL):
+                ind+=1
+                if field in sort_fields:
+                    out_sorts[ind].append(opt)
+                if type(translator) in [method_descriptor_type, function_type]:
+                    opt = translator(opt)
+                elif type(translator) == dict:
+                    if opt in translator:
+                        opt = translator[opt]
+                    
+                cols.append(cs+joiner+opt)
+            Wcols = cols.copy()
+            joiner = sep
+        
+        # preserve input column order
+        if 'in_cols' in dir(s):
+            out_cols = []
+            out_sortD = { tuple(osl):col for osl,col in zip(out_sorts,cols) }
+            for sort_tup in in_sort:
+                out_cols.append( out_sortD[sort_tup] )
+
+        else: out_cols = cols
+
+        return out_cols
+
+'''
+Usage example for post processing tools:
+
+v4_sep16_old = pd.read_csv('/active_projects/mort/custom/SmokescreenGWAS_ERO_v4_update_9-2016.csv',
+                             na_values=['.'], converters={'ID':str})
+v4_sep16_old.set_index(['ID','session'], inplace=True)
+
+
+v4_ERO_power_frames = {}
+for group,phenos in v4_pheno_groups.items():
+    tf_wins = [ tuple( [ float(val) for val in \
+                pheno[2].split('-') + pheno[1].split('-') ] ) \
+                for pheno in phenos ]
+    print( group, tf_wins)
+    mat_lst = list(v4_ses_df[group].values)
+    stack = EM.EROStack(mat_lst)
+    v4_ERO_power_frames[group] = stack.tf_mean_lowmem_multiwin(tf_wins)
+    del stack  
+
+
+v4_comb_set = v4_sep16_old.copy()
+v4_old_groups = find_column_groups(v4_sep16_old.columns)
+v4_old_col_set = EM.EROpheno_label_set( next( iter (v4_old_groups.values()) ) )
+print(v4_old_col_set.parsed_order)
+v4_all_rn = []
+for k,df in v4_ERO_power_frames.items():
+    exp = k.split('_')[0]
+    exp_renames = {}
+    if len(df.index.levels) > 2: # drop uniform experiment index
+        df.index = df.index.droplevel(2)  
+    col_groups = find_column_groups( df.columns, var_ind=0 )
+    for cgk,group in col_groups.items():
+        this_col_set = EM.EROpheno_label_set( group , implicit_values = {'experiment':[exp],'power':['total']})
+        renamed_cols = this_col_set.produce_column_names( order=v4_old_col_set.parsed_order,#order=['experiment','frequency','time','case','power','channels']
+                                    translators={'experiment':str.upper,
+                                    'power':{'total':'tot-pwr','evoked':'evo-pwr'} })
+        rename_dict = { old:new for old,new in zip(group,renamed_cols) }
+        exp_renames.update(rename_dict)
+    #print(exp_renames)
+    dfRN = df.rename(columns=exp_renames)
+    v4_all_rn.append(dfRN.copy())
+    comb_set = comb_set.combine_first(dfRN)
+    c_cols = comb_set.columns
+    u_cols = dfRN.columns
+    print( len(c_cols), len(u_cols), len(set(c_cols).intersection(u_cols)) )
+v4_comb_set.describe()
+
+v4_full_new = pd.concat(v4_all_rn,join='inner',axis=1)
+
+
+'''
