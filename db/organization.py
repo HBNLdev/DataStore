@@ -89,7 +89,8 @@ class MongoBacked:
             s.new = True
         else:
             s.new = False
-            s._id = next(c)['_id']
+            s.doc = next(c)
+            s._id = s.doc['_id']
             s.update_query = {'_id': s._id}
 
     def update(s):
@@ -126,6 +127,17 @@ class Neuropsych(MongoBacked):
         I.update(info)
         s.data = I
 
+
+class RawEEGData(MongoBacked):
+
+    ''' *.cnt file containing raw continuous EEG data '''
+
+    collection = 'raw_eegdata'
+
+    def __init__(s, info={}):
+        I = s.def_info.copy()
+        I.update(info)
+        s.data = I
 
 class EEGData(MongoBacked):
 
@@ -182,6 +194,13 @@ class EEGBehavior(MongoBacked):
         I = s.def_info.copy()
         I.update(info)
         s.data = I
+
+    def compare_field(s):
+        pass
+
+    def update_field(s):
+        pass
+
 
 
 class Core(MongoBacked):
