@@ -111,7 +111,7 @@ class avgh1:
 		indices = [ [sid], [expname], [expver], [gender], [age],
 					cases, chans, peaks ]
 		index 	= pd.MultiIndex.from_product(indices,
-					names=FH.mt_file.columns[:-3])
+											  names=FH.MT_File.columns[:-3])
 
 		# data
 		n_lines = len(cases) * len(chans) * len(peaks)
@@ -409,7 +409,7 @@ class avgh1:
 			s.mt_name = os.path.splitext(h1_name)[0] + '.mt'
 			s.mt_defaultpath = os.path.splitext(s.filepath)[0] + '.mt'
 			if os.path.isfile( s.mt_defaultpath ):
-				mt = FH.mt_file( s.mt_defaultpath )
+				mt = FH.MT_File(s.mt_defaultpath)
 				mt.parse_file()
 				s.mt_data = mt.data
 				s.case_peaks = mt.data.keys()

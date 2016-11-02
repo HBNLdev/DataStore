@@ -5,7 +5,7 @@ from datetime import timedelta
 import pandas as pd
 
 from .master_info import load_master, master_path
-from .file_handling import identify_files, mt_file
+from .file_handling import identify_files, MT_File
 from .organization import Mdb, Subject, SourceInfo, Session, ERPPeak
 
 
@@ -93,7 +93,7 @@ def erp():
     for fp in add_files:
         if fp in bad_files:
             continue
-        mtO = mt_file( fp )
+        mtO = MT_File(fp)
         mtO.parse_fileDB()
         erpO = ERPPeak( mtO.data )
         erpO.store()
