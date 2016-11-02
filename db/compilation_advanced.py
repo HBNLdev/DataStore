@@ -1,9 +1,13 @@
 ''' advanced compilation functionality '''
 
+import numpy as np
 import pandas as pd
 
 from .compilation import prepare_joindata
 from .quest_import import map_ph4, map_ph4_ssaga, build_inputdict
+
+map_allothers = {'neuropsych': {'date_lbl': 'testdate'},
+                 'EEGbehavior': {'date_lbl': 'date'}}
 
 # utility functions
 
@@ -15,8 +19,11 @@ def get_kdict(collection, subcoll):
         kmap = map_ph4
     elif collection is 'ssaga':
         kmap = map_ph4_ssaga
+    elif collection in map_allothers:
+        kmap = map_allothers
     else:
         print('collection not supported')
+        kmap = None
         return
     i = build_inputdict(subcoll, kmap)
     return i
@@ -70,11 +77,12 @@ def handle_dupes(join_df_sdate, new_datecol, fup_col, session_datecol):
     return join_df_nodupes
 
 
-def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols):
+def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
+                                min_age=-np.inf, max_age=np.inf):
     ''' given: 1) a compilation df that has had new info columns joined to it,
         2) the date column name from that new info,
         3) the follow-up column from that new info, and
-        4) the a list of all new joined columns -->
+        4) a list of all new joined columns -->
         return a dataframe in which subjects' info from followups are
         filled into the sessions that are nearest in time '''
 
@@ -84,7 +92,7 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols):
     iter_df = comp_dfj.copy()
     iter_df['date_diff'] = (iter_df[new_datecol] - iter_df['date']).abs()
     IDs = list(set(iter_df.index.get_level_values('ID')))
-    needed_cols = [new_datecol, fup_col, 'date']
+    needed_cols = [new_datecol, fup_col, 'date', 'age']
     for ID in IDs:
         ID_df = iter_df.ix[iter_df.index.get_level_values('ID') == ID,
                             needed_cols]
@@ -94,8 +102,8 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols):
         if fups.shape[0] < 1:
             continue
         for id_i, id_r in ID_df.iterrows():
-            if isinstance(id_r[fup_col], pd.tslib.NaTType):
-            # if np.isnan(id_r[fup_col]):
+            # if (isinstance(id_r[fup_col], pd.tslib.NaTType)) and (id_r['age'] > min_age) and (id_r['age'] < max_age):
+            if (np.isnan(id_r[fup_col])) and (id_r['age'] > min_age) and (id_r['age'] < max_age):
                 date_diffs = (fups.loc[:, new_datecol] -
                               id_r['date']).abs()
                 best_ind = date_diffs.argmin()
@@ -125,20 +133,24 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols):
 # main function (for now)
 
 
-def careful_join(comp_df, collection, subcoll, do_fill=False,
+def careful_join(comp_df, collection, subcoll=None, do_fill=False,
+                 min_age=-np.inf, max_age=np.inf,
                  session_datecol_in='date'):
-    ''' given a compilation dataframe indexed by ID/session (comp_df)
-        with a session date column named by session_datecol_in,
+    ''' given a compilation dataframe indexed by ID/session (comp_df) with an age column,
+        and with a session date column named by session_datecol_in,
         join a collection / subcollection while handling:
         1.) duplicate ID-followup combinations,
         2.) multiple follow-ups assigned to the same session.
         if desired, fill info from followups to nearest session in time '''
 
     # handle the dx subcolls
-    if 'dx_' in subcoll:
-        subcoll_safe = subcoll[3:]
+    if subcoll:
+        if 'dx_' in subcoll:
+            subcoll_safe = subcoll[3:]
+        else:
+            subcoll_safe = subcoll
     else:
-        subcoll_safe = subcoll
+        subcoll_safe = None
 
     # parse the target name to get knowledge about it
     i = get_kdict(collection, subcoll_safe)
@@ -179,7 +191,7 @@ def careful_join(comp_df, collection, subcoll, do_fill=False,
     if do_fill:
         prefill_cvg = comp_dfj[joined_cols].count() / comp_dfj.shape[0]
         comp_dfj_out = time_proximal_fill_fast(comp_dfj, new_datecol, fup_col,
-                                                                    joined_cols)
+                                                joined_cols, min_age=min_age, max_age=max_age)
         postfill_cvg = comp_dfj_out[joined_cols].count() / comp_dfj_out.shape[0]
         fill_factor = postfill_cvg / prefill_cvg
         print('coverage after filling is up to {:.1f} times higher'.format(
