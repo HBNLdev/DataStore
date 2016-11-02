@@ -146,6 +146,36 @@ def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
 
     return path
 
+def gen_path_stdf(rec, power_type):
+    ''' apply function designed to operate on a dataframe indexed by ID and session.
+        given processing version, parameter string, number of channels in the raw data, experiment,
+        case, power type, ID, and session, generate the path to the expected 3d ero mat '''
+
+    try:
+        ID = rec.name[0]
+        session = rec.name[1]
+
+        parent_dir = version_info[rec['prc_ver']]['storage path']
+
+        # handle the expected number of channels
+        if '-s9-' in rec['param_string']:
+            n_chans = '20'
+        else:
+            n_chans = chan_mapping[rec['n_chans']]
+
+        path_start = os.path.join(parent_dir, rec['param_string'], n_chans, rec['experiment'])
+        fname = '_'.join( [ ID, session, rec['experiment'], rec['case'], powertype_mapping[power_type] ] )
+        ext = '.mat'
+
+        path = os.path.join(path_start, fname + ext)
+
+        return path
+    except KeyError:
+        print(ID, session, 'had a key missing')
+        return None
+    except IndexError:
+        print(ID, 'had an index missing')
+
 def doc_exists(path):
     ''' given a path to a new ero-mat, determine if a corresponding STinverseMats doc exists '''
     filedir, filename = os.path.split(path)
@@ -248,14 +278,9 @@ def create_3dmats(docs, file_lim=None, run_now=False, proc_lim=10):
     batch_dict = organize_docs(docs)
 
     for ver_ps_exp_case_nchans, STmat_lst in batch_dict.items():
+        
         if file_lim is None:
-            file_lim = len(STmat_lst)
-            lim_flag = ''
-        else:
-            lim_flag = '_L' + str(file_lim)
-
-        if len(STmat_lst) <= 10:  # if empty or small, continue to next
-            continue
+            n_files = len(STmat_lst)
 
         version, param_str, exp, case, n_chans = ver_ps_exp_case_nchans
 
@@ -264,7 +289,7 @@ def create_3dmats(docs, file_lim=None, run_now=False, proc_lim=10):
         params = default_params.copy()
         params = add_stringparams(params, param_str)  # adds -e param (center 9 or not)
 
-        list_file_path = make_STlistfile(ver_ps_exp_case_nchans, STmat_lst, file_lim)
+        list_file_path = make_STlistfile(ver_ps_exp_case_nchans, STmat_lst, n_files)
         params['-f'] = list_file_path  # adds -f param (file list)
 
         for pwr_type in ['1', '2']:  # total, evoked
