@@ -33,6 +33,13 @@ site_hash = {'a': 'uconn',
 site_hash_rev = {
     v: k for k, v in site_hash.items() if k in [str(n) for n in range(1, 9)]}
 
+rd_subdir_tosite = {'alc': 'a-subject',
+                    'control': 'c-subjects',
+                    'high_risk': 'h-subjects'}
+
+system_shorthands = {'mc': 'masscomp',
+                     'ns': 'neuroscan'}
+
 experiment_shorthands = {'aa': 'ap3',
                          'ab': 'abk',
                          'an': 'ant',
@@ -96,7 +103,7 @@ experiment_shorthands = {'aa': 'ap3',
 
 def parse_filename(filename, include_full_ID=False):
     if os.path.sep in filename:
-        filename = os.path.split()[1]
+        filename = os.path.split(filename)[1]
 
     # neuroscan type
     if '_' in filename:
@@ -205,7 +212,7 @@ def parse_mt_name(file_or_path):
 
 
 def parse_STinv_path(path):
-    path, fn = os.path.split(path)
+    path, filename = os.path.split(path)
 
     info = {}
 
@@ -214,12 +221,127 @@ def parse_STinv_path(path):
     info['param_string'] = path_parts[-2]
     info['n_chans'] = path_parts[-5][-2:]
 
-    base_ext = fn.split('.')
+    base_ext = filename.split('.')
     fn_parts = parse_filename(base_ext[0])
+    fn_parts['ID'] = fn_parts['id']
     fn_parts['case'] = base_ext[2]
     info.update(fn_parts)
 
     return info
+
+def parse_rd_path(filepath):
+    path_parts = filepath.split(os.path.sep)
+    full_filename = path_parts[-1]
+    filename, ext = os.path.splitext(full_filename)
+
+    system = 'masscomp'
+    subdir = path_parts[3]
+    if subdir == 'coga':
+        site = path_parts[-3]
+    elif subdir in rd_subdir_tosite.keys():
+        site = rd_subdir_tosite[subdir]
+    else:
+        site = 'unknown'
+
+    experiment_short = filename[:2]
+    try:
+        experiment = experiment_shorthands[experiment_short]
+    except KeyError:
+        experiment = 'unknown'
+
+    if filename[4:8] in ['0000', '5000']:  # no family
+        family = None
+    else:
+        family = filename[4:8]
+
+    run_number = '1'  # determine first or second run
+    if filename[4] == '5':
+        run_number = '2'
+
+    subject_piece = path_parts[-2]
+    site_letter = filename[3].lower()
+    if site_letter.lower() == site_letter:
+        session_letter = 'a'
+    else:
+        session_letter = 'b'
+
+    subject = filename[8:11]
+    version = filename[2]
+
+    output = {'system': system,
+              'experiment': experiment,
+              'session': session_letter,
+              'run': run_number,
+              'site': site,
+              'family': family,
+              'subject': subject,
+              'ID': subject_piece,
+              'version': version,
+              'path': filepath}
+
+    return output
+
+def parse_cnt_path(filepath):
+    full_filename = os.path.split(filepath)[1]
+    filename, ext = os.path.splitext(full_filename)
+
+    pieces = filename.split('_')
+    experiment = pieces[0]
+    version = pieces[1]
+    session_piece = pieces[2]
+    session_letter = session_piece[0]
+    run_number = session_piece[1]
+
+    subject_piece = pieces[3]
+    system = 'neuroscan'  # preliminary
+    fam_number = subject_piece[1:5]
+    subject = subject_piece[5:8]
+
+    if fam_number in ['0000', '0001'] and subject_piece[0] in 'acghp':
+        site = subject_piece[0] + '-subjects'
+        if fam_number == '0000':  # no family
+            family = 0
+        if fam_number == '0001':
+            family = 0
+    else:
+        family = fam_number
+        site = site_hash[subject_piece[0].lower()]
+        if not subject_piece[0].isdigit():
+            system = 'masscomp'
+            subject_piece = site_hash_rev[site_hash[
+                subject_piece[0].lower()]] + subject_piece[1:]
+
+    try:
+        bitrate_or_note = pieces[4]
+    except:
+        bitrate_or_note = None
+
+    try:
+        note = pieces[5]
+    except:
+        note = None
+
+    try:
+        int(bitrate_or_note)
+        bitrate = bitrate_or_note
+    except:
+        note = bitrate_or_note
+        bitrate = None
+
+    output = {'path': filepath,
+              'system': system,
+              'experiment': experiment,
+              'session': session_letter,
+              'run': run_number,
+              'site': site,
+              'family': family,
+              'subject': subject,
+              'ID': subject_piece,
+              'version': version,
+              'bitrate': bitrate,
+              'note': note}
+
+    return output              
 
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
     file_list = []
@@ -288,7 +410,7 @@ def parse_maybe_numeric(st):
     return st
 
 
-class cnth1_file:
+class CNTH1_File:
     def __init__(s, filepath):
         s.filepath = filepath
         s.filename = os.path.split(filepath)[1]
@@ -325,14 +447,23 @@ class cnth1_file:
         s.trial_info = hD
 
 
-class avgh1_file(cnth1_file):
+class AVGH1_File(CNTH1_File):
     ''' represents *.avg.h1 files, mostly for the behavioral info inside '''
 
     min_resptime = 100
+    trial_columns = ['trial_num', 'case_num', 'response_id', 'stim_id', 'correct', 'omitted', 'artf_present',
+                     'accepted', 'max_thresh_win_value', 'threshold_value', 'response_latency', 'time_offset']
 
-    def parse_behav_forDB(s):
+    def __init__(s, filepath):
+        CNTH1_File.__init__(s, filepath)
+        path_parts = filepath.split(os.path.sep)
+        system_letters = path_parts[-2][:2]
+        s.file_info['system'] = system_shorthands[system_letters]
+        s.data = {'uID': s.file_info['id']+'_'+s.file_info['session']}
+
+    def parse_behav_forDB(s, general_info=False):
         ''' wrapper for main function that also prepares for DB insert '''
-        s.data = {}
+        # s.data = {}
         
         # experiment specific stuff
         s.parse_behav() # puts behavioral results in s.results
@@ -344,8 +475,12 @@ class avgh1_file(cnth1_file):
         # ID-session specific stuff
         s.data.update(s.file_info)
         s.data['ID'] = s.data['id']
-        s.data['uID'] = s.data['ID']+'_'+s.data['session']
+        # s.data['uID'] = s.data['ID']+'_'+s.data['session']
+
         del s.data['experiment']
+
+        if not general_info:
+            s.data = {s.exp: s.data[s.exp], 'uID': s.data['uID']}
 
     def parse_behav(s):
         ''' main function. populates s.ev_df with the event table and
@@ -412,6 +547,20 @@ class avgh1_file(cnth1_file):
         s.type_seq = np.array([col[1][0]  for col in f['file/run/event/event']])
         s.resp_seq = np.array([col[2][0]  for col in f['file/run/event/event']])
         s.time_seq = np.array([col[-1][0] for col in f['file/run/event/event']])
+
+    def load_data_mc(s):
+        ''' prepare needed data from the h5py pointer for a masscomp file '''
+        f = h5py.File(s.filepath)
+        s.exp = f['file/experiment/experiment'][0][-3][0].decode()
+        s.case_dict = {}
+        for column in f['file/run/case/case']:
+            s.case_dict.update({column[3][0]: {'code': column[-3][0].decode(),
+                                               'descriptor': column[-2][0].decode(),
+                                               'corr_resp': column[4][0],
+                                               'resp_win': column[9][0]}})
+        base_trialarray = f['file/run/trial/trial'][:]
+        np_array = np.array([[elem[0] for elem in row] for row in base_trialarray])
+        s.trial_df = pd.DataFrame(np_array, columns=s.trial_columns)
         
     def parse_seq(s):
         ''' parse the behavioral sequence and create a dataframe containing
@@ -503,7 +652,7 @@ class avgh1_file(cnth1_file):
                     s.type_descriptor.append('stm_unknown')
 
 
-class mt_file:
+class MT_File:
     ''' manually picked files from eeg experiments
         initialization only parses the filename, call parse_file to load data
     '''
@@ -566,9 +715,9 @@ class mt_file:
                             'subject.session_code': {'$regex': '.' + sub_ses[1] + '.'},
                             'experiment.exp_name': {'$regex': '.ant.'}}))[0]
         case_tup = tuple(
-            sorted([tuple([csD[fd] for fd in mt_file.case_fields]) for cnum, csD in exp_doc['case'].items()]))
-        case_type = mt_file.ant_cases_types_lk.index(case_tup)
-        return mt_file.ant_case_convD[case_type]
+            sorted([tuple([csD[fd] for fd in MT_File.case_fields]) for cnum, csD in exp_doc['case'].items()]))
+        case_type = MT_File.ant_cases_types_lk.index(case_tup)
+        return MT_File.ant_case_convD[case_type]
 
     def __init__(s, filepath):
         s.fullpath = filepath
@@ -615,11 +764,11 @@ class mt_file:
 
     def normed_cases_calc(s):
         try:
-            norm_dict = mt_file.normAntCase(
+            norm_dict = MT_File.normAntCase(
                 (s.file_info['id'], s.file_info['session']))
             s.normed_cases = norm_dict
         except:
-            s.normed_cases = mt_file.ant_case_convD[0]
+            s.normed_cases = MT_File.ant_case_convD[0]
             s.norm_fail = True
 
     def parse_fileDB(s):
@@ -790,7 +939,7 @@ class mt_file:
         return True
 
 
-class ERO_csv:
+class ERO_CSV:
     ''' Compilations in processed data '''
     columns = ['ID', 'session', 'trial', 'F3', 'FZ',
                'F4', 'C3', 'CZ', 'C4', 'P3', 'PZ', 'P4']
@@ -816,8 +965,8 @@ class ERO_csv:
         pD = {'unknown': unknown}
         for p in param_string.split('-'):
             pFlag = p[0]
-            if pFlag in ERO_csv.parameterD:
-                pLookup = ERO_csv.parameterD[pFlag]
+            if pFlag in ERO_CSV.parameterD:
+                pLookup = ERO_CSV.parameterD[pFlag]
                 pval = p[1:]
                 pOpts = pLookup['values']
                 if pOpts == 'numeric':
@@ -832,7 +981,7 @@ class ERO_csv:
     def __init__(s, filepath):
         s.filepath = filepath
         s.filename = os.path.split(filepath)[1]
-        s.parameters = ERO_csv.defaults_by_exp.copy()
+        s.parameters = ERO_CSV.defaults_by_exp.copy()
 
         s.parse_fileinfo()
 
@@ -841,14 +990,14 @@ class ERO_csv:
         calc_version = path_parts[2][-3:]
         path_parameters = path_parts[-3]
         site = path_parts[-2]
-        s.parameters.update(ERO_csv.parse_parameters(path_parameters))
+        s.parameters.update(ERO_CSV.parse_parameters(path_parameters))
 
         file_parts = s.filename.split('_')
         exp, case = file_parts[0].split('-')
         freq_min, freq_max = [float(v) for v in file_parts[1].split('-')]
         time_min, time_max = [int(v) for v in file_parts[2].split('-')]
         for param in file_parts[3:-4]:
-            s.parameters.update(ERO_csv.parse_parameters(param,
+            s.parameters.update(ERO_CSV.parse_parameters(param,
                                                          unknown=s.parameters['unknown']))
 
         s.parameters['unknown'] = list(s.parameters['unknown'])
@@ -934,7 +1083,7 @@ class ERO_csv:
         s.data.rename(columns=rename_dict, inplace=True)
 
 
-class ERO_summary_csv(ERO_csv):
+class ERO_Summary_CSV(ERO_CSV):
     ''' Compilations in processed data/csv-files-*/ERO-results '''
     rem_columns = ['sex', 'EROage', 'POP', 'wave12-race', '4500-race',
                    'ccGWAS-race', 'COGA11k-race', 'alc_dep_dx', 'alc_dep_ons']
@@ -947,7 +1096,7 @@ class ERO_summary_csv(ERO_csv):
         end_parts = file_parts[-1].split('.')
 
         calc_parameters = end_parts[0]
-        s.parameters.update(ERO_summary_csv.parse_parameters(calc_parameters))
+        s.parameters.update(ERO_Summary_CSV.parse_parameters(calc_parameters))
 
         exp, case = file_parts[0].split('-')
         freq_min, freq_max = [float(v) for v in file_parts[1].split('-')]
@@ -1000,7 +1149,7 @@ class ERO_summary_csv(ERO_csv):
 ##
 ##############################
 
-class neuropsych_xml:
+class Neuropsych_XML:
     ''' For XML files found in /raw_data/neuropsych '''
 
     # labels for fields output by david's awk script
@@ -1033,7 +1182,7 @@ class neuropsych_xml:
 
     def read_file(s):
         # this function needs to be in /usr/bin of the invoking system
-        func_name = 'do_np_processB'
+        func_name = '/opt/bin/do_np_processB'
         raw_line = subprocess.check_output([func_name, s.filepath])
         data_dict = s.parse_csvline(raw_line)
         data_dict.pop('id', None)
@@ -1075,7 +1224,7 @@ class neuropsych_xml:
             return v
 
 
-class neuropsych_summary:
+class Neuropsych_Summary:
     def __init__(s, filepath):
         s.filepath = filepath
         s.path = os.path.dirname(s.filepath)
@@ -1123,7 +1272,7 @@ def parse_value_with_info(val, column, integer_columns, float_columns, boolean_c
     return val
 
 
-class tolt_summary_file(neuropsych_summary):
+class TOLT_Summary_File(Neuropsych_Summary):
     integer_columns = ['PegCount', 'MinimumMoves', 'MovesMade', 'ExcessMoves']
     float_columns = ['AvgPickupTime', 'AvgTotalTime', 'AvgTrialTime',
                      '%AboveOptimal', 'TotalTrialsTime', 'AvgTrialsTime']
@@ -1165,11 +1314,11 @@ class tolt_summary_file(neuropsych_summary):
         return caseD
 
     def __init__(s, filepath):
-        neuropsych_summary.__init__(s, filepath)
+        Neuropsych_Summary.__init__(s, filepath)
         s.read_file()
 
 
-class cbst_summary_file(neuropsych_summary):
+class CBST_Summary_File(Neuropsych_Summary):
     integer_columns = ['Trials', 'TrialsCorrect']
     float_columns = ['TrialTime', 'AverageTime']
     boolean_columns = {'Direction': [
@@ -1210,7 +1359,7 @@ class cbst_summary_file(neuropsych_summary):
         return tests
 
     def __init__(s, filepath):
-        neuropsych_summary.__init__(s, filepath)
+        Neuropsych_Summary.__init__(s, filepath)
         s.read_file()
 
 

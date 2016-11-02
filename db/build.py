@@ -14,11 +14,12 @@ from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123,
     import_questfolder, import_questfolder_ssaga,
     match_fups2sessions, df_fromcsv)
 from .organization import (Subject, SourceInfo, Session, ERPPeak, Neuropsych,
-    Questionnaire, Core, Internalizing, Externalizing, FHAM, EEGData, ERPData,
+    Questionnaire, Core, Internalizing, Externalizing, FHAM, RawEEGData, EEGData, ERPData,
     STransformInverseMats, EEGBehavior, SSAGA, Mdb, EROcsv, EROcsvresults)
-from .file_handling import (identify_files, mt_file, neuropsych_xml,
-    cnth1_file, avgh1_file, parse_STinv_path, tolt_summary_file,
-    cbst_summary_file, ERO_csv)
+from .file_handling import (identify_files, parse_STinv_path, parse_cnt_path, parse_rd_path,
+                            MT_File, CNTH1_File, AVGH1_File,
+                            Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
+                            ERO_CSV)
 
 # utility functions
 
@@ -122,7 +123,7 @@ def erp_peaks():
     for fp in tqdm(mt_files):
         if fp in bad_files:
             continue
-        mtO = mt_file(fp)
+        mtO = MT_File(fp)
         mtO.parse_fileDB()
         erpO = ERPPeak(mtO.data)
         erpO.store()
@@ -134,7 +135,7 @@ def neuropsych_xmls():
     # 10 minutes
     xml_files, datemods = identify_files('/raw_data/neuropsych/', '*.xml')
     for fp in tqdm(xml_files):
-        xmlO = neuropsych_xml(fp)
+        xmlO = Neuropsych_XML(fp)
         nsO = Neuropsych('all', xmlO.data)
         nsO.store()
     sourceO = SourceInfo(Neuropsych.collection,
@@ -213,13 +214,50 @@ def fham():
     sourceO = SourceInfo(FHAM.collection, (path, datemod))
     sourceO.store()
 
+def raw_eegdata():
+    # ~2 mins?
+
+    # rds
+    rd_start_dir = '/raw_data/masscomp/'
+    rd_glob_expr = '*rd'
+    rd_files, rd_datemods = identify_files(rd_start_dir, rd_glob_expr)
+    for rd_path in tqdm(rd_files):
+        try:
+            if 'bad' in rd_path:
+                continue
+            info = parse_rd_path(rd_path)
+            raweegO = RawEEGData(info)
+            raweegO.store()
+        except:
+            print('problem with', rd_path)
+
+    # cnts
+    cnt_start_dir = '/raw_data/neuroscan/'
+    cnt_glob_expr = '*cnt'
+    cnt_files, cnt_datemods = identify_files(cnt_start_dir, cnt_glob_expr)
+    for cnt_path in tqdm(cnt_files):
+        try:
+            info = parse_cnt_path(cnt_path)
+            if not info['note']:
+                raweegO = RawEEGData(info)
+                raweegO.store()
+        except:
+            print('problem with', cnt_path)
+
+    # raw_files = rd_files + cnt_files
+    # raw_datemods = rd_datemods + cnt_datemods
+    # sourceO = SourceInfo(RawEEGData.collection,
+    #                 list(zip(raw_files, raw_datemods)))
+    # sourceO.store()
+    # too large!
+
 def eeg_data():
     # ~2 mins?
     start_dir = '/processed_data/cnt-h1-files/'
     glob_expr = '*cnt.h1'
     cnth1_files, datemods = identify_files(start_dir, glob_expr)
     for f in tqdm(cnth1_files):
-        fO = cnth1_file(f)
+        fO = CNTH1_File(f)
         fO.parse_fileDB()
         eegO = EEGData(fO.data)
         eegO.store()
@@ -233,10 +271,10 @@ def erp_data():
     glob_expr = '*avg.h1'
     avgh1_files, datemods = identify_files(start_dir, glob_expr)
     for f in tqdm(avgh1_files):
-        fO = cnth1_file(f)  # basically identical at this point
+        fO = CNTH1_File(f)  # basically identical at this point
         fO.parse_fileDB()
-        eegO = ERPData(fO.data)
-        eegO.store()
+        erpO = ERPData(fO.data)
+        erpO.store()
     sourceO = SourceInfo(ERPData.collection,
                     list(zip(avgh1_files, datemods)))
     sourceO.store()
@@ -293,6 +331,7 @@ def mat_st_inv_walk(check_update=False, mat_files=None):
             matO.store()
 
 def eeg_behavior(files_dms=None):
+    ''' files_dms should be a list of file/datemodifed tuples '''
     # ~8 hours total to parse all *.avg.h1's for behavior
     # files_dms = pickle.load( open(
     #    '/active_projects/mike/pickles/avgh1s_dates.p', 'rb')  )
@@ -305,16 +344,27 @@ def eeg_behavior(files_dms=None):
 
     for f in tqdm(avgh1_files):
         try:
-            fO = avgh1_file(f)
-            if fO.file_info['experiment'] == 'err':
-                continue # have corrupted trial info and will overwrite ern
-            fO.parse_behav_forDB()
-            erpbeh_obj = EEGBehavior(fO.data)
-            erpbeh_obj.compare()
-            if erpbeh_obj.new:
+            fO = AVGH1_File(f)  # get uID and file_info
+            if fO.file_info['system']=='masscomp' or fO.file_info['experiment'] == 'err':
+                continue  # masscomp have nonexistent trial info / err have corrupted trial info and will overwrite ern
+
+            # simply check if the ID-session-experiment already exists
+            erpbeh_obj_ck = EEGBehavior(fO.data)
+            erpbeh_obj_ck.compare()  # populates s.new with bool
+
+            if erpbeh_obj_ck.new:  # "brand new", get general info
+                fO.parse_behav_forDB(general_info=True)
+                erpbeh_obj = EEGBehavior(fO.data)
                 erpbeh_obj.store()
-            else:
-                erpbeh_obj.update()
+            else:  # if not brand new, check if the experiment is already in the doc
+                try:
+                    erpbeh_obj_ck.doc[fO.file_info['experiment']]
+                except KeyError:  # only update experiment info if not already in db
+                    fO = AVGH1_File(f)  # refresh the file obj
+                    fO.parse_behav_forDB()
+                    erpbeh_obj = EEGBehavior(fO.data)
+                    erpbeh_obj.compare()  # to get update query
+                    erpbeh_obj.update()
         except:
             print(f, 'failed')
     sourceO = SourceInfo('EEGbehavior', list(zip(avgh1_files, datemods)))
@@ -339,7 +389,7 @@ def neuropsych_TOLT():
     tolt_files, datemods = identify_files('/raw_data/neuropsych/',
                                              '*TOLT*sum.txt')
     for fp in tqdm(tolt_files):
-        toltO = tolt_summary_file(fp)
+        toltO = TOLT_Summary_File(fp)
         nsO = Neuropsych('TOLT', toltO.data)
         nsO.store()
     sourceO = SourceInfo(Neuropsych.collection, list(
@@ -352,7 +402,7 @@ def neuropsych_CBST():
     cbst_files, datemods = identify_files('/raw_data/neuropsych/',
                                              '*CBST*sum.txt')
     for fp in tqdm(cbst_files):
-        cbstO = cbst_summary_file(fp)
+        cbstO = CBST_Summary_File(fp)
         nsO = Neuropsych('CBST', cbstO.data)
         nsO.store()
     sourceO = SourceInfo(Neuropsych.collection, list(
@@ -377,7 +427,7 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
             joinDF = pd.DataFrame()
             for filename in file_list:
                 fpath = os.path.join(subdir, filename)
-                csvfileO = ERO_csv(fpath)
+                csvfileO = ERO_CSV(fpath)
                 file_info = csvfileO.data_for_file()  #filename parsing to here
                 
                 # '''
