@@ -109,7 +109,7 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
 def masterYOB():
     '''Writes _YOB version of master file in same location
     '''
-    load_master()
+    master, mod_time = load_master()
     masterY = master.copy()
     masterY['DOB'] = masterY['DOB'].apply(lambda d: d.year)
     masterY.rename(columns={'DOB': 'YOB'}, inplace=True)
@@ -121,11 +121,11 @@ def masterYOB():
     return masterY
 
 
-def ids_with_exclusions():
+def ids_with_exclusions(master):
     return master[master['no-exp'].notnull()]['ID'].tolist()
 
 
-def excluded_experiments(id):
+def excluded_experiments(master,id):
     ex_str = master.ix[id]['no-exp']
     excluded = []
     if type(ex_str) == str:
@@ -175,7 +175,7 @@ def subjects_for_study(study, return_series=False):
         return master.ix[id_series]['ID'].tolist()
 
 
-def frame_for_study(study):
+def frame_for_study(master, study):
     id_series = subjects_for_study(study)
 
     study_frame = master.ix[id_series]
@@ -186,7 +186,7 @@ def frame_for_study(study):
 session_letters = 'abcdefghijk'
 
 
-def sessions_for_subject_experiment(subject_id, experiment):
+def sessions_for_subject_experiment(master, subject_id, experiment):
     sessions = []
     subject = master.ix[subject_id]
     excluded = excluded_experiments(subject_id)
