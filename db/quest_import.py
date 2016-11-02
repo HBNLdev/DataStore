@@ -326,7 +326,7 @@ def match_fups2sessions(qname, knowledge_dict, path, q_collection):
         # try to access subject record, notify if not possible
         try:
             s_rec = s.find({'ID': qrec['ID']})[0]
-        except:
+        except IndexError:
             print('could not find ' + qrec['ID'] + ' in subjects collection')
             q.update_one({'_id': qrec['_id']}, {'$set': {'session': None}})
             continue
