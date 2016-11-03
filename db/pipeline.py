@@ -281,6 +281,8 @@ def create_3dmats(docs, file_lim=None, run_now=False, proc_lim=10):
         
         if file_lim is None:
             n_files = len(STmat_lst)
+        else:
+            n_files = file_lim
 
         version, param_str, exp, case, n_chans = ver_ps_exp_case_nchans
 
