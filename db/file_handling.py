@@ -451,8 +451,8 @@ class AVGH1_File(CNTH1_File):
     ''' represents *.avg.h1 files, mostly for the behavioral info inside '''
 
     min_resptime = 100
-    trial_columns = ['trial_num', 'case_num', 'response_id', 'stim_id', 'correct', 'omitted', 'artf_present',
-                     'accepted', 'max_thresh_win_value', 'threshold_value', 'response_latency', 'time_offset']
+    trial_columns = ['Trial', 'Case Index', 'Response Code', 'Stimulus', 'Correct', 'Omitted', 'Artifact Present',
+                      'Accepted', 'Max Amp in Threshold Window', 'Threshold', 'Reaction Time (ms)', 'Time (s)']
 
     def __init__(s, filepath):
         CNTH1_File.__init__(s, filepath)
@@ -466,7 +466,14 @@ class AVGH1_File(CNTH1_File):
         # s.data = {}
         
         # experiment specific stuff
-        s.parse_behav() # puts behavioral results in s.results
+        if s.file_info['system']=='masscomp':
+            s.parse_behav_mc()
+        elif s.file_info['system']=='neuroscan':
+            s.parse_behav() # puts behavioral results in s.results
+        else:
+            print('system not recognized')
+            return
+
         s.data[s.exp] = unflatten_dict(s.results)
         s.data[s.exp]['filepath'] = s.filepath
         s.data[s.exp]['run'] = s.file_info.pop('run')
@@ -488,6 +495,10 @@ class AVGH1_File(CNTH1_File):
         s.load_data()
         s.parse_seq()
         s.calc_results()
+
+    def parse_behav_mc(s):
+        s.load_data_mc()
+        s.calc_results_mc()
 
     def calc_results(s):
         ''' calculates accuracy and reaction time from the event table '''
@@ -534,6 +545,19 @@ class AVGH1_File(CNTH1_File):
 
         s.results = results
 
+    def calc_results_mc(s):
+        results = {}
+        for t, t_attrs in s.case_dict.items():
+            nm = t_attrs['code']
+            case_trials = s.trial_df[s.trial_df['Stimulus'] == t]
+            if t_attrs['corr_resp'] == 0: # no response required
+                results[nm+'_acc'] = sum(case_trials['Correct']) / case_trials.shape[0]
+                continue
+            case_trials.drop(case_trials[~case_trials['Correct']].index, inplace=True)
+            results[nm+'_medianrt'] = case_trials['Reaction Time (ms)'].median()
+        s.results = results
+
+
     def load_data(s):
         ''' prepare needed data from the h5py pointer '''
         f = h5py.File(s.filepath)
@@ -560,7 +584,12 @@ class AVGH1_File(CNTH1_File):
                                                'resp_win': column[9][0]}})
         base_trialarray = f['file/run/trial/trial'][:]
         np_array = np.array([[elem[0] for elem in row] for row in base_trialarray])
-        s.trial_df = pd.DataFrame(np_array, columns=s.trial_columns)
+        s.trial_df = pd.DataFrame(np_array)
+        s.trial_df.iloc[:, :4] = s.trial_df.iloc[:, :4].applymap(int)
+        s.trial_df.iloc[:, 4:8] = s.trial_df.iloc[:, 4:8].applymap(bool)
+        s.trial_df.iloc[:, 8:12] = s.trial_df.iloc[:, 8:12].applymap(float)
+        s.trial_df.columns = s.trial_columns
+        s.trial_df.set_index('Trial', inplace=True)
         
     def parse_seq(s):
         ''' parse the behavioral sequence and create a dataframe containing

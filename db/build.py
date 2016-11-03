@@ -345,8 +345,8 @@ def eeg_behavior(files_dms=None):
     for f in tqdm(avgh1_files):
         try:
             fO = AVGH1_File(f)  # get uID and file_info
-            if fO.file_info['system']=='masscomp' or fO.file_info['experiment'] == 'err':
-                continue  # masscomp have nonexistent trial info / err have corrupted trial info and will overwrite ern
+            if fO.file_info['experiment'] == 'err':
+                continue 
 
             # simply check if the ID-session-experiment already exists
             erpbeh_obj_ck = EEGBehavior(fO.data)
