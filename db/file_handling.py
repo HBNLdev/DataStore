@@ -40,6 +40,9 @@ rd_subdir_tosite = {'alc': 'a-subject',
 system_shorthands = {'mc': 'masscomp',
                      'ns': 'neuroscan'}
 
+current_experiments = ['eeo', 'eec', 'vp3', 'cpt', 'ern',
+                       'ant', 'aod', 'ans', 'stp', 'gng']
+
 experiment_shorthands = {'aa': 'ap3',
                          'ab': 'abk',
                          'an': 'ant',
