@@ -15,7 +15,6 @@ from .organization import Mdb, Questionnaire, SSAGA, SourceInfo
 quest_sparser_sub = {'achenbach': ['af_', 'bp_']}
 
 # note we defaultly use this dateformat because pandas sniffs to this format
-
 def_info = {'date_lbl': ['ADM_Y', 'ADM_M', 'ADM_D'],
             'na_val': '',
             'dateform': '%Y-%m-%d',
@@ -25,56 +24,115 @@ def_info = {'date_lbl': ['ADM_Y', 'ADM_M', 'ADM_D'],
             'id_lbl': 'ind_id',
             }
 
+# these zork urls may change from distribution to distribution
+# change when needed
+core_pheno = '/pheno_all/core_pheno_20161018.zip'
+fam_url = '/family_data/allfam_sas_3-20-12.zip'
+ach_url = '/Phase_IV/Achenbach%20January%202016%20Distribution.zip'
+cal_url = '/Phase_IV/CAL%20Forms%20Summer-Fall%202015%20Harvest_sas.zip'
+
 # still missing: cal
 # for non-ssaga questionnaires, if there are multiple file_pfixes,
 # the files are assumed to be basically non-overlapping in terms of individuals
 # (one for adults, and one for adolescents)
-map_ph4 = {'achenbach':   {'file_pfixes': ['asr4', 'ysr4'],
-                             'date_lbl': 'datefilled',
-                             'drop_keys': ['af_', 'bp_']},
-             'aeq':         {'file_pfixes': ['aeqa4', 'aeq4']},
-             'bis':         {'file_pfixes': ['bis_a_score4', 'bis_score4']},
-             'craving':     {'file_pfixes': ['crv4']},
-             'daily':       {'file_pfixes': ['daily4']},
-             'dependence':  {'file_pfixes': ['dpndnce4']},
-             'neo':         {'file_pfixes': ['neo4']},
-             'sensation':   {'file_pfixes': ['sssc4', 'ssv4']},
-             'sre':         {'file_pfixes': ['sre_score4']}
-           }
+map_ph4 = {
+    'achenbach': {'file_pfixes': ['asr4', 'ysr4'],
+                  'zip_name': 'Achenbach',
+                  'date_lbl': 'datefilled',
+                  'drop_keys': ['af_', 'bp_'],
+                  'zork_url': ach_url},
+    'aeq': {'file_pfixes': ['aeqa4', 'aeq4'],
+            'zip_name': 'aeq4',
+            'zork_url': '/Phase_IV/aeq4.zip'},
+    'bis': {'file_pfixes': ['bis_a_score4', 'bis_score4'],
+            'zip_name': 'biq4',
+            'zork_url': '/Phase_IV/biq4.zip'},
+    'cal': {'file_pfixes': 'scored',
+            'zip_name': 'CAL',
+            'zork_url': cal_url},
+    'craving': {'file_pfixes': ['crv4'],
+                'zip_name': 'crv',
+                'zork_url': '/Phase_IV/crv4.zip'},
+    'daily': {'file_pfixes': ['daily4'],
+              'zip_name': 'daily',
+              'zork_url': '/Phase_IV/daily4.zip'},
+    'dependence': {'file_pfixes': ['dpndnce4'],
+                   'zip_name': 'dpndnce',
+                   'zork_url': '/Phase_IV/dpndnce4.zip'},
+    'master': {'file_pfixes': 'master4',
+               'zip_name': 'master4',
+               'zork_url': '/Phase_IV/master4_sas.zip'},
+    'neo': {'file_pfixes': ['neo4'],
+            'zip_name': 'neo',
+            'zork_url': '/Phase_IV/neo4.zip'},
+    'sensation': {'file_pfixes': ['sssc4', 'ssv4'],
+                  'zip_name': 'ssv',
+                  'zork_url': '/Phase_IV/ssvscore4.zip'},
+    'sre': {'file_pfixes': ['sre_score4'],
+            'zip_name': 'sre4',
+            'zork_url': '/Phase_IV/sre4.zip'},
+
+}
 
 # for ssaga questionnaires, the multiple file_fpixes are perfectly overlapping,
 # so we end up joining them
 map_ph4_ssaga = {
-             'cssaga':      {'file_pfixes': ['cssaga4', 'dx_cssaga4'],
-                             'date_lbl': 'IntvDate',
-                             'id_lbl': 'IND_ID'},
-             'pssaga':      {'file_pfixes': ['pssaga4', 'dx_pssaga4'],
-                             'date_lbl': 'IntvDate',
-                             'id_lbl': 'ind_id'},
-             'ssaga':       {'file_pfixes': ['ssaga4', 'dx_ssaga4'],
-                             'date_lbl': 'IntvDate',
-                             'id_lbl': 'IND_ID'},
+    'cssaga': {'file_pfixes': ['cssaga4', 'dx_cssaga4'],
+               'date_lbl': 'IntvDate',
+               'id_lbl': 'IND_ID',
+               'zip_name': 'cssaga_dx',
+               'zork_url': '/Phase_IV/cssaga_dx.zip'},
+    'pssaga': {'file_pfixes': ['pssaga4', 'dx_pssaga4'],
+               'date_lbl': 'IntvDate',
+               'id_lbl': 'ind_id',
+               'zip_name': 'cssagap_dx',
+               'zork_url': '/Phase_IV/cssagap_dx.zip'},
+    'ssaga': {'file_pfixes': ['ssaga4', 'dx_ssaga4'],
+              'date_lbl': 'IntvDate',
+              'id_lbl': 'IND_ID',
+              'zip_name': 'ssaga_dx',
+              'zork_url': '/Phase_IV/ssaga_dx.zip'}
+}
+
+# for subject-specific info, used by quest_retrieval.py
+map_subject = {'core': {'file_pfixes': 'core',
+                        'zip_name': 'core',
+                        'zork_url': core_pheno},
+               'fams': {'file_pfixes': 'allfamilies',
+                        'zip_name': 'allfam',
+                        'zork_url': fam_url},
+               'fham': {'file_pfixes': 'bigfham4',
+                        'zip_name': 'bigfham4',
+                        'zork_url': '/Phase_IV/bigfham4.zip'},
+               'rels': {'file_pfixes': 'all_rels',
+                        'zip_name': 'allrels',
+                        'zork_url': '/family_data/allrels_sas.zip'},
+               'vcuext': {'file_pfixes': ['vcu'],
+                          'zip_name': 'vcu',
+                          'zork_url': '/vcu_ext_pheno/vcu_ext_all_121112_sas.zip'},
+               }
+
+map_ph123 = {'aeq': {'file_pfixes': ['aeq', 'aeqa', 'aeq3', 'aeqa3'],
+                     'id_lbl': 'IND_ID'},
+             'craving': {'file_pfixes': ['craving', 'craving3']},
+             'daily': {'file_pfixes': ['daily', 'daily3']},
+             'dependence': {'file_pfixes': ['dpndnce', 'dpndnce3']},
+             'neo': {'file_pfixes': ['neo', 'neo3']},
+             'sensation': {'file_pfixes': ['sssc', 'ssvscore', 'sssc3']},
+             'sre': {'file_pfixes': ['sre', 'sre3']},
              }
 
-map_ph123 = {'aeq':         {'file_pfixes': ['aeq', 'aeqa', 'aeq3', 'aeqa3'],
-                             'id_lbl': 'IND_ID'},
-             'craving':     {'file_pfixes': ['craving', 'craving3']},
-             'daily':       {'file_pfixes': ['daily', 'daily3']},
-             'dependence':  {'file_pfixes': ['dpndnce', 'dpndnce3']},
-             'neo':         {'file_pfixes': ['neo', 'neo3']},
-             'sensation':   {'file_pfixes': ['sssc', 'ssvscore', 'sssc3']},
-             'sre':         {'file_pfixes': ['sre', 'sre3']},
-             }
 
 def sasdir_tocsv(target_dir):
     ''' convert a directory filled with *.sas7bdat files to *.csv '''
 
-    sas_files = glob.glob(target_dir+'*.sas7bdat')
+    sas_files = glob(target_dir + '*.sas7bdat')
 
     for sf in sas_files:
         sf_contents = SAS7BDAT(sf)
         sf_df = sf_contents.to_data_frame()
-        sf_df.to_csv(sf+'.csv', index=False)
+        sf_df.to_csv(sf + '.csv', index=False)
+
 
 def quest_pathfollowup(path, file_pfixes, file_ext, max_fups):
     ''' build dict of followups to filepaths '''
@@ -93,6 +151,7 @@ def quest_pathfollowup(path, file_pfixes, file_ext, max_fups):
                 fn_dict.update({fpathstr: followup})
 
     return fn_dict
+
 
 def quest_pathfollowup_ssaga(path, file_pfixes, file_ext, max_fups):
     ''' build dict of followups to filepaths '''
@@ -113,6 +172,7 @@ def quest_pathfollowup_ssaga(path, file_pfixes, file_ext, max_fups):
 
     return fn_dict
 
+
 def parse_date(dstr, dateform):
     ''' parse date column '''
 
@@ -122,6 +182,7 @@ def parse_date(dstr, dateform):
         return datetime.strptime(dstr, dateform)
     else:
         return None
+
 
 def df_fromcsv(fullpath, id_lbl='ind_id', na_val=''):
     ''' convert csv into dataframe, converting ID column to standard '''
@@ -146,7 +207,7 @@ def df_fromsas(fullpath, id_lbl='ind_id'):
     # convert id to str and save as new column
     df[id_lbl] = df[id_lbl].apply(int).apply(str)
     df['ID'] = df[id_lbl]
-    
+
     return df
 
 
@@ -173,14 +234,14 @@ def import_questfolder(qname, kmap, path):
 
     # get dict of filepaths and followup numbers
     file_dict = quest_pathfollowup(i['path'] + subfolder + '/',
-                                i['file_pfixes'], i['file_ext'], i['max_fups'])
+                                   i['file_pfixes'], i['file_ext'], i['max_fups'])
     print(file_dict)
     if not file_dict:
         print('There were no files in the path specified.')
 
     # for each file
     for file, followup_num in file_dict.items():
-    
+
         # read csv in as dataframe
         tmp_path = os.path.join(i['path'], file)
         print(tmp_path)
@@ -213,7 +274,7 @@ def import_questfolder(qname, kmap, path):
             ro.storeNaTsafe()
         datemod = datetime.fromtimestamp(os.path.getmtime(i['path']))
         sourceO = SourceInfo('questionnaires',
-                                (i['path'], datemod), qname)
+                             (i['path'], datemod), qname)
         sourceO.store()
 
 
@@ -234,15 +295,15 @@ def import_questfolder_ssaga(qname, kmap, path):
         print('There were no files in the path specified.')
 
     for followup_num, files in file_dict.items():
-    
+
         join_df = pd.DataFrame()
-        
+
         for f in files:
             fname = os.path.split(f)[1]
             print(f)
             # read csv in as dataframe
             df = df_fromcsv(os.path.join(i['path'], f),
-                                i['id_lbl'], i['na_val'])
+                            i['id_lbl'], i['na_val'])
             # df = df_fromsas( os.path.join(i['path'], f), i['id_lbl'])
 
             # if date_lbl is a list, replace columns with one strjoined column
@@ -264,7 +325,7 @@ def import_questfolder_ssaga(qname, kmap, path):
                     pass
                     # print('date format failed for', c)
                     # if c == 'IntvDate':
-                        # raise
+                    # raise
 
             # df.set_index('ID', inplace=True)
             df.drop(i['id_lbl'], axis=1, inplace=True)
@@ -273,7 +334,7 @@ def import_questfolder_ssaga(qname, kmap, path):
                 dx_cols = df.columns
             else:
                 nondx_cols = df.columns
-                
+
             if join_df.empty:
                 join_df = df
             else:
@@ -317,7 +378,7 @@ def match_fups2sessions(qname, knowledge_dict, path, q_collection):
     s = Mdb['subjects']
     q = Mdb[q_collection]
     if 'ssaga' in qname:
-        qc = q.find({'questname': {'$in': [qname, 'dx_'+qname]}})
+        qc = q.find({'questname': {'$in': [qname, 'dx_' + qname]}})
     else:
         qc = q.find({'questname': qname})
     print('matching fups to sessions')
