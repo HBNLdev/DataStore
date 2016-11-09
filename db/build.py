@@ -21,6 +21,8 @@ from .file_handling import (identify_files, parse_STinv_path, parse_cnt_path, pa
                             Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
                             ERO_CSV)
 
+zork_path = '/processed_data/zork/zork-phase4-71/'
+
 # utility functions
 
 def calc_followupcol(row):
@@ -146,7 +148,7 @@ def questionnaires_ph4():
     # takes  ~20 seconds per questionnaire
     # phase 4 non-SSAGA
     kmap = map_ph4
-    path = '/processed_data/zork/zork-phase4-69/session/'
+    path = zork_path + 'session/'
     for qname in kmap.keys():
             print(qname)
             import_questfolder(qname, kmap, path)
@@ -156,7 +158,7 @@ def questionnaires_ssaga():
     ''' import all session-based questionnaire info related to SSAGA '''
     # SSAGA
     kmap = map_ph4_ssaga
-    path = '/processed_data/zork/zork-phase4-69/session/'
+    path = zork_path + 'session/'
     for qname in kmap.keys():
             print(qname)
             import_questfolder_ssaga(qname, kmap, path)
@@ -164,9 +166,11 @@ def questionnaires_ssaga():
 
 def core():
     # fast
-    folder = '/processed_data/zork/zork-phase4-69/subject/core/'
-    file = 'core_pheno_20160822.sas7bdat.csv'
-    path = folder + file
+    folder = zork_path + 'subject/core/'
+    csv_files = glob(folder+'*.csv')
+    if len(csv_files) != 1:
+        print(len(csv_files), 'csvs found, aborting')
+    path = csv_files[0]
     datemod = datetime.fromtimestamp(os.path.getmtime(path))
     df = df_fromcsv(path)
     for drec in tqdm(df.to_dict(orient='records')):
@@ -203,7 +207,7 @@ def externalizing():
 
 def fham():
     # fast
-    folder = '/processed_data/zork/zork-phase4-69/subject/fham4/'
+    folder = zork_path + 'subject/fham/'
     file = 'bigfham4.sas7bdat.csv'
     path = folder + file
     datemod = datetime.fromtimestamp(os.path.getmtime(path))
@@ -279,29 +283,6 @@ def erp_data():
                     list(zip(avgh1_files, datemods)))
     sourceO.store()
 
-def mat_st_inv_toc():
-    # can take a while depending on network traffic
-    toc_dir = '/archive/backup/toc.d/'
-    toc_str = 'processed_data'
-    latest = get_toc(toc_dir, toc_str)
-
-    lines = txt_tolines(latest)
-
-    start = './mat-files-v'
-    end = 'st.mat'
-    tmp_lines = find_lines(lines, start, end)
-
-    new_prefix = '/processed_data'
-    files = [new_prefix + l[1:] for l in tmp_lines]
-    mat_files = verify_files(files)
-    # dates = get_dates(files)
-    for f in tqdm(mat_files):
-        infoD = parse_STinv_path(f)
-        infoD['path'] = f
-        infoD['prc_ver'] = f.split(os.path.sep)[2][-2]
-        matO = STransformInverseMats(infoD)
-        matO.store()
-
 def mat_st_inv_walk(check_update=False, mat_files=None):
     # can take a while depending on network traffic
     if mat_files is None:
@@ -371,6 +352,29 @@ def eeg_behavior(files_dms=None):
     sourceO.store()
 
 # not recommended / graveyard below
+
+def mat_st_inv_toc():
+    # can take a while depending on network traffic
+    toc_dir = '/archive/backup/toc.d/'
+    toc_str = 'processed_data'
+    latest = get_toc(toc_dir, toc_str)
+
+    lines = txt_tolines(latest)
+
+    start = './mat-files-v'
+    end = 'st.mat'
+    tmp_lines = find_lines(lines, start, end)
+
+    new_prefix = '/processed_data'
+    files = [new_prefix + l[1:] for l in tmp_lines]
+    mat_files = verify_files(files)
+    # dates = get_dates(files)
+    for f in tqdm(mat_files):
+        infoD = parse_STinv_path(f)
+        infoD['path'] = f
+        infoD['prc_ver'] = f.split(os.path.sep)[2][-2]
+        matO = STransformInverseMats(infoD)
+        matO.store()
 
 def questionnaires_ph123():
     ''' import all session-based questionnaire info from phase 4

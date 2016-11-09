@@ -4,6 +4,7 @@ import os
 import shutil
 import requests
 import zipfile
+from time import sleep
 
 from db.quest_import import sasdir_tocsv, map_ph4, map_ph4_ssaga, map_subject, ach_url
 
@@ -68,6 +69,7 @@ def zork_download(target_base_dir, distro_subdir, user_name, password):
         except:
             print('download failed:', url)
             return False
+        sleep(3) # pause for a few seconds to give the server a break
         # error check -- if url doesnt exist then print missing zip???
         zip_name = url.split('/')[-1]
         with open(os.path.join(target_base_dir, distro_subdir, zip_name), 'wb') as zip_pointer:
@@ -144,4 +146,3 @@ def zork_convert(path):
         for name in files:
             if name.endswith('.zip'):
                 os.remove(os.path.join(roots, name))
-                

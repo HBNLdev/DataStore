@@ -59,9 +59,6 @@ map_ph4 = {
     'dependence': {'file_pfixes': ['dpndnce4'],
                    'zip_name': 'dpndnce',
                    'zork_url': '/Phase_IV/dpndnce4.zip'},
-    'master': {'file_pfixes': 'master4',
-               'zip_name': 'master4',
-               'zork_url': '/Phase_IV/master4_sas.zip'},
     'neo': {'file_pfixes': ['neo4'],
             'zip_name': 'neo',
             'zork_url': '/Phase_IV/neo4.zip'},
@@ -110,6 +107,9 @@ map_subject = {'core': {'file_pfixes': 'core',
                'vcuext': {'file_pfixes': ['vcu'],
                           'zip_name': 'vcu',
                           'zork_url': '/vcu_ext_pheno/vcu_ext_all_121112_sas.zip'},
+               'master': {'file_pfixes': 'master4',
+                         'zip_name': 'master4',
+                         'zork_url': '/Phase_IV/master4_sas.zip'}
                }
 
 map_ph123 = {'aeq': {'file_pfixes': ['aeq', 'aeqa', 'aeq3', 'aeqa3'],
@@ -188,7 +188,11 @@ def df_fromcsv(fullpath, id_lbl='ind_id', na_val=''):
     ''' convert csv into dataframe, converting ID column to standard '''
 
     # read csv in as dataframe
-    df = pd.read_csv(fullpath, na_values=na_val)
+    try:
+        df = pd.read_csv(fullpath, na_values=na_val)
+    except pd.parser.EmptyDataError:
+        print('csv file was empty, continuing')
+        return pd.DataFrame()
 
     # convert id to str and save as new column
     df[id_lbl] = df[id_lbl].apply(int).apply(str)
@@ -244,8 +248,12 @@ def import_questfolder(qname, kmap, path):
 
         # read csv in as dataframe
         tmp_path = os.path.join(i['path'], file)
-        print(tmp_path)
+        print(tmp_path)        
         df = df_fromcsv(tmp_path, i['id_lbl'], i['na_val'])
+
+        if df.empty:
+            continue
+
         # df = df_fromsas( os.path.join(i['path'], f), i['id_lbl'])
 
         # if date_lbl is a list, replace columns with one strjoined column
