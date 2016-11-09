@@ -3,7 +3,8 @@
 import numpy as np
 import pandas as pd
 
-from .compilation import prepare_joindata
+from .compilation import prepare_joindata, get_colldocs, prepare_indices
+from .organization import flatten_dict
 from .quest_import import map_ph4, map_ph4_ssaga, build_inputdict
 
 map_allothers = {'neuropsych': {'date_lbl': 'testdate'},
@@ -166,6 +167,88 @@ def careful_join(comp_df, collection, subcoll=None, do_fill=False,
     # (should be very few of these, but they are erroneous)
     join_df = prepare_joindata(comp_df, collection, subcoll,
                                 left_join_inds=['ID', 'session'])
+    join_df.rename(columns={old_datecol: new_datecol}, inplace=True)
+    join_df = join_df.reset_index().drop_duplicates(['ID', fup_col]).\
+                                    set_index(['ID', 'session'])
+    join_df.sort_index(inplace=True)
+
+    # join in session date info from a sessions-collection-based df
+    join_df_sdate = join_df.join(comp_df[session_datecol_in])
+    session_datecol = 'session_date'
+    join_df_sdate.rename(columns={session_datecol_in: session_datecol,
+                                  old_datecol: new_datecol}, inplace=True)
+
+    # handle follow-ups which were assigned to the same session letter
+    if join_df_sdate.index.has_duplicates:
+        join_df_nodupes = handle_dupes(join_df_sdate, new_datecol, fup_col,
+                                                            session_datecol)
+        comp_dfj = comp_df.join(join_df_nodupes)
+    else:
+        comp_dfj = comp_df.join(join_df_sdate)
+
+    # fill sessions in a "nearest in time" manner within IDs
+    # assess info coverage before and after
+    joined_cols = [col for col in comp_dfj.columns if subcoll_safe[:3] + '_' in col]
+    if do_fill:
+        prefill_cvg = comp_dfj[joined_cols].count() / comp_dfj.shape[0]
+        comp_dfj_out = time_proximal_fill_fast(comp_dfj, new_datecol, fup_col,
+                                                joined_cols, min_age=min_age, max_age=max_age)
+        postfill_cvg = comp_dfj_out[joined_cols].count() / comp_dfj_out.shape[0]
+        fill_factor = postfill_cvg / prefill_cvg
+        print('coverage after filling is up to {:.1f} times higher'.format(
+                                                                fill_factor.max()))
+    else:
+        comp_dfj_out = comp_dfj
+
+    comp_dfj_out[joined_cols].dropna(axis=0, how='all')
+    return comp_dfj_out
+
+
+def careful_join_ssaga(comp_df, do_fill=False, min_age=-np.inf, max_age=np.inf,
+                 session_datecol_in='date'):
+    ''' given a compilation dataframe indexed by ID/session (comp_df) with an age column,
+        and with a session date column named by session_datecol_in,
+        carefully join the SSAGA and CSSAGA info '''
+
+    coll = 'ssaga'
+    collection = 'ssaga'
+    subcoll_safe = 'ssaga'
+    prefix = 'ssa_'
+
+    # parse the target name to get knowledge about it
+    i = get_kdict(collection, subcoll_safe)
+    if isinstance(i['date_lbl'], list):
+        old_datecol = subcoll_safe[:3] + '_' + '-'.join(i['date_lbl'])
+    else:
+        old_datecol = subcoll_safe[:3] + '_' + i['date_lbl']
+    new_datecol = subcoll_safe[:3] + '_date'
+    fup_col = subcoll_safe[:3] + '_followup'
+
+    id_field = 'ID'
+    add_proj = {}
+    flatten = True
+    left_join_inds = ['ID', 'session']
+    query = {id_field: {'$in': list(
+        comp_df.index.get_level_values(id_field))}}
+    ssaga_docs = get_colldocs(coll, 'dx_ssaga', query, add_proj)
+    cssaga_docs = get_colldocs(coll, 'dx_cssaga', query, add_proj)
+    docs = list(ssaga_docs) + list(cssaga_docs)
+    del ssaga_docs
+    del cssaga_docs
+
+    if flatten:
+        recs =[flatten_dict(r) for r in list(docs)]
+    else:
+        recs = docs
+
+    join_df = pd.DataFrame.from_records(recs)
+    join_df['ID'] = join_df[id_field]
+
+    prepare_indices(join_df, left_join_inds)
+    join_df.columns = [prefix + c for c in join_df.columns]
+    join_df.dropna(axis=1, how='all', inplace=True) # drop empty columns
+    join_df.sort_index(inplace=True)                # sort
+
     join_df.rename(columns={old_datecol: new_datecol}, inplace=True)
     join_df = join_df.reset_index().drop_duplicates(['ID', fup_col]).\
                                     set_index(['ID', 'session'])
