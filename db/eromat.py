@@ -135,6 +135,21 @@ class EROStack:
         em.get_params()
         s.params = em.params
 
+    def survey_freqvecs(s):
+
+        freqlen_lst = []
+        freqlen_dict = {}
+        for fp in s.data_df['path'].values:
+            file_pointer = h5py.File(fp, 'r')
+            f_vec = handle_parse(file_pointer, 'opt/f_vec_ds', 'array')
+            freqlen_lst.append(f_vec.shape[1])
+            if f_vec.shape[1] not in freqlen_dict:
+                freqlen_dict[f_vec.shape[1]] = f_vec
+
+        s.data_df['freq_len'] = pd.Series(freqlen_lst, index=s.data_df.index)
+        s.freqlen_dict = freqlen_dict
+
+
     def load_stack(s):
         dsets = [h5py.File(fp, 'r')['data'] for fp in s.data_df['path'].values]
         arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
@@ -188,9 +203,11 @@ class EROStack:
         return mean_df
 
     def tf_mean_lowmem(s, times, freqs):
+
         time_lims = [convert_scale(s.params['Times'], time) for time in times]
-        freq_lims = [convert_scale(s.params['Frequencies'], freq)
-                                for freq in freqs]
+        freq_lims = dict()
+        for freq_len, freq_array in s.freqlen_dict.items():
+            freq_lims[freq_len] = [convert_scale(freq_array, freq) for freq in freqs]
         print(time_lims)
         print(freq_lims)
 
@@ -198,12 +215,14 @@ class EROStack:
         n_files = len(s.data_df['path'].values)
         mean_array = np.empty((n_files, n_chans))
 
-        for fpi, fp in enumerate(s.data_df['path'].values):
+        fpi = 0
+        for fp, fl in s.data_df[['path', 'freq_len']].values:
             file_pointer = h5py.File(fp, 'r')
             mean_array[fpi, :] = file_pointer['data']\
                                 [:, time_lims[0]:time_lims[1]+1,
-                                    freq_lims[0]:freq_lims[1]+1].mean(axis=(1,2))
+                                    freq_lims[fl][0]:freq_lims[fl][1]+1].mean(axis=(1,2))
             file_pointer.close()
+            fpi += 1
 
         time_lbl = '-'.join([str(t) for t in times])+'ms'
         freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
@@ -219,10 +238,12 @@ class EROStack:
         win_inds = []
         win_lbls = []
         for win in windows:
-            winds = ( convert_scale(s.params['Times'], win[0]),
-                      convert_scale(s.params['Times'], win[1]),
-                      convert_scale(s.params['Frequencies'], win[2]),
-                      convert_scale(s.params['Frequencies'], win[3]) )
+            winds = dict()
+            for freq_len, freq_array in s.freqlen_dict.items():
+                winds[freq_len] = ( convert_scale(s.params['Times'], win[0]),
+                                    convert_scale(s.params['Times'], win[1]),
+                                    convert_scale(freq_array, win[2]),
+                                    convert_scale(freq_array, win[3]) )
             time_lbl = '-'.join([str(t) for t in win[0:2]])+'ms'
             freq_lbl = '-'.join([str(f) for f in win[2:4]])+'Hz'
             lbls = ['_'.join([chan, time_lbl, freq_lbl])
@@ -236,21 +257,51 @@ class EROStack:
         n_chans = int(s.params['# of channels'][0][0])
         mean_array = np.empty((n_files, n_windows, n_chans))
 
-        for fpi, fp in tqdm(enumerate(s.data_df['path'].values)):
+        fpi = 0
+        for fp, fl in s.data_df[['path', 'freq_len']].values:
             file_pointer = h5py.File(fp, 'r')
             for wi, winds in enumerate(win_inds):
                 mean_array[fpi, wi, :] = file_pointer['data']\
-                                    [:, winds[0]:winds[1]+1,
-                                        winds[2]:winds[3]+1].mean(axis=(1,2))
+                                    [:, winds[fl][0]:winds[fl][1]+1,
+                                        winds[fl][2]:winds[fl][3]+1].mean(axis=(1,2))
             file_pointer.close()
+            fpi += 1
 
         mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows*n_chans))
 
         mean_df = pd.DataFrame(mean_array_reshaped, index=s.data_df.index, columns=win_lbls)
         return mean_df
 
-    def tf_mean_nosubs(s, times, freqs):
-        pass
+    def sub_mean_lowmem(s):
+        ''' given time and frequency limits, calculate a grand (cross-subject) mean in that window
+            for all channels. creates a numpy array of shape (chans, freqs, times) '''
+
+        n_files = len(s.data_df['path'].values)
+        n_chans = int(s.params['# of channels'][0][0])
+        n_times = s.params['Frequencies'].shape[1]
+        n_freqs = s.params['Times'].shape[1]
+        print('{} files, {} chans, {} times, {} freqs'.format(n_files, n_chans, n_times, n_freqs))
+
+        sum_array = np.zeros((n_chans, n_freqs, n_times))
+
+        shape_mismatch_count = 0
+        for fpi, fp in enumerate(s.data_df['path'].values):
+            file_pointer = h5py.File(fp, 'r')
+            data = file_pointer['data'][:]
+            if data.shape != sum_array.shape:
+                print('shape mismatch on file', fpi)
+                print('data', data.shape)
+                print('sum array', sum_array.shape)
+                shape_mismatch_count += 1
+                continue
+            sum_array += data
+            file_pointer.close()
+
+        mean_array = sum_array / (n_files - shape_mismatch_count)
+
+        print('total mismatched:', shape_mismatch_count)
+
+        return mean_array
 
     def retrieve_dbdata(s, times, freqs):
         # for mat in s.data_df.iterrows():
