@@ -77,9 +77,9 @@ default_params = {'-p': '1',
 ### Info ###
 
 version_info = {'4': {'ruby script': '/active_projects/ERO_scripts/extract_st_bands_v4.0_custom.rb',
-                      'storage path': '/processed_data/ero-mats-V4/'},
+                      'storage path': '/processed_data/ero-mats-v40/'},
                 '6': {'ruby script': '/active_projects/ERO_scripts/extract_st_bands_v6.0_custom.rb',
-                      'storage path': '/processed_data/ero-mats-V6/'},
+                      'storage path': '/processed_data/ero-mats-v60/'},
                 }
 
 center9_text = '/export/home/mort/projects/electrodes-for_21.txt'
@@ -147,9 +147,8 @@ def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
     return path
 
 def gen_path_stdf(rec, power_type):
-    ''' apply function designed to operate on a dataframe indexed by ID and session.
-        given processing version, parameter string, number of channels in the raw data, experiment,
-        case, power type, ID, and session, generate the path to the expected 3d ero mat '''
+    ''' version of above, with dataframe based off STinverse docs
+    '''
 
     try:
         ID = rec.name[0]
