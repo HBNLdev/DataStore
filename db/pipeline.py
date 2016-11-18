@@ -122,6 +122,9 @@ def txt2list(path):
         lst = [line.strip() for line in f]
     return lst
 
+def list2txt(out_path):
+    ''' given path, write a list of strings to a text file there, with one element per line '''
+
 def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
     ''' apply function designed to operate on a dataframe indexed by ID and session.
         given processing version, parameter string, number of channels in the raw data, experiment,
