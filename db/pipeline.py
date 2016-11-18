@@ -77,9 +77,9 @@ default_params = {'-p': '1',
 ### Info ###
 
 version_info = {'4': {'ruby script': '/active_projects/ERO_scripts/extract_st_bands_v4.0_custom.rb',
-                      'storage path': '/processed_data/ero-mats-V4/'},
+                      'storage path': '/processed_data/ero-mats-v40/'},
                 '6': {'ruby script': '/active_projects/ERO_scripts/extract_st_bands_v6.0_custom.rb',
-                      'storage path': '/processed_data/ero-mats-V6/'},
+                      'storage path': '/processed_data/ero-mats-v60/'},
                 }
 
 center9_text = '/export/home/mort/projects/electrodes-for_21.txt'
@@ -121,6 +121,9 @@ def txt2list(path):
     with open(path, 'r') as f:
         lst = [line.strip() for line in f]
     return lst
+
+def list2txt(out_path):
+    ''' given path, write a list of strings to a text file there, with one element per line '''
 
 def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
     ''' apply function designed to operate on a dataframe indexed by ID and session.

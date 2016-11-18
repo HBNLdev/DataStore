@@ -4,6 +4,7 @@ import os
 
 from tqdm import tqdm
 import numpy as np
+from scipy import interpolate
 import pandas as pd
 import h5py
 import dask.array as da
@@ -110,6 +111,7 @@ class EROStack:
     def __init__(s, path_lst, touch_db=False):
         s.init_df(path_lst, touch_db=touch_db)
         s.get_params()
+        s.survey_freqvecs()
 
     def init_df(s, path_lst, touch_db=False):
         ''' given, a list of paths, intializes the dataframe that represents each existent EROmat.
@@ -142,12 +144,14 @@ class EROStack:
         for fp in s.data_df['path'].values:
             file_pointer = h5py.File(fp, 'r')
             f_vec = handle_parse(file_pointer, 'opt/f_vec_ds', 'array')
+            file_pointer.close()
             freqlen_lst.append(f_vec.shape[1])
             if f_vec.shape[1] not in freqlen_dict:
                 freqlen_dict[f_vec.shape[1]] = f_vec
 
         s.data_df['freq_len'] = pd.Series(freqlen_lst, index=s.data_df.index)
         s.freqlen_dict = freqlen_dict
+        s.params['Frequencies'] = freqlen_dict[max(freqlen_dict)]
 
 
     def load_stack(s):
@@ -216,7 +220,7 @@ class EROStack:
         mean_array = np.empty((n_files, n_chans))
 
         fpi = 0
-        for fp, fl in s.data_df[['path', 'freq_len']].values:
+        for fp, fl in tqdm(s.data_df[['path', 'freq_len']].values):
             file_pointer = h5py.File(fp, 'r')
             mean_array[fpi, :] = file_pointer['data']\
                                 [:, time_lims[0]:time_lims[1]+1,
@@ -258,7 +262,7 @@ class EROStack:
         mean_array = np.empty((n_files, n_windows, n_chans))
 
         fpi = 0
-        for fp, fl in s.data_df[['path', 'freq_len']].values:
+        for fp, fl in tqdm(s.data_df[['path', 'freq_len']].values):
             file_pointer = h5py.File(fp, 'r')
             for wi, winds in enumerate(win_inds):
                 mean_array[fpi, wi, :] = file_pointer['data']\
@@ -273,16 +277,16 @@ class EROStack:
         return mean_df
 
     def sub_mean_lowmem(s):
-        ''' given time and frequency limits, calculate a grand (cross-subject) mean in that window
-            for all channels. creates a numpy array of shape (chans, freqs, times) '''
+        ''' calculate a grand (cross-subject) mean.
+            creates a numpy array of shape (chans, freqs, times) '''
 
         n_files = len(s.data_df['path'].values)
         n_chans = int(s.params['# of channels'][0][0])
-        n_times = s.params['Frequencies'].shape[1]
-        n_freqs = s.params['Times'].shape[1]
+        n_times = s.params['Times'].shape[1]
+        n_freqs = s.params['Frequencies'].shape[1]
         print('{} files, {} chans, {} times, {} freqs'.format(n_files, n_chans, n_times, n_freqs))
 
-        sum_array = np.zeros((n_chans, n_freqs, n_times))
+        sum_array = np.zeros((n_chans, n_times, n_freqs))
 
         shape_mismatch_count = 0
         for fpi, fp in enumerate(s.data_df['path'].values):
@@ -303,10 +307,57 @@ class EROStack:
 
         return mean_array
 
+    def sub_mean_lowmem_interp(s):
+        ''' calculate a grand (cross-subject) mean. creates a numpy array of shape (chans, freqs, times)
+            if interpolation is necessary '''
+
+        n_files = len(s.data_df['path'].values)
+        n_chans = int(s.params['# of channels'][0][0])
+        time_vec = s.params['Times'][0]
+        n_times = time_vec.size
+        n_freqs = s.params['Frequencies'].shape[1]
+        print('{} files, {} chans, {} times, {} freqs'.format(n_files, n_chans, n_times, n_freqs))
+
+        sum_array = np.zeros((n_chans, n_times, n_freqs))
+
+        max_freqsize = max(s.freqlen_dict)
+        
+        fpi = 0
+        for fp, fl in tqdm(s.data_df[['path', 'freq_len']].values):
+            file_pointer = h5py.File(fp, 'r')
+            data = file_pointer['data'][:]
+            file_pointer.close()
+            if fl != max_freqsize:
+                new_data = np.empty((n_chans, n_times, max_freqsize))
+                for ctfi, chan_tf in enumerate(data):
+                    new_data[ctfi, :, :] = interp_freqdomain_fast(chan_tf, time_vec,
+                        s.freqlen_dict[fl][0], s.freqlen_dict[max_freqsize][0])
+                data = new_data
+            sum_array += data
+            fpi += 1
+
+        mean_array = sum_array / n_files
+
+        return mean_array
+
+
     def retrieve_dbdata(s, times, freqs):
         # for mat in s.data_df.iterrows():
         #     proj = C.format_EROprojection()
         pass
+
+def interp_freqdomain(a, t, f1, f2):
+    ''' given time-frequency array a that is of shape (t.size, f1.size),
+        timepoint vector t, and two frequency vectors, f1 and f2,
+        use 2d interpolation to produce output array that is of size (t.size, f2.size) '''
+    f = interpolate.interp2d(f1, t, a)
+    return f(f2, t)
+
+def interp_freqdomain_fast(a, t, f1, f2):
+    ''' faster version of above '''
+    f = interpolate.RectBivariateSpline(t, f1, a)
+    return f(t, f2)
+
 
 class EROMat:
     

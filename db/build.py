@@ -108,6 +108,9 @@ def sessions():
     sourceO = SourceInfo(Session.collection, (master_path, master_mtime))
     sourceO.store()
 
+def add_sessions_info():    
+    pass
+
 
 def erp_peaks():
     # 3 minutes
@@ -312,7 +315,7 @@ def mat_st_inv_walk(check_update=False, mat_files=None):
             matO.store()
 
 def eeg_behavior(files_dms=None):
-    ''' files_dms should be a list of file/datemodifed tuples '''
+    ''' if used, files_dms should be a list of file/datemodifed tuples '''
     # ~8 hours total to parse all *.avg.h1's for behavior
     # files_dms = pickle.load( open(
     #    '/active_projects/mike/pickles/avgh1s_dates.p', 'rb')  )

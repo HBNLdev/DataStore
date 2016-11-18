@@ -538,6 +538,8 @@ class AVGH1_File(CNTH1_File):
                     resp_codes.remove(0)
                 except:
                     pass
+                # this part logs the median reaction time for each type of response
+                # (i.e. both for correct and incorrect responses)
                 for rc in resp_codes:
                     tmp_df = s.ev_df[(s.ev_df['resp_seq']==rc) & \
                             ~(s.ev_df['early']) & ~(s.ev_df['errant'])]
