@@ -11,7 +11,7 @@ import h5py
 import pandas as pd
 import numpy as np
 
-from .organization import unflatten_dict, MongoConn
+from .organization import unflatten_dict, Mdb
 from .utils import next_file_with_base
 
 site_hash = {'a': 'uconn',
@@ -459,7 +459,7 @@ def extract_case_tuple(path):
         index = case[0][0]
         type_letter = case[-3][0].decode()
         type_word = case[-2][0].decode()
-        case_lst.append((index, '"'+type_letter+'"', '"'+type_word+'"'))
+        case_lst.append((index, type_letter, type_word))
     case_tup = tuple(case_lst)
     return case_tup
 
@@ -731,22 +731,22 @@ class MT_File:
     # string for reference
     data_structure = '{(case#,peak):{electrodes:(amplitude,latency),reaction_time:time} }'
 
-    ant_cases_types_lk = [((1, '"A"', '"Antonym"'),
-                           (2, '"J"', '"Jumble"'),
-                           (3, '"W"', '"Word"'),
-                           (4, '"P"', '"Prime"')),
-                          ((1, '"T"', '"jumble"'),
-                           (2, '"T"', '"prime"'),
-                           (3, '"T"', '"antonym"'),
-                           (4, '"T"', '"other"')),
-                          ((1, '"T"', '"jumble"'),
-                           (2, '"T"', '" prime"'),
-                           (3, '"T"', '" antonym"'),
-                           (4, '"T"', '" other"')),
-                          ((1, '"T"', '"jumble"'),
-                           (2, '"T"', '"prime"'),
-                           (3, '"T"', '"antonym"'),
-                           (4, '"T"', '"word"'))]
+    ant_cases_types_lk = [((1, 'A', 'Antonym'),
+                           (2, 'J', 'Jumble'),
+                           (3, 'W', 'Word'),
+                           (4, 'P', 'Prime')),
+                          ((1, 'T', 'jumble'),
+                           (2, 'T', 'prime'),
+                           (3, 'T', 'antonym'),
+                           (4, 'T', 'other')),
+                          ((1, 'T', 'jumble'),
+                           (2, 'T', ' prime'),
+                           (3, 'T', ' antonym'),
+                           (4, 'T', ' other')),
+                          ((1, 'T', 'jumble'),
+                           (2, 'T', 'prime'),
+                           (3, 'T', 'antonym'),
+                           (4, 'T', 'word'))]
 
     case_fields = ['case_num', 'case_type', 'descriptor']
 
@@ -764,13 +764,13 @@ class MT_File:
                        'stp': {1: 'c', 2: 'i'},
                        }
 
-    def normAntCase(sub_ses):
-        exp_doc = list(MongoConn['COGA']['avgh1s'].find
-                            ({'subject.subject_id': {'$regex': '.' + sub_ses[0] + '.'},
-                            'subject.session_code': {'$regex': '.' + sub_ses[1] + '.'},
-                            'experiment.exp_name': {'$regex': '.ant.'}}))[0]
-        case_tup = tuple(
-            sorted([tuple([csD[fd] for fd in MT_File.case_fields]) for cnum, csD in exp_doc['case'].items()]))
+    query_fields = ['id', 'session', 'experiment']
+
+    def normAntCase(s):
+        query = {k:v for k,v in s.file_info.items() if k in s.query_fields}
+        doc = Mdb['avgh1s'].find_one(query)
+        avgh1_path = doc['filepath']
+        case_tup = extract_case_tuple(avgh1_path)
         case_type = MT_File.ant_cases_types_lk.index(case_tup)
         return MT_File.ant_case_convD[case_type]
 
@@ -783,7 +783,6 @@ class MT_File:
         if s.file_info['experiment'] == 'ant':
             s.normed_cases_calc()
         s.parse_header()
-
 
     def parse_fileinfo(s):
         s.file_info = parse_filename(s.filename)
@@ -819,8 +818,7 @@ class MT_File:
 
     def normed_cases_calc(s):
         try:
-            norm_dict = MT_File.normAntCase(
-                (s.file_info['id'], s.file_info['session']))
+            norm_dict = s.normAntCase()
             s.normed_cases = norm_dict
         except:
             s.normed_cases = MT_File.ant_case_convD[0]
