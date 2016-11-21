@@ -450,6 +450,20 @@ class CNTH1_File:
         s.trial_info = hD
 
 
+def extract_case_tuple(path):
+    ''' given a path to an .avg.h1 file, extract a case tuple for comparison '''
+    f = h5py.File(path, 'r')
+    case_info = f['file']['run']['case']['case'][:]
+    case_lst = []
+    for case in case_info:
+        index = case[0][0]
+        type_letter = case[-3][0].decode()
+        type_word = case[-2][0].decode()
+        case_lst.append((index, '"'+type_letter+'"', '"'+type_word+'"'))
+    case_tup = tuple(case_lst)
+    return case_tup
+
+
 class AVGH1_File(CNTH1_File):
     ''' represents *.avg.h1 files, mostly for the behavioral info inside '''
 
@@ -458,11 +472,23 @@ class AVGH1_File(CNTH1_File):
                       'Accepted', 'Max Amp in Threshold Window', 'Threshold', 'Reaction Time (ms)', 'Time (s)']
 
     def __init__(s, filepath):
+        s.filepath = filepath
         CNTH1_File.__init__(s, filepath)
         path_parts = filepath.split(os.path.sep)
         system_letters = path_parts[-2][:2]
         s.file_info['system'] = system_shorthands[system_letters]
         s.data = {'uID': s.file_info['id']+'_'+s.file_info['session']}
+
+    def fix_ant(s):
+        case_tup = extract_case_tuple(s.filepath)
+        try:
+            ind = MT_File.ant_cases_types_lk.index(case_tup)
+        except IndexError:
+            print('case info unexpected')
+            return
+        if ind > 0:
+            for type_ind in range(4):
+                s.case_dict[type_ind]['code'] = 'JPAW'[type_ind]
 
     def parse_behav_forDB(s, general_info=False):
         ''' wrapper for main function that also prepares for DB insert '''
@@ -470,9 +496,17 @@ class AVGH1_File(CNTH1_File):
         
         # experiment specific stuff
         if s.file_info['system']=='masscomp':
-            s.parse_behav_mc()
+
+            s.load_data_mc()
+            if s.file_info['experiment'] == 'ant':
+                s.fix_ant()
+            s.calc_results_mc()
+
         elif s.file_info['system']=='neuroscan':
-            s.parse_behav() # puts behavioral results in s.results
+            s.load_data()
+            s.parse_seq()
+            s.calc_results() # puts behavioral results in s.results
+
         else:
             print('system not recognized')
             return
@@ -491,17 +525,6 @@ class AVGH1_File(CNTH1_File):
 
         if not general_info:
             s.data = {s.exp: s.data[s.exp], 'uID': s.data['uID']}
-
-    def parse_behav(s):
-        ''' main function. populates s.ev_df with the event table and
-            s.results with the results '''
-        s.load_data()
-        s.parse_seq()
-        s.calc_results()
-
-    def parse_behav_mc(s):
-        s.load_data_mc()
-        s.calc_results_mc()
 
     def calc_results(s):
         ''' calculates accuracy and reaction time from the event table '''
@@ -555,13 +578,11 @@ class AVGH1_File(CNTH1_File):
         for t, t_attrs in s.case_dict.items():
             nm = t_attrs['code']
             case_trials = s.trial_df[s.trial_df['Stimulus'] == t]
-            if t_attrs['corr_resp'] == 0: # no response required
-                results[nm+'_acc'] = sum(case_trials['Correct']) / case_trials.shape[0]
-                continue
-            case_trials.drop(case_trials[~case_trials['Correct']].index, inplace=True)
-            results[nm+'_medianrt'] = case_trials['Reaction Time (ms)'].median()
+            results[nm+'_acc'] = sum(case_trials['Correct']) / case_trials.shape[0]
+            if t_attrs['corr_resp'] != 0: # response required
+                case_trials.drop(case_trials[~case_trials['Correct']].index, inplace=True)
+                results[nm+'_medianrt'] = case_trials['Reaction Time (ms)'].median()
         s.results = results
-
 
     def load_data(s):
         ''' prepare needed data from the h5py pointer '''
@@ -744,7 +765,7 @@ class MT_File:
                        }
 
     def normAntCase(sub_ses):
-        exp_doc = list(MongoConn['COGAa'].EEG.find
+        exp_doc = list(MongoConn['COGA']['avgh1s'].find
                             ({'subject.subject_id': {'$regex': '.' + sub_ses[0] + '.'},
                             'subject.session_code': {'$regex': '.' + sub_ses[1] + '.'},
                             'experiment.exp_name': {'$regex': '.ant.'}}))[0]
