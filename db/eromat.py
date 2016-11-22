@@ -111,6 +111,7 @@ class EROStack:
     def __init__(s, path_lst, touch_db=False):
         s.init_df(path_lst, touch_db=touch_db)
         s.get_params()
+        s.open_pointers()
         s.survey_freqvecs()
 
     def init_df(s, path_lst, touch_db=False):
@@ -137,14 +138,15 @@ class EROStack:
         em.get_params()
         s.params = em.params
 
+    def open_pointers(s):
+        s.pointer_lst = [h5py.File(fp, 'r') for fp in s.data_df['path'].values]
+
     def survey_freqvecs(s):
 
         freqlen_lst = []
         freqlen_dict = {}
-        for fp in s.data_df['path'].values:
-            file_pointer = h5py.File(fp, 'r')
-            f_vec = handle_parse(file_pointer, 'opt/f_vec_ds', 'array')
-            file_pointer.close()
+        for fp in s.pointer_lst:
+            f_vec = handle_parse(fp, 'opt/f_vec_ds', 'array')
             freqlen_lst.append(f_vec.shape[1])
             if f_vec.shape[1] not in freqlen_dict:
                 freqlen_dict[f_vec.shape[1]] = f_vec
@@ -153,15 +155,14 @@ class EROStack:
         s.freqlen_dict = freqlen_dict
         s.params['Frequencies'] = freqlen_dict[max(freqlen_dict)]
 
-
     def load_stack(s):
-        dsets = [h5py.File(fp, 'r')['data'] for fp in s.data_df['path'].values]
+        dsets = [fp['data'] for fp in s.pointer_lst]
         arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
         s.stack = da.stack(arrays, axis=-1)
         print(s.stack.shape)
 
     def load_stack_np(s):
-        arrays = [h5py.File(fp, 'r')['data'][:] for fp in s.data_df['path'].values]
+        arrays = [fp['data'][:] for fp in s.pointer_lst]
         s.stack_np = np.stack(arrays, axis=-1)
         print(s.stack_np.shape)
 
@@ -220,12 +221,10 @@ class EROStack:
         mean_array = np.empty((n_files, n_chans))
 
         fpi = 0
-        for fp, fl in tqdm(s.data_df[['path', 'freq_len']].values):
-            file_pointer = h5py.File(fp, 'r')
-            mean_array[fpi, :] = file_pointer['data']\
+        for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
+            mean_array[fpi, :] = fp['data']\
                                 [:, time_lims[0]:time_lims[1]+1,
                                     freq_lims[fl][0]:freq_lims[fl][1]+1].mean(axis=(1,2))
-            file_pointer.close()
             fpi += 1
 
         time_lbl = '-'.join([str(t) for t in times])+'ms'
@@ -262,13 +261,11 @@ class EROStack:
         mean_array = np.empty((n_files, n_windows, n_chans))
 
         fpi = 0
-        for fp, fl in tqdm(s.data_df[['path', 'freq_len']].values):
-            file_pointer = h5py.File(fp, 'r')
+        for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
             for wi, winds in enumerate(win_inds):
-                mean_array[fpi, wi, :] = file_pointer['data']\
+                mean_array[fpi, wi, :] = fp['data']\
                                     [:, winds[fl][0]:winds[fl][1]+1,
                                         winds[fl][2]:winds[fl][3]+1].mean(axis=(1,2))
-            file_pointer.close()
             fpi += 1
 
         mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows*n_chans))
@@ -289,9 +286,8 @@ class EROStack:
         sum_array = np.zeros((n_chans, n_times, n_freqs))
 
         shape_mismatch_count = 0
-        for fpi, fp in enumerate(s.data_df['path'].values):
-            file_pointer = h5py.File(fp, 'r')
-            data = file_pointer['data'][:]
+        for fpi, fp in enumerate(s.pointer_lst):
+            data = fp['data'][:]
             if data.shape != sum_array.shape:
                 print('shape mismatch on file', fpi)
                 print('data', data.shape)
@@ -299,7 +295,6 @@ class EROStack:
                 shape_mismatch_count += 1
                 continue
             sum_array += data
-            file_pointer.close()
 
         mean_array = sum_array / (n_files - shape_mismatch_count)
 
@@ -323,10 +318,8 @@ class EROStack:
         max_freqsize = max(s.freqlen_dict)
         
         fpi = 0
-        for fp, fl in tqdm(s.data_df[['path', 'freq_len']].values):
-            file_pointer = h5py.File(fp, 'r')
-            data = file_pointer['data'][:]
-            file_pointer.close()
+        for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
+            data = fp['data'][:]
             if fl != max_freqsize:
                 new_data = np.empty((n_chans, n_times, max_freqsize))
                 for ctfi, chan_tf in enumerate(data):
@@ -340,11 +333,11 @@ class EROStack:
 
         return mean_array
 
-
     def retrieve_dbdata(s, times, freqs):
         # for mat in s.data_df.iterrows():
         #     proj = C.format_EROprojection()
         pass
+
 
 def interp_freqdomain(a, t, f1, f2):
     ''' given time-frequency array a that is of shape (t.size, f1.size),
@@ -352,6 +345,7 @@ def interp_freqdomain(a, t, f1, f2):
         use 2d interpolation to produce output array that is of size (t.size, f2.size) '''
     f = interpolate.interp2d(f1, t, a)
     return f(f2, t)
+
 
 def interp_freqdomain_fast(a, t, f1, f2):
     ''' faster version of above '''
