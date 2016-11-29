@@ -1,5 +1,4 @@
 ''' Qt version of HBNL Peak Picker
-
     Just run me with python3 in conda 'upgrade' environment.
 '''
 
