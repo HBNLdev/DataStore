@@ -24,19 +24,23 @@ ordered_chans = []
 for row in layout:
     ordered_chans.extend([chan for chan in row if chan])
 
+
 def n_colors(N):
     ''' given integer N, return generator for N distinct colors '''
-    HSV_tuples = [(x*1.0/N, 0.5, 0.5) for x in range(N)]
+    HSV_tuples = [(x * 1.0 / N, 0.5, 0.5) for x in range(N)]
     RGB_tuples = map(lambda x: colorsys.hsv_to_rgb(*x), HSV_tuples)
     return RGB_tuples
 
+
 def subplot_heuristic(n):
     ''' for n subplots, determine best grid layout dimensions '''
+
     def isprime(n):
         for x in range(2, int(np.sqrt(n)) + 1):
             if n % x == 0:
                 return False
         return True
+
     if n > 6 and isprime(n):
         n += 1
     num_lst, den_lst = [n], [1]
@@ -46,10 +50,11 @@ def subplot_heuristic(n):
             num_lst.append(n // x)
     ratios = np.array([a / b for a, b in zip(num_lst, den_lst)])
     best_ind = np.argmin(ratios - 1.618)  # most golden
-    if den_lst[best_ind] < num_lst[best_ind]: # always have more rows than cols
+    if den_lst[best_ind] < num_lst[best_ind]:  # always have more rows than cols
         return den_lst[best_ind], num_lst[best_ind]
     else:
         return num_lst[best_ind], den_lst[best_ind]
+
 
 def figsize_heuristic(sp_dims):
     ''' given subplot dims (rows, columns), return (width, height) of figure '''
@@ -68,6 +73,7 @@ def figsize_heuristic(sp_dims):
         out_width = sp_width * sp_dims[1]
     return out_width, out_height
 
+
 # text-processing for processively generating figure names
 
 def is_nonstr_sequence(obj):
@@ -75,6 +81,7 @@ def is_nonstr_sequence(obj):
     if isinstance(obj, str):
         return False
     return isinstance(obj, collections.Sequence)
+
 
 def nested_strjoin(obj, delim='_'):
     ''' recursively convert obj contents to strings and join '''
@@ -90,41 +97,44 @@ def nested_strjoin(obj, delim='_'):
             js += str(thing) + delim
     return js
 
+
 # plot utilities
 
 def blank_topo(in_ax, info):
     ''' create a blank headplot '''
     topo = np.empty(61)
-    cmap = LinearSegmentedColormap.from_list('mycmap', ['white', 'white'] )
+    cmap = LinearSegmentedColormap.from_list('mycmap', ['white', 'white'])
     ax, im, cn, pos_x, pos_y = plot_topomap(topo, info, cmap=cmap,
                                             contours=0, axes=in_ax,
                                             show=False)
     return ax, im, cn, pos_x, pos_y
 
+
 def create_arc(pt1, pt2, color=(0, 0, 0), linewidth=1, alpha=1):
     ''' given two x, y coordinate-tuples, return arc between them '''
     x0, y0 = pt1
     x1, y1 = pt2
-    midpoint = ((x0 + x1)/2, (y0 + y1)/2)
+    midpoint = ((x0 + x1) / 2, (y0 + y1) / 2)
     vdist = np.linalg.norm(np.array((x0, y0)) - np.array((x1, y1)))
-    hdist = 0.1 + (vdist / 10) # this works pretty good?
+    hdist = 0.1 + (vdist / 10)  # this works pretty good?
     angle = np.degrees(np.arctan2((x1 - x0), -(y1 - y0)))
     return Arc(midpoint, hdist, vdist, angle, 90, 270, color=color,
-              linewidth=linewidth, alpha=alpha)
+               linewidth=linewidth, alpha=alpha)
+
 
 def ordinalize_one(num, size, lims, mid=None):
     ''' given datum, ordinalize it to a given index size '''
-    
+
     vmin, vmax = lims
 
-    data_prop = (num - vmin) / (vmax -  vmin)
-    data_prop_ind = int(round(data_prop * (size-1)))
+    data_prop = (num - vmin) / (vmax - vmin)
+    data_prop_ind = int(round(data_prop * (size - 1)))
 
     if mid is not None:
         if num < 0:
-            data_prop = np.fabs( (num - mid) / vmin )
+            data_prop = np.fabs((num - mid) / vmin)
         else:
-            data_prop = np.fabs( (num - mid) / vmax )
+            data_prop = np.fabs((num - mid) / vmax)
 
     if data_prop_ind < 0:
         data_prop_ind = 0
@@ -132,22 +142,24 @@ def ordinalize_one(num, size, lims, mid=None):
         data_prop_ind = size - 1
     return data_prop_ind, data_prop
 
+
 def ordinalize_many(data, size=256, lims=[0, 0.25]):
     ''' given data, ordinalize it to a given index size '''
     if lims:
         vmin, vmax = lims
     else:
         vmin, vmax = data.min(), data.max()
-    data_prop = (data - vmin) / (vmax -  vmin)
-    data_prop_inds = (data_prop * (size-1)).round().astype(int)
+    data_prop = (data - vmin) / (vmax - vmin)
+    data_prop_inds = (data_prop * (size - 1)).round().astype(int)
     data_prop_inds[data_prop_inds < 0] = 0
     data_prop_inds[data_prop_inds > size - 1] = size - 1
     return data_prop_inds, vmin, vmax
 
+
 def plot_arcs(arcs, ax, pair_inds, pos_x, pos_y, cmap, lims=[0, 0.25]):
     ''' given 1d array of connection strengths, plot as colored arcs '''
     arc_inds, vmin, vmax = ordinalize_many(arcs, cmap.N, lims)
-    lims = np.array( [vmin, vmax] )
+    lims = np.array([vmin, vmax])
     cmap_array = cmap(range(cmap.N))
     arch_lst = []
     for pind, pair in enumerate(pair_inds):
@@ -174,6 +186,7 @@ class MidpointNormalize(colors.Normalize):
         # simple example...
         x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
         return np.ma.masked_array(np.interp(value, x, y))
+
 
 class ImageFollower(object):
     ''' update image in response to changes in clim or cmap on another image '''
@@ -203,7 +216,8 @@ def plot_topomap(data, pos, vmin=None, vmax=None, cmap=None, sensors=True,
     from mne.defaults import _handle_default
     from mne.channels.layout import _find_topomap_coords
     from mne.io.meas_info import Info
-    from mne.viz.topomap import _check_outlines, _prepare_topomap, _griddata, _make_image_mask, _plot_sensors, _draw_outlines
+    from mne.viz.topomap import _check_outlines, _prepare_topomap, _griddata, _make_image_mask, _plot_sensors, \
+        _draw_outlines
 
     data = np.asarray(data)
 

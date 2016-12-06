@@ -3,6 +3,7 @@
 import numpy as np
 import itertools
 
+
 # array functions
 def permute_data(a, a_dimnames, out_dimnames):
     ''' given array a and a_dimnames, a tuple naming its dimensions,
@@ -16,42 +17,49 @@ def permute_data(a, a_dimnames, out_dimnames):
     out_a = a.transpose(transpose_lst)
     return out_a, out_dimnames
 
+
 def reverse_dimorder(array):
     ''' return version of array with dimensions in reversed order '''
-    return np.transpose(array, list(range(len(array.shape)-1, -1, -1)))
+    return np.transpose(array, list(range(len(array.shape) - 1, -1, -1)))
+
 
 def baseline_sub(array, pt_lims, along_dim=-1, condition_dim=None):
     ''' baseline array in a subtractive way '''
-    to_sub = array.take(range(pt_lims[0], pt_lims[1]+1), axis=along_dim)\
-                        .mean(axis=along_dim, keepdims=True)
+    to_sub = array.take(range(pt_lims[0], pt_lims[1] + 1), axis=along_dim) \
+        .mean(axis=along_dim, keepdims=True)
     if condition_dim:
         to_sub = to_sub.mean(axis=condition_dim, keepdims=True)
     return array - to_sub
 
+
 def baseline_div(array, pt_lims, along_dim=-1, condition_dim=None):
     ''' baseline array in a divisive way '''
     to_div = array.take(range(pt_lims[0], pt_lims[1] + 1), axis=along_dim) \
-                         .mean(axis=along_dim, keepdims=True)
+        .mean(axis=along_dim, keepdims=True)
     if condition_dim:
         to_div = to_div.mean(axis=condition_dim, keepdims=True)
     return 10 * np.log10(array / to_div)
+
 
 def convert_ms(time_array, ms):
     ''' given time array, find index nearest to given time value '''
     return np.argmin(np.fabs(time_array - ms))
 
+
 def compound_take(a, dimval_tups):
     ''' given array, apply multiple indexing operations '''
+
     def apply_take(a, d, v):
         if isinstance(v, int) or isinstance(v, np.int64):
-            return a.take([v], d) # stand-in for expand_dims
+            return a.take([v], d)  # stand-in for expand_dims
         else:
             return a.take(v, d)
+
     print(a.shape)
     for d, v in dimval_tups:
-        if isinstance(v, tuple): # reserved for itertools.product-takes
+        if isinstance(v, tuple):  # reserved for itertools.product-takes
             for dp, vp in zip(d, v):
-                if isinstance(vp, dict): # reserved for operation-takes
+                if isinstance(vp, dict):  # reserved for operation-takes
                     (op, lvls), = vp.items()
                     if op == 'minus':
                         a = apply_take(a, dp, lvls[0]) - \
@@ -65,10 +73,10 @@ def compound_take(a, dimval_tups):
                         print(a.shape)
                 else:
                     a = apply_take(a, dp, vp)
-        elif isinstance(v, dict): # reserved for operation-takes
+        elif isinstance(v, dict):  # reserved for operation-takes
             (op, lvls), = v.items()
             if op == 'minus':
-                try: # assume singleton indices
+                try:  # assume singleton indices
                     a = apply_take(a, d, lvls[0]) - apply_take(a, d, lvls[1])
                 except ValueError:
                     print('level subtraction with mean')
@@ -84,12 +92,13 @@ def compound_take(a, dimval_tups):
                 print(a.shape)
         else:
             a = apply_take(a, d, v)
-        # print(a.shape)
+            # print(a.shape)
     return a
+
 
 def basic_slice(a, in_dimval_tups):
     ''' given array a and list of (dim, val) tuples, basic-slice a '''
-    slicer = [slice(None)]*len(a.shape) # initialize slicer
+    slicer = [slice(None)] * len(a.shape)  # initialize slicer
 
     # if the elements of the tuples are tuples, unpack and put in series
     dimval_tups = []
@@ -101,23 +110,23 @@ def basic_slice(a, in_dimval_tups):
             dimval_tups.append(dvt)
 
     # build the slice list
-    dimval_tups.sort(reverse=True) # sort descending by dims
+    dimval_tups.sort(reverse=True)  # sort descending by dims
     print('~~~slice time~~~')
     for d, v in dimval_tups:
         try:
-            v[1] # for non-singleton vals
+            v[1]  # for non-singleton vals
             if type(v) == range:
                 print('got a range')
                 slicer[d] = slice(v.start, v.stop, v.step)
             else:
                 slicer[d] = v
-        except: # for singleton vals
+        except:  # for singleton vals
             print('singleton dim', d)
             if type(v) == np.ndarray:
                 slicer[d] = v[0]
             else:
                 slicer[d] = v
-            slicer.insert(d+1, np.newaxis)
+            slicer.insert(d + 1, np.newaxis)
 
     print(slicer)
     return a[tuple(slicer)]
@@ -134,6 +143,7 @@ def handle_pairs(s, pairs_arg):
     else:
         print('pairs incorrectly specified')
         raise
+
 
 def handle_by(s, by_stage, d_dims, d_dimlvls, ordered=False):
     ''' handle a 'by' argument, which tells a plotting functions what parts
@@ -160,6 +170,7 @@ def handle_by(s, by_stage, d_dims, d_dimlvls, ordered=False):
     else:
         return interpret_by(s, tuple(by_stage.items())[0], d_dims, d_dimlvls)
 
+
 def interpret_by(s, by_stage, data_dims, data_dimlvls):
     ''' by_stage: 2-tuple of variable name and requested levels
         data_dims: n-tuple describing the n dimensions of the data
@@ -169,41 +180,41 @@ def interpret_by(s, by_stage, data_dims, data_dimlvls):
     if by_stage[0] in data_dims:  # if variable is in data dims
         dim = data_dims.index(by_stage[0])
         print('data in dim', dim)
-        if by_stage[1] == 'all': # if levels were not specified
+        if by_stage[1] == 'all':  # if levels were not specified
             labels = data_dimlvls[dim]
             vals = list(range(len(labels)))
             print('iterate across available vals including', vals)
-        else: # if levels were specified
+        else:  # if levels were specified
             labels = by_stage[1]
             print(data_dimlvls[dim])
-            if data_dimlvls[dim].dtype == np.float64: # if array data
+            if data_dimlvls[dim].dtype == np.float64:  # if array data
                 vals = []
                 for lbl in labels:
                     if isinstance(lbl, list):
                         if len(lbl) == 2:
-                            tmp_inds = range(np.argmin(np.fabs(\
+                            tmp_inds = range(np.argmin(np.fabs( \
                                 data_dimlvls[dim] - lbl[0])),
-                                            np.argmin(np.fabs(\
-                                data_dimlvls[dim] - lbl[1]))+1)
+                                np.argmin(np.fabs( \
+                                    data_dimlvls[dim] - lbl[1])) + 1)
                         else:
-                            tmp_inds = [np.argmin(np.fabs(\
+                            tmp_inds = [np.argmin(np.fabs( \
                                 data_dimlvls[dim] - lp)) for lp in lbl]
                     else:
-                        tmp_inds = np.argmin(np.fabs(\
+                        tmp_inds = np.argmin(np.fabs( \
                             data_dimlvls[dim] - lbl))
                     vals.append(tmp_inds)
-            else: # if non-array data (labeled, like conditions)
+            else:  # if non-array data (labeled, like conditions)
                 vals = []
                 for lbl in labels:
                     if isinstance(lbl, dict):
                         (op, lvls), = lbl.items()
-                        vals.append({op: [np.where(data_dimlvls[dim]==l)[0]
-                                                    for l in lvls]})
+                        vals.append({op: [np.where(data_dimlvls[dim] == l)[0]
+                                          for l in lvls]})
                     elif isinstance(lbl, list):
-                        vals.append([np.where(data_dimlvls[dim]==lb)[0][0]
-                                                    for lb in lbl])
+                        vals.append([np.where(data_dimlvls[dim] == lb)[0][0]
+                                     for lb in lbl])
                     else:
-                        vals.append(np.where(data_dimlvls[dim]==lbl)[0])
+                        vals.append(np.where(data_dimlvls[dim] == lbl)[0])
             print('vals to iterate on are', vals)
     elif by_stage[0] in s.demog_df.columns:  # if variable in demog dims
         dim = data_dims.index('subject')
@@ -219,13 +230,13 @@ def interpret_by(s, by_stage, data_dims, data_dimlvls):
             for lbl in labels:
                 if isinstance(lbl, dict):
                     (op, lvls), = lbl.items()
-                    vals.append({op: [np.where(s.demog_df[by_stage[0]]==l)[0]
-                                                for l in lvls]})
+                    vals.append({op: [np.where(s.demog_df[by_stage[0]] == l)[0]
+                                      for l in lvls]})
                 elif isinstance(lbl, list):
-                    vals.append([np.where(s.demog_df[by_stage[0]]==lb)[0][0]
-                                                for lb in lbl])
+                    vals.append([np.where(s.demog_df[by_stage[0]] == lb)[0][0]
+                                 for lb in lbl])
                 else:
-                    vals.append(np.where(s.demog_df[by_stage[0]]==lbl)[0])
+                    vals.append(np.where(s.demog_df[by_stage[0]] == lbl)[0])
             print('vals to iterate on are', vals)
     else:
         print('variable not found in data or demogs')
