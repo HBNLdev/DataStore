@@ -155,58 +155,6 @@ class EROStack:
         s.freqlen_dict = freqlen_dict
         s.params['Frequencies'] = freqlen_dict[max(freqlen_dict)]
 
-    def load_stack(s):
-        dsets = [fp['data'] for fp in s.pointer_lst]
-        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
-        s.stack = da.stack(arrays, axis=-1)
-        print(s.stack.shape)
-
-    def load_stack_np(s):
-        arrays = [fp['data'][:] for fp in s.pointer_lst]
-        s.stack_np = np.stack(arrays, axis=-1)
-        print(s.stack_np.shape)
-
-    def tf_mean(s, times, freqs):
-        time_lims = [convert_scale(s.params['Times'], time) for time in times]
-        freq_lims = [convert_scale(s.params['Frequencies'], freq)
-                                for freq in freqs]
-        print(time_lims)
-        print(freq_lims)
-        tf_slice = s.stack[:, time_lims[0]:time_lims[1]+1,
-                              freq_lims[0]:freq_lims[1]+1, :]
-        tf_mean = tf_slice.mean(axis=2)
-        tf_mean = tf_mean.mean(axis=1)
-        out_array = np.empty(tf_mean.shape)
-        da.store(tf_mean, out_array)
-
-        time_lbl = '-'.join([str(t) for t in times])+'ms'
-        freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
-        lbls = ['_'.join([chan, time_lbl, freq_lbl])
-                        for chan in s.params['Channels']]
-
-        mean_df = pd.DataFrame(out_array.T, index=s.data_df.index, columns=lbls)
-        return mean_df
-
-    def tf_mean_np(s, times, freqs):
-        time_lims = [convert_scale(s.params['Times'], time) for time in times]
-        freq_lims = [convert_scale(s.params['Frequencies'], freq)
-                                for freq in freqs]
-        print(time_lims)
-        print(freq_lims)
-        tf_slice = s.stack_np[:, time_lims[0]:time_lims[1]+1,
-                              freq_lims[0]:freq_lims[1]+1, :]
-        print('slice', tf_slice.shape)
-        tf_mean = tf_slice.mean(axis=(1,2))
-        print('mean', tf_mean.shape)
-
-        time_lbl = '-'.join([str(t) for t in times])+'ms'
-        freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
-        lbls = ['_'.join([chan, time_lbl, freq_lbl])
-                        for chan in s.params['Channels']]
-
-        mean_df = pd.DataFrame(tf_mean.T, index=s.data_df.index, columns=lbls)
-        return mean_df
-
     def tf_mean_lowmem(s, times, freqs):
 
         time_lims = [convert_scale(s.params['Times'], time) for time in times]
@@ -333,6 +281,33 @@ class EROStack:
 
         return mean_array
 
+    def load_data_interp(s):
+
+        n_files = len(s.data_df['path'].values)
+        n_chans = int(s.params['# of channels'][0][0])
+        time_vec = s.params['Times'][0]
+        n_times = time_vec.size
+        max_freqsize = max(s.freqlen_dict)
+        n_freqs = s.freqlen_dict[max_freqsize].shape[1]
+        print('{} files, {} chans, {} times, {} freqs'.format(n_files, n_chans, n_times, n_freqs))
+
+        # subjects, conditions, channels, freq, timepoints
+        data_array = np.empty((n_files, 1, n_chans, n_times, n_freqs))
+        
+        fpi = 0
+        for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
+            data = fp['data'][:] # is chans x times x freq
+            if fl != max_freqsize:
+                new_data = np.empty((n_chans, n_times, max_freqsize))
+                for ctfi, chan_tf in enumerate(data):
+                    new_data[ctfi, :, :] = interp_freqdomain_fast(chan_tf, time_vec,
+                        s.freqlen_dict[fl][0], s.freqlen_dict[max_freqsize][0])
+                data = new_data
+            data_array[fpi, 0, :, :, :] = data
+            fpi += 1
+
+        return data_array
+
     def retrieve_dbdata(s, times, freqs):
         # for mat in s.data_df.iterrows():
         #     proj = C.format_EROprojection()
@@ -348,7 +323,7 @@ def interp_freqdomain(a, t, f1, f2):
 
 
 def interp_freqdomain_fast(a, t, f1, f2):
-    ''' faster version of above '''
+    ''' faster version of above that uses a cubic spline procedure '''
     f = interpolate.RectBivariateSpline(t, f1, a)
     return f(t, f2)
 
@@ -718,5 +693,61 @@ v4_comb_set.describe()
 
 v4_full_new = pd.concat(v4_all_rn,join='inner',axis=1)
 
+
+'''
+
+''' retired code
+
+    def load_stack(s):
+        dsets = [fp['data'] for fp in s.pointer_lst]
+        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
+        s.stack = da.stack(arrays, axis=-1)
+        print(s.stack.shape)
+
+    def load_stack_np(s):
+        arrays = [fp['data'][:] for fp in s.pointer_lst]
+        s.stack_np = np.stack(arrays, axis=-1)
+        print(s.stack_np.shape)
+
+    def tf_mean(s, times, freqs):
+        time_lims = [convert_scale(s.params['Times'], time) for time in times]
+        freq_lims = [convert_scale(s.params['Frequencies'], freq)
+                                for freq in freqs]
+        print(time_lims)
+        print(freq_lims)
+        tf_slice = s.stack[:, time_lims[0]:time_lims[1]+1,
+                              freq_lims[0]:freq_lims[1]+1, :]
+        tf_mean = tf_slice.mean(axis=2)
+        tf_mean = tf_mean.mean(axis=1)
+        out_array = np.empty(tf_mean.shape)
+        da.store(tf_mean, out_array)
+
+        time_lbl = '-'.join([str(t) for t in times])+'ms'
+        freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
+        lbls = ['_'.join([chan, time_lbl, freq_lbl])
+                        for chan in s.params['Channels']]
+
+        mean_df = pd.DataFrame(out_array.T, index=s.data_df.index, columns=lbls)
+        return mean_df
+
+    def tf_mean_np(s, times, freqs):
+        time_lims = [convert_scale(s.params['Times'], time) for time in times]
+        freq_lims = [convert_scale(s.params['Frequencies'], freq)
+                                for freq in freqs]
+        print(time_lims)
+        print(freq_lims)
+        tf_slice = s.stack_np[:, time_lims[0]:time_lims[1]+1,
+                              freq_lims[0]:freq_lims[1]+1, :]
+        print('slice', tf_slice.shape)
+        tf_mean = tf_slice.mean(axis=(1,2))
+        print('mean', tf_mean.shape)
+
+        time_lbl = '-'.join([str(t) for t in times])+'ms'
+        freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
+        lbls = ['_'.join([chan, time_lbl, freq_lbl])
+                        for chan in s.params['Channels']]
+
+        mean_df = pd.DataFrame(tf_mean.T, index=s.data_df.index, columns=lbls)
+        return mean_df
 
 '''
