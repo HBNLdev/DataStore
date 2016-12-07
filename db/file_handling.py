@@ -344,7 +344,10 @@ def parse_cnt_path(filepath):
               'bitrate': bitrate,
               'note': note}
 
-    return output              
+    return output
+
+def parse_cnth1_path(filepath):
+    pass
 
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
     file_list = []

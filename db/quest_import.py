@@ -41,7 +41,7 @@ map_ph4 = {
                   'date_lbl': 'datefilled',
                   'drop_keys': ['af_', 'bp_'],
                   'zork_url': ach_url},
-    'aeq': {'file_pfixes': ['aeqa4', 'aeq4'],
+    'aeq': {'file_pfixes': ['aeqascore4', 'aeqscore4'],
             'zip_name': 'aeq4',
             'zork_url': '/Phase_IV/aeq4.zip'},
     'bis': {'file_pfixes': ['bis_a_score4', 'bis_score4'],
@@ -62,13 +62,12 @@ map_ph4 = {
     'neo': {'file_pfixes': ['neo4'],
             'zip_name': 'neo',
             'zork_url': '/Phase_IV/neo4.zip'},
-    'sensation': {'file_pfixes': ['sssc4', 'ssv4'],
+    'sensation': {'file_pfixes': ['ssvscore4'],
                   'zip_name': 'ssv',
                   'zork_url': '/Phase_IV/ssvscore4.zip'},
     'sre': {'file_pfixes': ['sre_score4'],
             'zip_name': 'sre4',
             'zork_url': '/Phase_IV/sre4.zip'},
-
 }
 
 # for ssaga questionnaires, the multiple file_fpixes are perfectly overlapping,
