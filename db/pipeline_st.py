@@ -53,14 +53,11 @@ nchans_to_eparam = {'21': '1', '32': '2', '64': '3'}
 
 # maps from experiments to their default set of parameters
 exp_params = {
-    'cpt': {'-hi': '0.3', '-lo': '45', 'k': '187.5', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5',
-            'z': '-50'},
+    'cpt': {'-hi': '0.3', '-lo': '45', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5', 'z': '-50'},
     'ern': {'p': '100'},
     'err': {'n': '15', 'p': '100'},
-    'gng': {'-hi': '0.3', '-lo': '45', 'k': '187.5', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5',
-            'z': '-50'},
-    'stp': {'-hi': '0.3', '-lo': '45', 'k': '187.5', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5',
-            'z': '-50'},
+    'gng': {'-hi': '0.3', '-lo': '45', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5', 'z': '-50'},
+    'stp': {'-hi': '0.3', '-lo': '45', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5', 'z': '-50'},
     }
 # 'cpt2': {'k': '300', 'n': '15', 'u': '-200', 'v': '1000', 'y': '-300', 'z': '-50'} # second set of cpt params
 
@@ -154,6 +151,8 @@ def organize_docs(docs):
             print('recording type not recognized for', cnth1_fp)
             continue
         for proc_type in proctype_info.keys():
+            if exp not in proctype_info[proc_type]['experiments']:
+                continue
             for case in exp_cases[exp]:
                 stmat_fp = build_eventualpath(proc_type, rec_type, exp, case, cnth1_fp)
                 batch_dict[(proc_type, rec_type, exp, case)].append((cnth1_fp, stmat_fp))
