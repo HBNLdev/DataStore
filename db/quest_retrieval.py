@@ -5,6 +5,9 @@ import shutil
 import requests
 import zipfile
 from time import sleep
+from glob import glob
+
+import pandas as pd
 
 from db.quest_import import sasdir_tocsv, map_ph4, map_ph4_ssaga, map_subject, ach_url
 
@@ -43,6 +46,14 @@ def zork_retrieval(user_name, password, distro_num, target_base_dir='/processed_
     recursive_unzip(path)
 
     zork_convert(path)
+
+    aeq_dir = os.path.join(target_base_dir, distro_subdir, 'session', 'aeq') + '/'
+    aeq_patch_dict = prepare_patchdict(aeq_dir, ['aeqa4', 'aeq4'], ['aeqascore4', 'aeqscore4'])
+    patch(aeq_patch_dict)
+    
+    sensation_dir = os.path.join(target_base_dir, distro_subdir, 'session', 'sensation') + '/'
+    sensation_patch_dict = prepare_patchdict(sensation_dir, ['ssv4'], ['ssvscore4'])
+    patch(sensation_patch_dict)
 
     return True
 
@@ -146,3 +157,43 @@ def zork_convert(path):
         for name in files:
             if name.endswith('.zip'):
                 os.remove(os.path.join(roots, name))
+
+
+def prepare_patchdict(target_dir, date_file_pfixes, score_file_pfixes, file_ext='.sas7bdat.csv', max_fups=5):
+    
+    fp_infolder = glob(target_dir + '*' + file_ext)
+#     print(fp_infolder)
+    
+    tojoin_dict = {}
+    
+    for fpfix_date, fpfix_score in zip(date_file_pfixes, score_file_pfixes):
+        for fup in range(max_fups+1):
+            if fup == 0:
+                f_suff = file_ext
+            else:
+                f_suff = '_f' + str(fup) + file_ext
+            fp_date = target_dir + fpfix_date + f_suff
+            fp_score = target_dir + fpfix_score + f_suff
+#             print(fp_date, fp_score)
+            if fp_date in fp_infolder and fp_score in fp_infolder:
+                tojoin_dict[fp_date] = fp_score
+    
+    return tojoin_dict
+
+def patch(patch_dict, date_cols=['ADM_Y', 'ADM_M', 'ADM_D']):
+    ''' given a patching dictionary in which keys are CSVs containing date_cols, and
+    values are row-length-matching CSVs without date_cols, join the date_cols of the former to the latter '''
+    for dp, np in patch_dict.items():
+        try:
+            date_df = pd.read_csv(dp)
+            nodate_df = pd.read_csv(np)
+            if date_df.shape[0] == nodate_df.shape[0]:
+                try:
+                    patched_df = nodate_df.join(date_df[date_cols])
+                except KeyError:
+                    print(dp, 'lacked date columns')
+                    continue
+                print('success: overwriting', np)
+                patched_df.to_csv(np, index=False)
+        except pd.io.parsers.EmptyDataError:
+            print(dp, 'or', np, 'was empty')
