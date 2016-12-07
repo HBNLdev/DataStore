@@ -7,10 +7,9 @@ import numpy as np
 from scipy import interpolate
 import pandas as pd
 import h5py
-import dask.array as da
 
 from .organization import Mdb
-# import compilation as C
+from .pipeline import version_info, chan_mapping, powertype_mapping
 
 opt_info = {'Add baseline':             ('add_baseline',    'array'),
             'Calculation type':         ('calc_type',       'array'),
@@ -48,6 +47,62 @@ chans = ['FP1', 'FP2', 'F7' , 'F8' , 'AF1', 'AF2', 'FZ' ,
      'F2' , 'F1' , 'TP8', 'TP7', 'AFZ', 'CP3', 'CP4', 'P5' ,
       'P6' , 'C1' , 'C2' , 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ' ,
        'P2' , 'P1' , 'CPZ']
+
+
+def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
+    ''' apply function designed to operate on a dataframe indexed by ID and session.
+        given processing version, parameter string, number of channels in the raw data, experiment,
+        case, power type, ID, and session, generate the path to the expected 3d ero mat '''
+
+    ID = rec.name[0]
+    session = rec.name[1]
+
+    parent_dir = version_info[prc_ver]['storage path']
+
+    # handle the expected number of channels
+    if '-s9-' in param_str:
+        n_chans = '20'
+    else:
+        n_chans = chan_mapping[raw_chans]
+
+    path_start = os.path.join(parent_dir, param_str, n_chans, exp)
+    fname = '_'.join( [ ID, session, exp, case, powertype_mapping[power_type] ] )
+    ext = '.mat'
+
+    path = os.path.join(path_start, fname + ext)
+
+    return path
+
+def gen_path_stdf(rec, power_type):
+    ''' apply function designed to operate on a dataframe indexed by ID and session.
+        given processing version, parameter string, number of channels in the raw data, experiment,
+        case, power type, ID, and session, generate the path to the expected 3d ero mat '''
+
+    try:
+        ID = rec.name[0]
+        session = rec.name[1]
+
+        parent_dir = version_info[rec['prc_ver']]['storage path']
+
+        # handle the expected number of channels
+        if '-s9-' in rec['param_string']:
+            n_chans = '20'
+        else:
+            n_chans = chan_mapping[rec['n_chans']]
+
+        path_start = os.path.join(parent_dir, rec['param_string'], n_chans, rec['experiment'])
+        fname = '_'.join( [ ID, session, rec['experiment'], rec['case'], powertype_mapping[power_type] ] )
+        ext = '.mat'
+
+        path = os.path.join(path_start, fname + ext)
+
+        return path
+    except KeyError:
+        print(ID, session, 'had a key missing')
+        return None
+    except IndexError:
+        print(ID, 'had an index missing')
+
 
 # h5py parsing functions
 
