@@ -7,7 +7,6 @@ import pymongo
 import pandas as pd
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
-Mdb = MongoConn['COGA']
 
 # utility functions
 
@@ -61,30 +60,31 @@ class MongoBacked:
         of info and target collection '''
 
     def_info = {}
+    Mdb = MongoConn['COGA']
 
     def store(s):
         ''' store the record info (in data attr) into the target collection '''
         s.data['insert_time'] = datetime.datetime.now()
-        Mdb[s.collection].insert_one(s.data)
+        s.Mdb[s.collection].insert_one(s.data)
 
     def store_track(s):
         ''' same as above but return the insert (for diagnostics) '''
         s.data['insert_time'] = datetime.datetime.now()
-        insert = Mdb[s.collection].insert_one(s.data)
+        insert = s.Mdb[s.collection].insert_one(s.data)
         return insert
 
     def storeNaTsafe(s):
         ''' store, removing NaTs from record (incompatible with mongo) '''
         s.data['insert_time'] = datetime.datetime.now()
         remove_NaTs(s.data)
-        Mdb[s.collection].insert_one(s.data)
+        s.Mdb[s.collection].insert_one(s.data)
 
     def compare(s, field='uID'):
         ''' based on a key field (usually a uniquely identifying per-record
             string), determine if a record of that type already exists
             in the collection, and inform with boolean attr called new.
             if new is False, the _id of the existing record is kept. '''
-        c = Mdb[s.collection].find({field: s.data[field]})
+        c = s.Mdb[s.collection].find({field: s.data[field]})
         if c.count() == 0:
             s.new = True
         else:
@@ -98,7 +98,10 @@ class MongoBacked:
         if 'insert_time' in s.data:
             del s.data['insert_time']
         s.data['update_time'] = datetime.datetime.now()
-        Mdb[s.collection].update_one(s.update_query, {'$set': s.data})
+        s.Mdb[s.collection].update_one(s.update_query, {'$set': s.data})
+
+# expose Mdb for use at module level
+Mdb = MongoBacked.Mdb
 
 
 class SourceInfo(MongoBacked):
@@ -328,7 +331,7 @@ class EROcsvresults(MongoBacked):
         ''' bulk_write list of records that have been formatted
             from joining many CSVs together '''
         adding_uids = [new_rec['uID'] for new_rec in s.data]
-        doc_lookup = Mdb[s.collection].find(
+        doc_lookup = s.Mdb[s.collection].find(
             {'uID': {'$in': adding_uids}}, {'uID': 1})
         existing_mapper = {doc['uID']: doc['_id'] for doc in doc_lookup}
 
@@ -350,7 +353,7 @@ class EROcsvresults(MongoBacked):
                 insert_op = pymongo.operations.InsertOne(add_doc)
                 bulk_lst.append(insert_op)
         try:
-            Mdb[s.collection].bulk_write(bulk_lst, ordered=False)
+            s.Mdb[s.collection].bulk_write(bulk_lst, ordered=False)
         except:
             print(s.data_file_link)
             print(bulk_lst)
