@@ -16,7 +16,8 @@ from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123,
 from .organization import (Subject, SourceInfo, Session, ERPPeak, Neuropsych,
     Questionnaire, Core, Internalizing, Externalizing, FHAM, RawEEGData, EEGData, ERPData,
     STransformInverseMats, EEGBehavior, SSAGA, Mdb, EROcsv, EROcsvresults)
-from .file_handling import (identify_files, parse_STinv_path, parse_cnt_path, parse_rd_path,
+from .file_handling import (identify_files,
+                            parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path,
                             MT_File, CNTH1_File, AVGH1_File,
                             Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
                             ERO_CSV)
@@ -264,9 +265,11 @@ def eeg_data():
     glob_expr = '*cnt.h1'
     cnth1_files, datemods = identify_files(start_dir, glob_expr)
     for f in tqdm(cnth1_files):
-        fO = CNTH1_File(f)
-        fO.parse_fileDB()
-        eegO = EEGData(fO.data)
+        data = parse_cnth1_path(f)
+        if data['n_chans'] not in ['21', '32', '64']:
+            print(f, 'had unexpected number of chans')
+            continue
+        eegO = EEGData(data)
         eegO.store()
     sourceO = SourceInfo(EEGData.collection,
                     list(zip(cnth1_files, datemods)))

@@ -1,17 +1,17 @@
 ''' tools for batch creation of st-mats from cnt-h1's '''
 
 import os
+import subprocess
 import time
 from collections import defaultdict
-import subprocess
 
-proctype_info = {'v40_center9': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v4.0_custom.rb',
+proctype_info = {'v40center9': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v4.0_custom.rb',
                                  'storage path': '/processed_data/mat-files-ps-v40/',
                                  'experiments': ['vp3', 'aod', 'ant']},
-                 'v60_center9': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v6.0_custom.rb',
+                 'v60center9': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v6.0_custom.rb',
                                  'storage path': '/processed_data/mat-files-ps-v60/',
                                  'experiments': ['vp3', 'aod', 'ant', 'ans', 'cpt', 'ern', 'err', 'gng', 'stp']},
-                 'v60_all': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v6.0_custom.rb',
+                 'v60all': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v6.0_custom.rb',
                              'storage path': '/processed_data/mat-files-ps-v60/',
                              'experiments': ['vp3', 'aod', 'ant', 'ans', 'cpt', 'ern', 'err', 'gng', 'stp']},
                  }
@@ -46,7 +46,7 @@ proctype_info = {'v40_center9': {'ruby script': '/active_projects/ERO_scripts/ca
 default_params = {'n': '10',
                   't': '100',
                   'v': '800',
-                  'k': '500'} #NOTE: k parameter is prestimulus time!
+                  'k': '500'}  # NOTE: k parameter is prestimulus time!
 
 # maps from number of channels to the 'e' parameter
 nchans_to_eparam = {'21': '1', '32': '2', '64': '3'}
@@ -58,7 +58,7 @@ exp_params = {
     'err': {'n': '15', 'p': '100'},
     'gng': {'-hi': '0.3', '-lo': '45', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5', 'z': '-50'},
     'stp': {'-hi': '0.3', '-lo': '45', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5', 'z': '-50'},
-    }
+}
 # 'cpt2': {'k': '300', 'n': '15', 'u': '-200', 'v': '1000', 'y': '-300', 'z': '-50'} # second set of cpt params
 
 # maps for experiments to the list of conditions
@@ -72,6 +72,17 @@ exp_cases = {'ant': ['a', 'j', 'w', 'p'],  # need renaming (for masscomp files, 
              'gng': ['g', 'ng'],
              'stp': ['c', 'in'], }
 
+# maps experiments to possible #s of chans
+exp_nchans = {'ant': ['21', '32', '64'],
+              'aod': ['21', '32', '64'],
+              'vp3': ['21', '32', '64'],
+              'ans': ['32', '64'],
+              'ern': ['32', '64'],
+              'err': ['32', '64'],
+              'gng': ['64'],
+              'cpt': ['64'],
+              'stp': ['64'], }
+
 # maps from new condition order for ant to the old (fix)
 ant_cind_map = {'1': '3', '2': '1', '3': '4', '4': '2'}
 
@@ -79,7 +90,7 @@ ant_cind_map = {'1': '3', '2': '1', '3': '4', '4': '2'}
 def run_calls_cwds(call_edir_lst, proc_lim=10):
     ''' given a list of 2-tuples containing (complete command-line call strings, directories in which to execute them),
         administer them into a pool of processes with at most proc_lim processes at one time. '''
-    
+
     processes = set()
 
     call_ind = -1
@@ -99,6 +110,7 @@ def run_calls_cwds(call_edir_lst, proc_lim=10):
             os.wait()
             processes.difference_update(
                 [p for p in processes if p.poll() is not None])
+
 
 def get_stmat_calls(docs, file_lim=None):
     ''' main function. given a cursor of mongo docs and a file limit, create a list of 2-tuples that are
@@ -130,6 +142,7 @@ def get_stmat_calls(docs, file_lim=None):
         call_edir_lst.append((call, edir))
 
     return call_edir_lst
+
 
 def organize_docs(docs):
     ''' given a mongo cursor of cnth1 docs, organize them into a dict where the keys are 4-tuples of
@@ -170,6 +183,7 @@ def cull_batch(batch_dict):
 
     return new_bd
 
+
 def make_cnth1listfile(pt_rt_exp_case, file_list, limit=None):
     ''' given a batch-identifying 4-tuple, a list of cnth-h1 files,
         and a file limit: create a text file with those cnth-h1 files,
@@ -187,9 +201,10 @@ def make_cnth1listfile(pt_rt_exp_case, file_list, limit=None):
     list_path = '/active_projects/ERO_scripts/cnth1_lists/' + \
                 batch_id + '_cnth1s-' + tstamp + lim_flag + '.lst'
     with open(list_path, 'w') as list_file:
-            list_file.writelines([L + '\n' for L in file_list[:limit]])
+        list_file.writelines([L + '\n' for L in file_list[:limit]])
 
     return list_path
+
 
 def construct_call(proc_type, pdict):
     ''' given a processing type and a parameter dictionary, return a full command line call '''
@@ -208,6 +223,7 @@ def construct_call(proc_type, pdict):
 
     return call
 
+
 def get_params(proc_type, rec_type, exp, case):
     ''' given the elements of a batch-unique 4-tuple, create a dict of appropriate parameters.
         note this implements necessary parameters for correct functions, but also uses default params
@@ -217,7 +233,7 @@ def get_params(proc_type, rec_type, exp, case):
 
     # channels
     n_chans = rec_type[-2:]
-    if proc_type in ['v40_center9', 'v60_center9']:
+    if proc_type in ['v40center9', 'v60center9']:
         pdict.update({'e': '1'})
         if n_chans == '21':
             pdict.update({'s': '2,4,5,10,11,13,16,18,19'})
@@ -226,7 +242,7 @@ def get_params(proc_type, rec_type, exp, case):
         else:
             print('number of channels unexpected')
             return
-    elif proc_type == 'v60_all':
+    elif proc_type == 'v60all':
         try:
             pdict.update({'e': nchans_to_eparam[n_chans]})
         except KeyError:
@@ -253,42 +269,46 @@ def get_params(proc_type, rec_type, exp, case):
         pdict.update({'c': ant_cind_map[case_ind]})
 
     # remove p param from v40 calls
-    if proc_type == 'v40_center9' and 'p' in pdict:
+    if proc_type == 'v40center9' and 'p' in pdict:
         del pdict['p']
 
     return pdict
+
 
 def build_eventualpath(proc_type, rec_type, exp, case, cnth1_fp):
     ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat path '''
 
     parent_dir = proctype_info[proc_type]['storage path']
-    param_str = build_paramstr(proc_type, rec_type, exp)
+    n_chans = rec_type[-2:]
+    param_str = build_paramstr(proc_type, n_chans, exp)
     cnth1_fn = os.path.split(cnth1_fp)[1]
     fname = '.'.join([cnth1_fn, case, 'st', 'mat'])
     fp = os.path.join(parent_dir, rec_type, exp, exp + '-' + case, param_str, fname)
 
     return fp
 
+
 def build_eventualdir(proc_type, rec_type, exp, case):
     ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat dir '''
-    
+
     parent_dir = proctype_info[proc_type]['storage path']
-    param_str = build_paramstr(proc_type, rec_type, exp)
-    
+    n_chans = rec_type[-2:]
+    param_str = build_paramstr(proc_type, n_chans, exp)
+
     edir = os.path.join(parent_dir, rec_type, exp, exp + '-' + case, param_str)
 
     return edir
 
-def build_paramstr(proc_type, rec_type, exp):
-    ''' given processing type, recording type, and experiment, return correct parameter string '''
 
-    if proc_type == 'v40_center9':
+def build_paramstr(proc_type, n_chans, exp):
+    ''' given processing type, # of channels, and experiment, return correct parameter string '''
+
+    if proc_type == 'v40center9':
         return 'e1-n10-s9-t100-v800'
 
-    if proc_type == 'v60_center9':
+    if proc_type == 'v60center9':
         ps = 'e1'
-    elif proc_type == 'v60_all':
-        n_chans = rec_type[-2:]
+    elif proc_type == 'v60all':
         ps = 'e' + nchans_to_eparam[n_chans]
     else:
         print('processing type not recognized')
@@ -306,9 +326,7 @@ def build_paramstr(proc_type, rec_type, exp):
         print('experiment not recognized')
         return
 
-    if proc_type == 'v60_all':
+    if proc_type == 'v60all':
         ps = ps.replace('-s9-', '-')
 
     return ps
-
-

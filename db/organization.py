@@ -7,7 +7,6 @@ import pymongo
 import pandas as pd
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
-Mdb = MongoConn['COGA']
 
 # utility functions
 
@@ -60,6 +59,7 @@ class MongoBacked:
         into a MongoDB collection. classes that inherit specify type
         of info and target collection '''
 
+    Mdb = MongoConn['COGA']
     def_info = {}
 
     def store(s):
@@ -100,6 +100,7 @@ class MongoBacked:
         s.data['update_time'] = datetime.datetime.now()
         Mdb[s.collection].update_one(s.update_query, {'$set': s.data})
 
+Mdb = MongoBacked.Mdb
 
 class SourceInfo(MongoBacked):
 
