@@ -2,51 +2,125 @@
 
 import os
 
-from tqdm import tqdm
-import numpy as np
-from scipy import interpolate
-import pandas as pd
 import h5py
+import numpy as np
+import pandas as pd
+from scipy import interpolate
+from tqdm import tqdm
 
+from .compilation import join_collection
 from .organization import Mdb
 from .pipeline import version_info, chan_mapping, powertype_mapping
+from .pipeline_st import build_paramstr
 
-opt_info = {'Add baseline':             ('add_baseline',    'array'),
-            'Calculation type':         ('calc_type',       'array'),
-            'Condition':                ('case_name',       'text'),
-            'Channel sort':             ('channel_sort',    'array'),
-            'Do baseline':              ('do_baseline',     'array'),
-            'Channels':                 ('elec_array',      'text_array'),
-            'Experiment':               ('exp_name',        'text'),
+opt_info = {'Add baseline': ('add_baseline', 'array'),
+            'Calculation type': ('calc_type', 'array'),
+            'Condition': ('case_name', 'text'),
+            'Channel sort': ('channel_sort', 'array'),
+            'Do baseline': ('do_baseline', 'array'),
+            'Channels': ('elec_array', 'text_array'),
+            'Experiment': ('exp_name', 'text'),
             # 'Original frequencies':   ('f_vec',           'array'),
-            'Frequencies':              ('f_vec_ds',        'array'),
-            'File ID':                  ('file_id',         'text'),
+            'Frequencies': ('f_vec_ds', 'array'),
+            'File ID': ('file_id', 'text'),
             # 'File name':              ('file_name',       'text'),
-            'Mat file':                 ('filenm',          'text'),
-            'Run':                      ('file_run',        'array'),
-            'Session':                  ('file_session',    'text'),
-            'File index':               ('i_file',          'array'),
-            'Natural log':              ('ln_calc',         'array'),
-            '# of channels':            ('n_chans_present', 'array'),
-            'Output type':              ('out_type',        'array'),
-            'Output type name':         ('out_type_name',   'text'),
+            'Mat file': ('filenm', 'text'),
+            'Run': ('file_run', 'array'),
+            'Session': ('file_session', 'text'),
+            'File index': ('i_file', 'array'),
+            'Natural log': ('ln_calc', 'array'),
+            '# of channels': ('n_chans_present', 'array'),
+            'Output type': ('out_type', 'array'),
+            'Output type name': ('out_type_name', 'text'),
             # 'Output text':            ('output_text',     'text'),
-            'Sampling rate':            ('rate',            'array'),
-            'S-transform type':         ('st_type',         'array'),
-            'S-transform type name':    ('st_type_name',    'text'),
-            'Time downsample ratio':    ('time_ds_factor',  'array'),
+            'Sampling rate': ('rate', 'array'),
+            'S-transform type': ('st_type', 'array'),
+            'S-transform type name': ('st_type_name', 'text'),
+            'Time downsample ratio': ('time_ds_factor', 'array'),
             # 'Original times':         ('time_vec',        'array'),
-            'Times':                    ('time_vec_ds',     'array'),
-           }
+            'Times': ('time_vec_ds', 'array'),
+            }
 
-chans = ['FP1', 'FP2', 'F7' , 'F8' , 'AF1', 'AF2', 'FZ' ,
- 'F4' , 'F3' , 'FC6', 'FC5', 'FC2', 'FC1', 'T8' , 'T7' , 'CZ' ,
-  'C3' , 'C4' , 'CP5', 'CP6', 'CP1', 'CP2', 'P3' , 'P4' , 'PZ' ,
-   'P8' , 'P7' , 'PO2', 'PO1', 'O2' , 'O1' , 'X'  , 'AF7', 'AF8',
-    'F5' , 'F6' , 'FT7', 'FT8', 'FPZ', 'FC4', 'FC3', 'C6' , 'C5' ,
-     'F2' , 'F1' , 'TP8', 'TP7', 'AFZ', 'CP3', 'CP4', 'P5' ,
-      'P6' , 'C1' , 'C2' , 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ' ,
-       'P2' , 'P1' , 'CPZ']
+chans = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ',
+         'F4', 'F3', 'FC6', 'FC5', 'FC2', 'FC1', 'T8', 'T7', 'CZ',
+         'C3', 'C4', 'CP5', 'CP6', 'CP1', 'CP2', 'P3', 'P4', 'PZ',
+         'P8', 'P7', 'PO2', 'PO1', 'O2', 'O1', 'X', 'AF7', 'AF8',
+         'F5', 'F6', 'FT7', 'FT8', 'FPZ', 'FC4', 'FC3', 'C6', 'C5',
+         'F2', 'F1', 'TP8', 'TP7', 'AFZ', 'CP3', 'CP4', 'P5',
+         'P6', 'C1', 'C2', 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ',
+         'P2', 'P1', 'CPZ']
+
+
+def join_allcols(rec, sep='_'):
+    ''' dataframe apply function that simply joins the whole rows contents (should be strings),
+        using sep as the separator '''
+    return sep.join(rec)
+
+
+def prepare_erodf(ero_df):
+    ''' given an ero_df prepared by EROStack.tf_mean_lowmem_multiwin_chans,
+        that is row-index by ID, session, powertype, experiment, and condition,
+        and column-indexed by TFROI and channel,
+        reorganize the dataframe to be in an export-friendly format '''
+
+    ero_df2 = ero_df.unstack(['powertype', 'experiment', 'condition'])
+    ero_df2.columns = ero_df2.columns.reorder_levels(['powertype', 'experiment', 'condition', 'TFROI', 'channel'])
+    ero_df3 = ero_df2.dropna(axis=1, how='all')
+    ero_df3.sortlevel(0, axis=1, inplace=True)
+    collapsed_cols = pd.Series(ero_df3.columns.tolist()).apply(pd.Series).apply(join_allcols, axis=1, args=['_'])
+    ero_df3.columns = collapsed_cols
+    return ero_df3
+
+
+def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked']):
+    ''' given a dataframe indexed by ID and session, a desired ERO processing type,
+        a dict mapping desired experiments to desired cases within each,
+        and a list of desired power types,
+        return a dataframe with added columns that locate the corresponding paths to 3d ero mats '''
+
+    uIDs = [ID + '_' + session for ID, session in df.index.tolist()]
+    query = {'uID': {'$in': uIDs}, 'experiment': {'$in': list(exp_cases.keys())}}
+    proj = {'_id': 0, 'ID': 1, 'session': 1, 'n_chans': 1}
+    nchans_df = join_collection(df, 'cnth1s',
+                                add_query=query, add_proj=proj,
+                                left_join_inds=['ID', 'session'], right_join_inds=['ID', 'session'])
+
+    nchans_df.dropna(subset=['cnt_n_chans'], inplace=True)
+    groups = nchans_df.groupby(level=nchans_df.index.names)
+    nchans_df_nodupes = groups.last()
+    df_out = df.join(nchans_df_nodupes['cnt_n_chans'])
+
+    prc_ver = proc_type[1]
+    parent_dir = version_info[prc_ver]['storage path']
+
+    for exp, cases in exp_cases.items():
+        for case in cases:
+            for ptype in power_types:
+                ptype_short = powertype_mapping[ptype]
+                apply_args = [parent_dir, proc_type, exp, case, ptype_short]
+                pathcol_name = '_'.join([proc_type, exp, case, ptype])
+                df_out[pathcol_name] = df_out.apply(gen_path2, axis=1, args=apply_args)
+
+    return df_out
+
+
+def gen_path2(rec, parent_dir, proc_type, exp, case, power_type_short):
+    ID = rec.name[0]
+    session = rec.name[1]
+    raw_chans = rec['cnt_n_chans']
+    try:
+        param_str = build_paramstr(proc_type, raw_chans, exp)
+    except KeyError:
+        return np.nan  # also consider returning a default value here
+    n_chans = chan_mapping[raw_chans]
+
+    path_start = os.path.join(parent_dir, param_str, n_chans, exp)
+    fname = '_'.join([ID, session, exp, case, power_type_short])
+    ext = '.mat'
+
+    path = os.path.join(path_start, fname + ext)
+
+    return path
 
 
 def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
@@ -66,12 +140,13 @@ def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
         n_chans = chan_mapping[raw_chans]
 
     path_start = os.path.join(parent_dir, param_str, n_chans, exp)
-    fname = '_'.join( [ ID, session, exp, case, powertype_mapping[power_type] ] )
+    fname = '_'.join([ID, session, exp, case, powertype_mapping[power_type]])
     ext = '.mat'
 
     path = os.path.join(path_start, fname + ext)
 
     return path
+
 
 def gen_path_stdf(rec, power_type):
     ''' apply function designed to operate on a dataframe indexed by ID and session.
@@ -91,7 +166,7 @@ def gen_path_stdf(rec, power_type):
             n_chans = chan_mapping[rec['n_chans']]
 
         path_start = os.path.join(parent_dir, rec['param_string'], n_chans, rec['experiment'])
-        fname = '_'.join( [ ID, session, rec['experiment'], rec['case'], powertype_mapping[power_type] ] )
+        fname = '_'.join([ID, session, rec['experiment'], rec['case'], powertype_mapping[power_type]])
         ext = '.mat'
 
         path = os.path.join(path_start, fname + ext)
@@ -111,12 +186,14 @@ def parse_text(dset, dset_field):
     dset_ref = dset[dset_field]
     return ''.join(chr(c[0]) for c in dset_ref[:])
 
+
 def parse_textarray(dset, dset_field):
     ''' parse .mat-style h5 field that contains a text array '''
     dset_ref = dset[dset_field]
-    array = dset_ref[:]    
-    return [''.join([chr(arg) for arg in args]).rstrip() for args in 
-                zip(*array)]
+    array = dset_ref[:]
+    return [''.join([chr(arg) for arg in args]).rstrip() for args in
+            zip(*array)]
+
 
 def parse_cell(dset, dset_field):
     ''' parse .mat-style h5 field that contains a cell array '''
@@ -127,6 +204,7 @@ def parse_cell(dset, dset_field):
         return out_lst
     except:
         return []
+
 
 def parse_array(dset, dset_field):
     ''' parse .mat-style h5 field that contains a numerical array.
@@ -139,18 +217,22 @@ def parse_array(dset, dset_field):
     else:
         return contents
 
+
 ftypes_funcs = {'text': parse_text, 'cell': parse_cell, 'array': None,
                 'text_array': parse_textarray}
+
 
 def handle_parse(dset, dset_field, field_type):
     ''' given file pointer, field, and datatype, apply appropriate parser '''
     func = ftypes_funcs[field_type]
     return func(dset, dset_field) if func else dset[dset_field][:]
 
+
 # dataframe functions
 
 def join_columns(row, columns):
     return '_'.join([row[field] for field in columns])
+
 
 # array functions
 
@@ -158,7 +240,13 @@ def convert_scale(scale_array, scale_val):
     ''' given array, find index nearest to given value '''
     return np.argmin(np.fabs(scale_array - scale_val))
 
+
 # main classes
+
+class EmptyStackError(Exception):
+    def __init__(s):
+        print('all files in the stack were missing')
+
 
 class EROStack:
     ''' represents a list of .mat's as a dask stack '''
@@ -167,7 +255,7 @@ class EROStack:
         s.init_df(path_lst, touch_db=touch_db)
         s.get_params()
         s.open_pointers()
-        s.survey_freqvecs()
+        s.survey_vecs()
 
     def init_df(s, path_lst, touch_db=False):
         ''' given, a list of paths, intializes the dataframe that represents each existent EROmat.
@@ -182,33 +270,48 @@ class EROStack:
                 row_lst.append(em.info)
             else:
                 missing_count += 1
-                
-        print(missing_count, 'files missing')
+
+        if row_lst:
+            print(missing_count, 'files missing')
+        else:
+            raise EmptyStackError
 
         s.data_df = pd.DataFrame.from_records(row_lst)
-        s.data_df.set_index(['ID', 'session', 'experiment'], inplace=True)
+        s.data_df.set_index(['ID', 'session', 'powertype', 'experiment', 'condition'], inplace=True)
+        s.data_df.sort_index(inplace=True)
 
     def get_params(s):
-        em = EROMat(s.data_df.ix[0, 'path'])
+        # em = EROMat(s.data_df.ix[0, 'path'])
+        em = EROMat(s.data_df['path'][0])
         em.get_params()
         s.params = em.params
 
     def open_pointers(s):
         s.pointer_lst = [h5py.File(fp, 'r') for fp in s.data_df['path'].values]
 
-    def survey_freqvecs(s):
+    def survey_vecs(s):
 
+        # freqs /chans
         freqlen_lst = []
+        chanlen_lst = []
         freqlen_dict = {}
+        chanlen_dict = {}
         for fp in s.pointer_lst:
             f_vec = handle_parse(fp, 'opt/f_vec_ds', 'array')
+            chans = handle_parse(fp, 'opt/elec_array', 'text_array')
             freqlen_lst.append(f_vec.shape[1])
+            chanlen_lst.append(len(chans))
             if f_vec.shape[1] not in freqlen_dict:
                 freqlen_dict[f_vec.shape[1]] = f_vec
+            if len(chans) not in chanlen_dict:
+                chanlen_dict[len(chans)] = chans
 
         s.data_df['freq_len'] = pd.Series(freqlen_lst, index=s.data_df.index)
+        s.data_df['chan_len'] = pd.Series(chanlen_lst, index=s.data_df.index)
         s.freqlen_dict = freqlen_dict
+        s.chanlen_dict = chanlen_dict
         s.params['Frequencies'] = freqlen_dict[max(freqlen_dict)]
+        s.params['Channels'] = chanlen_dict[max(chanlen_dict)]
 
     def tf_mean_lowmem(s, times, freqs):
 
@@ -225,15 +328,15 @@ class EROStack:
 
         fpi = 0
         for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
-            mean_array[fpi, :] = fp['data']\
-                                [:, time_lims[0]:time_lims[1]+1,
-                                    freq_lims[fl][0]:freq_lims[fl][1]+1].mean(axis=(1,2))
+            mean_array[fpi, :] = fp['data'] \
+                [:, time_lims[0]:time_lims[1] + 1,
+                                 freq_lims[fl][0]:freq_lims[fl][1] + 1].mean(axis=(1, 2))
             fpi += 1
 
-        time_lbl = '-'.join([str(t) for t in times])+'ms'
-        freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
+        time_lbl = '-'.join([str(t) for t in times]) + 'ms'
+        freq_lbl = '-'.join([str(f) for f in freqs]) + 'Hz'
         lbls = ['_'.join([chan, time_lbl, freq_lbl])
-                        for chan in s.params['Channels']]
+                for chan in s.params['Channels']]
 
         mean_df = pd.DataFrame(mean_array, index=s.data_df.index, columns=lbls)
         return mean_df
@@ -246,14 +349,14 @@ class EROStack:
         for win in windows:
             winds = dict()
             for freq_len, freq_array in s.freqlen_dict.items():
-                winds[freq_len] = ( convert_scale(s.params['Times'], win[0]),
-                                    convert_scale(s.params['Times'], win[1]),
-                                    convert_scale(freq_array, win[2]),
-                                    convert_scale(freq_array, win[3]) )
-            time_lbl = '-'.join([str(t) for t in win[0:2]])+'ms'
-            freq_lbl = '-'.join([str(f) for f in win[2:4]])+'Hz'
+                winds[freq_len] = (convert_scale(s.params['Times'], win[0]),
+                                   convert_scale(s.params['Times'], win[1]),
+                                   convert_scale(freq_array, win[2]),
+                                   convert_scale(freq_array, win[3]))
+            time_lbl = '-'.join([str(t) for t in win[0:2]]) + 'ms'
+            freq_lbl = '-'.join([str(f) for f in win[2:4]]) + 'Hz'
             lbls = ['_'.join([chan, time_lbl, freq_lbl])
-                        for chan in s.params['Channels']]
+                    for chan in s.params['Channels']]
             print(winds)
             win_inds.append(winds)
             win_lbls.extend(lbls)
@@ -266,14 +369,62 @@ class EROStack:
         fpi = 0
         for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
             for wi, winds in enumerate(win_inds):
-                mean_array[fpi, wi, :] = fp['data']\
-                                    [:, winds[fl][0]:winds[fl][1]+1,
-                                        winds[fl][2]:winds[fl][3]+1].mean(axis=(1,2))
+                mean_array[fpi, wi, :] = fp['data'] \
+                    [:, winds[fl][0]:winds[fl][1] + 1,
+                                         winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
             fpi += 1
 
-        mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows*n_chans))
+        mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows * n_chans))
 
         mean_df = pd.DataFrame(mean_array_reshaped, index=s.data_df.index, columns=win_lbls)
+        return mean_df
+
+    def tf_mean_lowmem_multiwin_chans(s, windows, channels):
+        ''' given a list of tf windows, which are 4-tuples of (t1, t2, f1, f2),
+            calculate means in those windows for all channels and subjects '''
+        win_inds = []
+        win_lbls = []
+        for win in windows:
+            winds = dict()
+            for freq_len, freq_array in s.freqlen_dict.items():
+                winds[freq_len] = (convert_scale(s.params['Times'], win[0]),
+                                   convert_scale(s.params['Times'], win[1]),
+                                   convert_scale(freq_array, win[2]),
+                                   convert_scale(freq_array, win[3]))
+            time_lbl = '-'.join([str(t) for t in win[0:2]]) + 'ms'
+            freq_lbl = '-'.join([str(f) for f in win[2:4]]) + 'Hz'
+            win_lbl = '_'.join([time_lbl, freq_lbl])
+            print(winds)
+            win_inds.append(winds)
+            win_lbls.append(win_lbl)
+
+        try:
+            cinds = dict()
+            for chan_len, chan_lst in s.chanlen_dict.items():
+                cinds[chan_len] = sorted(chan_lst.index(c) for c in channels)
+                chan_lbls = [chan_lst[ci] for ci in cinds[chan_len]]
+        except IndexError:
+            print('channel not recognized')
+            return
+
+        n_files = len(s.data_df['path'].values)
+        n_windows = len(windows)
+        n_chans = len(channels)
+        mean_array = np.empty((n_files, n_windows, n_chans))
+
+        fpi = 0
+        for fp, fl, cl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values, s.data_df['chan_len'].values)):
+            for wi, winds in enumerate(win_inds):
+                mean_array[fpi, wi, :] = fp['data'] \
+                    [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
+                                         winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+            fpi += 1
+
+        mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows * n_chans))
+
+        column_mi = pd.MultiIndex.from_product([win_lbls, chan_lbls], names=['TFROI', 'channel'])
+
+        mean_df = pd.DataFrame(mean_array_reshaped, index=s.data_df.index, columns=column_mi)
         return mean_df
 
     def sub_mean_lowmem(s):
@@ -319,7 +470,7 @@ class EROStack:
         sum_array = np.zeros((n_chans, n_times, n_freqs))
 
         max_freqsize = max(s.freqlen_dict)
-        
+
         fpi = 0
         for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
             data = fp['data'][:]
@@ -327,7 +478,8 @@ class EROStack:
                 new_data = np.empty((n_chans, n_times, max_freqsize))
                 for ctfi, chan_tf in enumerate(data):
                     new_data[ctfi, :, :] = interp_freqdomain_fast(chan_tf, time_vec,
-                        s.freqlen_dict[fl][0], s.freqlen_dict[max_freqsize][0])
+                                                                  s.freqlen_dict[fl][0],
+                                                                  s.freqlen_dict[max_freqsize][0])
                 data = new_data
             sum_array += data
             fpi += 1
@@ -348,15 +500,16 @@ class EROStack:
 
         # subjects, conditions, channels, freq, timepoints
         data_array = np.empty((n_files, 1, n_chans, n_times, n_freqs))
-        
+
         fpi = 0
         for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
-            data = fp['data'][:] # is chans x times x freq
+            data = fp['data'][:]  # is chans x times x freq
             if fl != max_freqsize:
                 new_data = np.empty((n_chans, n_times, max_freqsize))
                 for ctfi, chan_tf in enumerate(data):
                     new_data[ctfi, :, :] = interp_freqdomain_fast(chan_tf, time_vec,
-                        s.freqlen_dict[fl][0], s.freqlen_dict[max_freqsize][0])
+                                                                  s.freqlen_dict[fl][0],
+                                                                  s.freqlen_dict[max_freqsize][0])
                 data = new_data
             data_array[fpi, 0, :, :, :] = data
             fpi += 1
@@ -384,7 +537,6 @@ def interp_freqdomain_fast(a, t, f1, f2):
 
 
 class EROMat:
-    
     def __init__(s, path):
         ''' represents h5-compatible mat containing 3d ERO data and options '''
         s.filepath = path
@@ -394,14 +546,14 @@ class EROMat:
     def parse_path(s):
         ''' parse file info from new 3d ERO .mat path '''
         filedir, filename = os.path.split(s.filepath)
-        
+
         dirparts = filedir.split(os.path.sep)
         n_chans = dirparts[-2]
         param_string = dirparts[-3]
-        
+
         name, ext = os.path.splitext(filename)
-        ID, session, experiment, condition, measure = name.split('_')
-        
+        ID, session, experiment, condition, powertype = name.split('_')
+
         s.info = {'path': s.filepath,
                   'n_chans': n_chans,
                   'param_string': param_string,
@@ -409,15 +561,15 @@ class EROMat:
                   'session': session,
                   'experiment': experiment,
                   'condition': condition,
-                  'measure': measure}
+                  'powertype': powertype}
 
     def prepare_row(s):
         ''' get info for row in dataframe from database '''
         s.retrieve_csvdoc()
-        s.info.update({'_id':   s._id,
-                       'path':  s.filepath,
+        s.info.update({'_id': s._id,
+                       'path': s.filepath,
                        'matpath': s.params['Mat file']})
-    
+
     def get_params(s):
         ''' extract data parameters from opt, relying upon opt_info. '''
         mat = h5py.File(s.filepath, 'r')
@@ -425,26 +577,26 @@ class EROMat:
         s.params = {}
         for param, info in opt_info.items():
             s.params.update({param:
-                             handle_parse(mat, prefix + info[0], info[1])})
+                                 handle_parse(mat, prefix + info[0], info[1])})
         mat.close()
-        
+
     def load_data(s):
         ''' prepare 3d ERO data '''
         s.data = h5py.File(s.filepath, 'r')['data'][:]
-    
+
     def tf_mean(s, times, freqs):
         time_lims = [convert_scale(s.params['Times'], time) for time in times]
         freq_lims = [convert_scale(s.params['Frequencies'], freq)
-                                for freq in freqs]
+                     for freq in freqs]
         print(time_lims)
         print(freq_lims)
-        tf_slice = s.data[:, time_lims[0]:time_lims[1]+1,
-                              freq_lims[0]:freq_lims[1]+1]
+        tf_slice = s.data[:, time_lims[0]:time_lims[1] + 1,
+                   freq_lims[0]:freq_lims[1] + 1]
         tf_mean = tf_slice.mean(axis=2)
         out_array = tf_mean.mean(axis=1)
-        
+
         mean_df = pd.DataFrame(out_array, index=chans,
-                                          columns=[s.filepath[-10:]])
+                               columns=[s.filepath[-10:]])
         return mean_df
 
     def retrieve_csvdoc(s, just_id=True):
@@ -463,7 +615,7 @@ class EROMat:
             return
         elif c.count() > 1:
             print(uID, 'had more than one matching doc')
-        
+
         s.csv_doc = next(c)
         s._id = s.csv_doc['_id']
         # extract _id and store in dataframe?
@@ -471,90 +623,93 @@ class EROMat:
 
 # Post processing tools to manage output and compare with old compilations
 
-def find_column_groups(column_list,exclusions=['trial','age'],var_ind=-1):
+def find_column_groups(column_list, exclusions=['trial', 'age'], var_ind=-1):
     ''' group columns with similar values across all fields except the one specified by var_ind
 
         this is meant to parse old style labellings to set up groups for comparison
     '''
     process_list = column_list.copy()
     for ex in exclusions:
-        process_list = [ c for c in process_list if ex not in c]
-    
-    col_lists = [ c.split('_') for c in process_list ]
-    [ cl.pop(var_ind) for cl in col_lists  ]
-    col_tups = [ tuple(cl) for cl in col_lists ]
+        process_list = [c for c in process_list if ex not in c]
+
+    col_lists = [c.split('_') for c in process_list]
+    [cl.pop(var_ind) for cl in col_lists]
+    col_tups = [tuple(cl) for cl in col_lists]
     col_types = set(col_tups)
-    col_groups = { ct:[] for ct in col_types }
-    for ct, field in zip(col_tups,process_list):
+    col_groups = {ct: [] for ct in col_types}
+    for ct, field in zip(col_tups, process_list):
         col_groups[ct].append(field)
-    
+
     return col_groups
 
     # Tools to extract order from column names and produce them flexibly - aiming at more generalization
-        # Information to guide processing 
+    # Information to guide processing
+
+
 experiments = Mdb.STinverseMats.distinct('experiment')
-case_name_aliases = {'tt':'target','nv':'novel','nt':'nontarget'}
+case_name_aliases = {'tt': 'target', 'nv': 'novel', 'nt': 'nontarget'}
 cases_db = Mdb.STinverseMats.distinct('case')
 cases = []
 for case in cases_db:
     cases.append(case)
     if case in case_name_aliases:
         cases.append(case_name_aliases[case])
-        
-powers = ['tot-pwr','evo-pwr','total','evoked']
-units = ['ms','Hz']
+
+powers = ['tot-pwr', 'evo-pwr', 'total', 'evoked']
+units = ['ms', 'Hz']
 method_descriptor_type = type(str.lower)
 function_type = type(lambda x: x)
 
-        # utility functions
+
+# utility functions
 def num_drop_units(st):
     stD = st
     found_unit = None
     for unit in units:
         if unit in stD:
-            stD = stD.replace(unit,'')
+            stD = stD.replace(unit, '')
             found_unit = unit
     return float(stD), found_unit
 
-def split_label( label, sep='_' ):
+
+def split_label(label, sep='_'):
     parts = label.split(sep)
     return parts
 
 
-def parse_col_group(col_list,field_names,sep='_'):
-
-    all_pieces = [ split_label(c,sep) for c in col_list ]
-    num_parts = set([ len(pcs) for pcs in all_pieces ])
+def parse_col_group(col_list, field_names, sep='_'):
+    all_pieces = [split_label(c, sep) for c in col_list]
+    num_parts = set([len(pcs) for pcs in all_pieces])
     if len(num_parts) > 1:
         return 'non_uniform'
-    else: num_parts = list(num_parts)[0]
-    options = [ set() for  i in range(num_parts)]
+    else:
+        num_parts = list(num_parts)[0]
+    options = [set() for i in range(num_parts)]
     for col_pcs in all_pieces:
-        [ options[i].add(pc) for i,pc in enumerate(col_pcs) ]
-    options = [ list(o) for o in options ]
+        [options[i].add(pc) for i, pc in enumerate(col_pcs)]
+    options = [list(o) for o in options]
 
-
-    part_names = field_names.copy() #set([k for k in def_desc.keys()])
-    #identify part meanings
+    part_names = field_names.copy()  # set([k for k in def_desc.keys()])
+    # identify part meanings
     part_order = []
     parsed_opts = []
     unitsD = {}
     for opts in options:
-        if len(part_names) == 1: # handle the final remaining field
-            part_order.append( list(part_names)[0] )
-            parsed_opts.append( opts )
+        if len(part_names) == 1:  # handle the final remaining field
+            part_order.append(list(part_names)[0])
+            parsed_opts.append(opts)
         elif opts[0] in cases:
             part_order.append('case')
             part_names.remove('case')
             parsed_opts.append(opts)
-        elif opts[0] in experiments or opts[0] in [ e.upper() for e in experiments ]:
+        elif opts[0] in experiments or opts[0] in [e.upper() for e in experiments]:
             part_order.append('experiment')
             part_names.remove('experiment')
             parsed_opts.append(opts)
         elif opts[0] in powers:
             part_order.append('power')
             part_names.remove('power')
-            parsed_opts.append( opts )            
+            parsed_opts.append(opts)
         elif '-' in opts[0] and 'pwr' not in opts[0]:
             nums_pieces = opts[0].split('-')
             nums = []
@@ -572,40 +727,41 @@ def parse_col_group(col_list,field_names,sep='_'):
                 part_order.append('time')
                 part_names.remove('time')
 
-            parsed_opts.append( [ tuple(nums) ] )
+            parsed_opts.append([tuple(nums)])
             unitsD[part_order[-1]] = this_unit
 
         else:
             part_order.append('channels')
             part_names.remove('channels')
-            parsed_opts.append( opts )
+            parsed_opts.append(opts)
 
     return part_order, parsed_opts, unitsD
 
 
-        # Representational class to parse and produce labels
+    # Representational class to parse and produce labels
+
+
 class EROpheno_label_set:
     '''normally  a set for one phenotype across electordes
     '''
     # Default example descirption - used for filling gaps - these are overriden by 
     # 'implicit_values' argument on initialization
-    field_desc = {'experiment':['vp3'],
-                'case':['target'],
-               'time':[(300,700)],
-                'frequency':[(3.0,7.0)],
-               'channels':['FZ','PZ','CZ','F3','F4','C3','C4','P3','P4'],
-               'power':['total']}
-    def_order = ['experiment','case','frequency','time','power','channels']
-    
-    
-    def __init__(s,description={}, fields = None, implicit_values = {}, sep='_' ):
+    field_desc = {'experiment': ['vp3'],
+                  'case': ['target'],
+                  'time': [(300, 700)],
+                  'frequency': [(3.0, 7.0)],
+                  'channels': ['FZ', 'PZ', 'CZ', 'F3', 'F4', 'C3', 'C4', 'P3', 'P4'],
+                  'power': ['total']}
+    def_order = ['experiment', 'case', 'frequency', 'time', 'power', 'channels']
+
+    def __init__(s, description={}, fields=None, implicit_values={}, sep='_'):
         s.in_sep = sep
         s.units = {}
         s.implicit_values = implicit_values
-        
+
         if fields is None:
             fields = s.def_order
-        
+
         if type(description) == list:
             s.in_cols = description.copy()
             parse_out = parse_col_group(s.in_cols, fields, sep='_')
@@ -616,38 +772,38 @@ class EROpheno_label_set:
                 field_order, options, units = parse_out
             s.units = units
         # need to normalize custom description
-        
-        s.parsed_desc = { fd:desc for fd,desc in zip(field_order,options) }
-        
-        s.parsed_order = field_order 
-        
-    def produce_column_names(s,order=def_order, units=False, dec_funs={'frequency':"%.1f", 'time':"%.0f"},
-                            translators = {'experiment':str.lower}, sep='_'):
+
+        s.parsed_desc = {fd: desc for fd, desc in zip(field_order, options)}
+
+        s.parsed_order = field_order
+
+    def produce_column_names(s, order=def_order, units=False, dec_funs={'frequency': "%.1f", 'time': "%.0f"},
+                             translators={'experiment': str.lower}, sep='_'):
         '''Output list of column names with 
             translators is nested dict by fields and values
         '''
         if order == 'parsed':
             order = s.parsed_order
-        
+
         # note input column order 
-        sort_fields = [ f for f,opts in s.parsed_desc.items() if len(opts)>1 ]   
+        sort_fields = [f for f, opts in s.parsed_desc.items() if len(opts) > 1]
         if 'in_cols' in dir(s):
-            in_orders = {fd:[] for fd in sort_fields}
+            in_orders = {fd: [] for fd in sort_fields}
             in_sort = []
             for incol in s.in_cols:
-                parsed = { fd:val for fd,val in zip(s.parsed_order,incol.split(s.in_sep)) }
+                parsed = {fd: val for fd, val in zip(s.parsed_order, incol.split(s.in_sep))}
                 for sf in sort_fields:
-                    in_sort.append( tuple([ parsed[fd] for fd in sort_fields ]) )
+                    in_sort.append(tuple([parsed[fd] for fd in sort_fields]))
 
         full_desc = s.field_desc.copy()
         full_desc.update(s.implicit_values)
         full_desc.update(s.parsed_desc)
-        #print(full_desc)
-        
-        opt_lens = [ len(v) for k,v in  full_desc.items() ]
+        # print(full_desc)
+
+        opt_lens = [len(v) for k, v in full_desc.items()]
         n_cols = np.product(opt_lens)
-        Wcols = n_cols*[ '' ]
-        out_sorts = [ [] for n in range(n_cols) ]
+        Wcols = n_cols * ['']
+        out_sorts = [[] for n in range(n_cols)]
         joiner = ''
         for field in order:
             translator = None
@@ -657,25 +813,26 @@ class EROpheno_label_set:
                 opts = s.parsed_desc[field]
             else:
                 opts = full_desc[field]
-            if field in ['time','frequency']:
+            if field in ['time', 'frequency']:
                 nums_st = []
                 for v in opts[0]:
-                    #print(v,  "dec_places[field])+"f")
-                    nums_st.append( dec_funs[field] % v )
+                    # print(v,  "dec_places[field])+"f")
+                    nums_st.append(dec_funs[field] % v)
                 opt_st = '-'.join(nums_st)
                 if units and field in s.units:
-                    opt_st = opt_st+s.units[field]
+                    opt_st = opt_st + s.units[field]
                 optL = [opt_st]
-                
+
             else:
                 optL = opts
             if len(optL) == 1:
-                optL = n_cols*optL
+                optL = n_cols * optL
 
-            #print(optL)
-            cols = []; ind = -1
-            for cs,opt in zip(Wcols,optL):
-                ind+=1
+            # print(optL)
+            cols = [];
+            ind = -1
+            for cs, opt in zip(Wcols, optL):
+                ind += 1
                 if field in sort_fields:
                     out_sorts[ind].append(opt)
                 if type(translator) in [method_descriptor_type, function_type]:
@@ -683,21 +840,23 @@ class EROpheno_label_set:
                 elif type(translator) == dict:
                     if opt in translator:
                         opt = translator[opt]
-                    
-                cols.append(cs+joiner+opt)
+
+                cols.append(cs + joiner + opt)
             Wcols = cols.copy()
             joiner = sep
-        
+
         # preserve input column order
         if 'in_cols' in dir(s):
             out_cols = []
-            out_sortD = { tuple(osl):col for osl,col in zip(out_sorts,cols) }
+            out_sortD = {tuple(osl): col for osl, col in zip(out_sorts, cols)}
             for sort_tup in in_sort:
-                out_cols.append( out_sortD[sort_tup] )
+                out_cols.append(out_sortD[sort_tup])
 
-        else: out_cols = cols
+        else:
+            out_cols = cols
 
         return out_cols
+
 
 '''
 Usage example for post processing tools:

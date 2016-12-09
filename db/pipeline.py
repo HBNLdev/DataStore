@@ -76,6 +76,8 @@ default_params = {'-p': '1',
 
 ### Info ###
 
+st_tomat_list_dir = '/active_projects/ERO_scripts/st_lists/'
+
 version_info = {'4': {'ruby script': '/active_projects/ERO_scripts/extract_st_bands_v4.0_custom.rb',
                       'storage path': '/processed_data/ero-mats-v40/'},
                 '6': {'ruby script': '/active_projects/ERO_scripts/extract_st_bands_v6.0_custom.rb',
@@ -124,6 +126,7 @@ def txt2list(path):
 
 def list2txt(out_path):
     ''' given path, write a list of strings to a text file there, with one element per line '''
+    pass
 
 def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
     ''' apply function designed to operate on a dataframe indexed by ID and session.
@@ -259,7 +262,7 @@ def make_STlistfile(ver_ps_exp_case_nchans, file_list, limit=None):
     batch_id = '-'.join([p for p in ver_ps_exp_case_nchans])
 
     tstamp = str(int(time.time() * 1000))
-    list_path = '/processed_data/EROprc_lists/' + \
+    list_path = st_tomat_list_dir + \
                 batch_id + '_mats-' + tstamp + lim_flag + '.lst'
     with open(list_path, 'w') as list_file:
             list_file.writelines([L + '\n' for L in file_list[:limit]])

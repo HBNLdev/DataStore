@@ -347,7 +347,60 @@ def parse_cnt_path(filepath):
     return output
 
 def parse_cnth1_path(filepath):
-    pass
+    full_dir, full_filename = os.path.split(filepath)
+
+    dir_pieces = full_dir.split(os.path.sep)
+    rec_type = dir_pieces[6]
+    n_chans = rec_type[-2:]
+    
+    filename, ext = os.path.splitext(full_filename)
+
+    pieces = filename.split('_')
+    experiment = pieces[0]
+    version = pieces[1]
+    session_piece = pieces[2]
+    session_letter = session_piece[0]
+    run_number = session_piece[1]
+
+    subject_piece = pieces[3]
+    system = 'neuroscan'  # preliminary
+    fam_number = subject_piece[1:5]
+    subject = subject_piece[5:8]
+
+    if fam_number in ['0000', '0001'] and subject_piece[0] in 'acghp':
+        site = subject_piece[0] + '-subjects'
+        if fam_number == '0000':  # no family
+            family = 0
+        if fam_number == '0001':
+            family = 0
+    else:
+        family = fam_number
+        site = site_hash[subject_piece[0].lower()]
+        if not subject_piece[0].isdigit():
+            system = 'masscomp'
+            subject_piece = site_hash_rev[site_hash[
+                subject_piece[0].lower()]] + subject_piece[1:]
+
+    try:
+        bitrate = pieces[4]
+    except:
+        bitrate = None
+
+    output = {'filepath': filepath,
+              'system': system,
+              'experiment': experiment,
+              'session': session_letter,
+              'run': run_number,
+              'site': site,
+              'family': family,
+              'subject': subject,
+              'ID': subject_piece,
+              'uID': subject_piece + '_' + session_letter,
+              'version': version,
+              'bitrate': bitrate,
+              'n_chans': n_chans}
+
+    return output
 
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
     file_list = []

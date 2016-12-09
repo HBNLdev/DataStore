@@ -59,6 +59,7 @@ class MongoBacked:
         into a MongoDB collection. classes that inherit specify type
         of info and target collection '''
 
+    Mdb = MongoConn['COGA']
     def_info = {}
     Mdb = MongoConn['COGA']
 
@@ -103,6 +104,7 @@ class MongoBacked:
 # expose Mdb for use at module level
 Mdb = MongoBacked.Mdb
 
+Mdb = MongoBacked.Mdb
 
 class SourceInfo(MongoBacked):
 
