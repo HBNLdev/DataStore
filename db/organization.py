@@ -173,6 +173,17 @@ class ERPPeak(MongoBacked):
         I.update(info)
         s.data = I
 
+class RestingPower(MongoBacked):
+
+    ''' resting state power estimates '''
+
+    collection = 'resting_power'
+
+    def __init__(s, info={}):
+        I = s.def_info.copy()
+        I.update(info)
+        s.data = I
+
 class STransformInverseMats(MongoBacked):
 
     ''' *.mat file containing inverse S-tranformed ERO power data '''

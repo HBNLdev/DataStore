@@ -42,7 +42,8 @@ def prepare_for_fhd(in_df):
     df['cor_alc_dep_dx'] = df['cor_alc_dep_dx'].apply(conv_159)
     df['aldep1'] = df.apply(
         harmonize_fields, axis=1, args=['alc_dep_dx', 'cor_alc_dep_dx'])
-    df.reset_index('session', inplace=True)
+    if 'session' in df.index.names:
+        df.reset_index('session', inplace=True)
     df['ID'] = df.index.get_level_values('ID')
     drop_lst = ['alc_dep_dx', 'fID', 'famID', 'mID', 'sex', 'cor_alc_dep_dx',
                 'cor_ald5dx', 'cor_sex', 'aldep1', 'ID']

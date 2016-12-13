@@ -14,11 +14,11 @@ from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123,
     import_questfolder, import_questfolder_ssaga,
     match_fups2sessions, df_fromcsv)
 from .organization import (Subject, SourceInfo, Session, ERPPeak, Neuropsych,
-    Questionnaire, Core, Internalizing, Externalizing, FHAM, RawEEGData, EEGData, ERPData,
+    Questionnaire, Core, Internalizing, Externalizing, FHAM, RawEEGData, EEGData, ERPData, RestingPower,
     STransformInverseMats, EEGBehavior, SSAGA, Mdb, EROcsv, EROcsvresults)
 from .file_handling import (identify_files,
                             parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path,
-                            MT_File, CNTH1_File, AVGH1_File,
+                            MT_File, CNTH1_File, AVGH1_File, RestingDAT,
                             Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
                             ERO_CSV)
 
@@ -288,6 +288,32 @@ def erp_data():
     sourceO = SourceInfo(ERPData.collection,
                     list(zip(avgh1_files, datemods)))
     sourceO.store()
+
+def resting_power():
+    # fast
+    start_dir = '/processed_data/eeg/complete_result_09_16.d/results/'
+    ns_file = 'ns_all_tests.dat'
+    mc_fileA = 'mc_1st_test.dat'
+    mc_fileB = 'mc_2nd_test.dat'
+
+    nsO = RestingDAT(start_dir + ns_file)
+    nsO.ns_to_dataframe()
+    rec_lst = nsO.file_df.to_dict(orient='records')
+
+    mcO_A = RestingDAT(start_dir + mc_fileA)
+    mcO_A.mc_to_dataframe(session='a')
+    rec_lst.extend(mcO_A.file_df.to_dict(orient='records'))
+    
+    mcO_B = RestingDAT(start_dir + mc_fileB)
+    mcO_B.mc_to_dataframe(session='b')
+    rec_lst.extend(mcO_B.file_df.to_dict(orient='records'))
+
+    for rec in tqdm(rec_lst):
+        rpO = RestingPower(rec)
+        rpO.store()
+
+    # sourceO = SourceInfo(RestingPower.collection, [])
+
 
 def mat_st_inv_walk(check_update=False, mat_files=None):
     # can take a while depending on network traffic
