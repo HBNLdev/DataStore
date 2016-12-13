@@ -153,9 +153,8 @@ def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
     return path
 
 def gen_path_stdf(rec, power_type):
-    ''' apply function designed to operate on a dataframe indexed by ID and session.
-        given processing version, parameter string, number of channels in the raw data, experiment,
-        case, power type, ID, and session, generate the path to the expected 3d ero mat '''
+    ''' version of above, with dataframe based off STinverse docs
+    '''
 
     try:
         ID = rec.name[0]
