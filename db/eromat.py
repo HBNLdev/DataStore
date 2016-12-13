@@ -12,6 +12,7 @@ from .compilation import join_collection
 from .organization import Mdb
 from .pipeline import version_info, chan_mapping, powertype_mapping
 from .pipeline_st import build_paramstr
+from .utils import join_allcols
 
 opt_info = {'Add baseline': ('add_baseline', 'array'),
             'Calculation type': ('calc_type', 'array'),
@@ -49,13 +50,6 @@ chans = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ',
          'F2', 'F1', 'TP8', 'TP7', 'AFZ', 'CP3', 'CP4', 'P5',
          'P6', 'C1', 'C2', 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ',
          'P2', 'P1', 'CPZ']
-
-
-def join_allcols(rec, sep='_'):
-    ''' dataframe apply function that simply joins the whole rows contents (should be strings),
-        using sep as the separator '''
-    return sep.join(rec)
-
 
 def prepare_erodf(ero_df):
     ''' given an ero_df prepared by EROStack.tf_mean_lowmem_multiwin_chans,
@@ -391,8 +385,8 @@ class EROStack:
                                    convert_scale(s.params['Times'], win[1]),
                                    convert_scale(freq_array, win[2]),
                                    convert_scale(freq_array, win[3]))
-            time_lbl = '-'.join([str(t) for t in win[0:2]]) + 'ms'
-            freq_lbl = '-'.join([str(f) for f in win[2:4]]) + 'Hz'
+            time_lbl = 'to'.join([str(t) for t in win[0:2]]) + 'ms'
+            freq_lbl = 'to'.join([str(f) for f in win[2:4]]) + 'Hz'
             win_lbl = '_'.join([time_lbl, freq_lbl])
             print(winds)
             win_inds.append(winds)
@@ -417,7 +411,7 @@ class EROStack:
             for wi, winds in enumerate(win_inds):
                 mean_array[fpi, wi, :] = fp['data'] \
                     [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
-                                         winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                                winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
             fpi += 1
 
         mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows * n_chans))
@@ -513,6 +507,66 @@ class EROStack:
                 data = new_data
             data_array[fpi, 0, :, :, :] = data
             fpi += 1
+
+        return data_array
+
+    def survey_conds(s):
+
+        cond_lst = list(set(s.data_df.index.get_level_values('condition')))
+        n_conds = len(cond_lst)
+        g = s.data_df.reset_index('condition').groupby(level=['ID', 'session'] )
+        cond_counts = g['condition'].count()
+        cond_deficient_uIDs = cond_counts.index[(cond_counts < n_conds).values]
+        data_df_fullconds = s.data_df.drop(cond_deficient_uIDs)
+        data_df_fullconds_uID = data_df_fullconds.reset_index().set_index(['ID', 'session'])
+        fullcond_uIDs = list(set(data_df_fullconds_uID.index.values))
+        data_df_fullconds_uIDconds = data_df_fullconds_uID.set_index('condition', append=True)
+        g = data_df_fullconds_uID.groupby(level=data_df_fullconds_uID.index.names)
+        data_df_fullconds_uID_nodupes = g.first()
+        
+        s.cond_lst = cond_lst
+        s.fullcond_uIDs = fullcond_uIDs
+        s.data_df_fullconds = data_df_fullconds
+        s.data_df_fullconds_uIDconds = data_df_fullconds_uIDconds
+        s.data_df_fullconds_uID_nodupes = data_df_fullconds_uID_nodupes
+
+    def load_data_interp_conds(s):
+
+        if 'cond_lst' not in dir(s):
+            s.survey_conds()
+
+        n_subjects = len(s.fullcond_uIDs)
+        n_conds = len(s.cond_lst)
+        n_chans = int(s.params['# of channels'][0][0])
+        time_vec = s.params['Times'][0]
+        n_times = time_vec.size
+        max_freqsize = max(s.freqlen_dict)
+        n_freqs = s.freqlen_dict[max_freqsize].shape[1]
+        print('{} subjects, {} conds, {} chans, {} times, {} freqs'.\
+            format(n_subjects, n_conds, n_chans, n_times, n_freqs))
+
+        # subjects, conditions, channels, freq, timepoints
+        data_array = np.empty((n_subjects, n_conds, n_chans, n_times, n_freqs))
+
+        uidi = -1
+        for ID, session in s.fullcond_uIDs:
+            uidi += 1
+            for ci, cond in enumerate(s.cond_lst):
+                ID_ses_cond = (ID, session, cond)
+                # print(ID_ses_cond)
+                row = s.data_df_fullconds_uIDconds.loc[ID_ses_cond]
+                file_path = row['path']
+                fl = row['freq_len']
+                pointer = h5py.File(file_path, 'r')
+                data = pointer['data'][:]  # is chans x times x freq
+                if fl != max_freqsize:
+                    new_data = np.empty((n_chans, n_times, max_freqsize))
+                    for ctfi, chan_tf in enumerate(data):
+                        new_data[ctfi, :, :] = interp_freqdomain_fast(chan_tf, time_vec,
+                                                                      s.freqlen_dict[fl][0],
+                                                                      s.freqlen_dict[max_freqsize][0])
+                    data = new_data
+                data_array[uidi, ci, :, :, :] = data
 
         return data_array
 

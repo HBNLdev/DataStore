@@ -301,6 +301,7 @@ def tf(r, measure='power',
             axarr[spi].grid(True)
             axarr[spi].axvline(r.zero_tf, color='k', linestyle='--')
             axarr[spi].set_xlim(r.time_tf_plotlims)
+            axarr[spi].set_ylim(r.freq_tf_plotlims)
             ''' labels and title '''
             axarr[spi].set_xlabel('Time (s)', fontweight=stitlefont_wt)
             if spi % sp_dims[1] == 0:
@@ -400,7 +401,8 @@ def topo(r, measure='erp', times=list(range(0, 501, 125)),
                 topo_lst.append(topo)
                 im_lst.append(im)
                 ''' labels '''
-                axarr[ax_dum].text(-.5, .5, t_lbls[ti])  # time label
+                if ri == 0:
+                    axarr[ax_dum].text(-.5, .5, t_lbls[ti])  # time label
                 if ti == 0:
                     axarr[ax_dum].text(-1.5, 0, r_lbls[ri])  # row label
 

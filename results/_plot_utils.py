@@ -32,6 +32,14 @@ def n_colors(N):
     return RGB_tuples
 
 
+def freq_tick_heuristic(freq_vec):
+    ''' given frequency sampling vector, return a suggested tick spacing '''
+    freq_vec_cut = freq_vec[freq_vec < 32]
+    n_freqs = len(freq_vec_cut)
+    suggested_ticks = 10
+    suggested_space = round(n_freqs / suggested_ticks)
+    return suggested_space
+
 def subplot_heuristic(n):
     ''' for n subplots, determine best grid layout dimensions '''
 

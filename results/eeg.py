@@ -1,4 +1,4 @@
-''' represents intermediate results from MATLAB processing pipeline '''
+''' represents EEG results from MATLAB processing pipeline or ERO-mats '''
 
 import os
 from glob import glob
@@ -13,9 +13,13 @@ import mne
 from mne.channels import read_ch_connectivity
 
 from .plot import measure_pps, get_data
-from ._plot_utils import nested_strjoin
+from ._plot_utils import nested_strjoin, freq_tick_heuristic
 from ._array_utils import (convert_ms, baseline_sub, baseline_div, handle_by,
                            basic_slice, compound_take, reverse_dimorder)
+
+
+time_plotlims_ms = [-100, 800]
+freq_plotlims_hz = [0, 32]
 
 # values are tuples of h5py fieldname and datatype
 opt_info = {'Options path': ('optpath', 'text'),
@@ -235,15 +239,20 @@ class Results:
             s.make_tfscales_erostack()
 
         s.zero_tf = convert_ms(s.time_tf, 0)
-        s.freq_ticks_pt = range(0, len(s.freq), 2)
-        s.freq_ticks_hz = ['{0:.1f}'.format(f) for f in s.freq[::2]]
+        freq_tick_space = freq_tick_heuristic(s.freq)
+        s.freq_ticks_pt = range(0, len(s.freq), freq_tick_space)
+        s.freq_ticks_hz = ['{0:.1f}'.format(f) for f in s.freq[::freq_tick_space]]
         s.time_ticks()  # additional helper function for ticks
 
         # time plot limits
-        time_plotlims_ms = [-100, 600]
+        
         s.time_plotlims = [convert_ms(s.time, ms) for ms in time_plotlims_ms]
         s.time_tf_plotlims = [convert_ms(s.time_tf, ms)
                               for ms in time_plotlims_ms]
+
+        # freq plot limits
+        s.freq_tf_plotlims = [convert_ms(s.freq, hz)
+                              for hz in freq_plotlims_hz]
 
         # only CSD beyond this if statement
         if not s.params['CSD matrix']:
@@ -620,6 +629,7 @@ class ResultsFromEROStack(Results):
     # notes:
     
     # should NOT have inconsistent freq_vecs
+    # if using conditions dimension, should be condition-complete across subjects
 
     source_pipeline = 'erostack'
 
@@ -637,8 +647,14 @@ class ResultsFromEROStack(Results):
     }
 
 
-    def __init__(s, erostack_obj, batch_id='erostack1', csv_or_df=None, trial_thresh=15):
+    def __init__(s, erostack_obj, batch_id='erostack1', csv_or_df=None, trial_thresh=15,
+                    cond_stack=False):
+
         s.stack = erostack_obj
+        s.cond_stack = cond_stack
+        if s.cond_stack and 'cond_lst' not in dir(s.stack):
+            s.stack.survey_conds()
+        
         s.get_params(batch_id)
         s.init_filedf()
         s.add_rejinfo()
@@ -653,7 +669,10 @@ class ResultsFromEROStack(Results):
 
         s.params = s.default_params.copy()
         s.params['Batch ID'] = batch_id
-        s.params['Condition labels'] = [s.stack.params['Condition']]
+        if s.stack.cond_lst:
+            s.params['Condition labels'] = s.stack.cond_lst
+        else:
+            s.params['Condition labels'] = [s.stack.params['Condition']]
         s.params['Sampling rate'] = s.stack.params['Sampling rate']
         s.params['# of timepoints'] = np.array([[float(s.stack.params['Times'].size)]])
         s.params['Temporal limits'] = np.array([[s.stack.params['Times'][0][0]], [s.stack.params['Times'][0][-1]]])
@@ -671,8 +690,10 @@ class ResultsFromEROStack(Results):
 
     def init_filedf(s):
         # for now, just pass the stack data_df
-
-        s.file_df = s.stack.data_df
+        if s.cond_stack:
+            s.file_df = s.stack.data_df_fullconds_uID_nodupes
+        else:
+            s.file_df = s.stack.data_df.copy()
         uid_inds(s.file_df)
 
     def add_rejinfo(s):
@@ -680,7 +701,7 @@ class ResultsFromEROStack(Results):
         # data_df should already have trials
 
         # interpchans is always 0 here
-        s.file_df['# of interpolated channels'] = [0]*s.stack.data_df.shape[0]
+        s.file_df['# of interpolated channels'] = [0]*s.file_df.shape[0]
 
     def make_tfscales_erostack(s):
         
@@ -692,10 +713,20 @@ class ResultsFromEROStack(Results):
                    avgcond_baseline=False):
         ''' load (total) power data and divisively baseline-normalize '''
 
-        power = s.stack.load_data_interp()
+        if s.cond_stack:
+            power = s.stack.load_data_interp_conds()
+        else:
+            power = s.stack.load_data_interp()
         s.power = power.swapaxes(3, 4)
         # power is (subjects, conditions, channels, freq, timepoints,)
 
+        # if 62 channels, most likely includes the x eog chan, which we'll remove
+        if s.power.shape[2] == 62:
+            stack_chans = s.stack.params['Channels']
+            eogchan_ind = stack_chans.index('X')
+            use_inds = list(range(len(stack_chans)))
+            use_inds.remove(eogchan_ind)
+            s.power = s.power[:, :, use_inds, :, :]
 
         s.tf_dims = ('subject', 'condition', 'channel',
                      'frequency', 'timepoint')
