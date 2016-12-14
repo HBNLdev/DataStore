@@ -236,7 +236,13 @@ def prepare_joindata(keyDF, coll, subcoll=None, add_query={}, add_proj={},
     query = {id_field: {'$in': list(
         keyDF.index.get_level_values(right_join_inds[0]))}}
     query.update(add_query)
-    docs = get_colldocs(coll, subcoll, query, add_proj)
+    proj = {}
+    if add_proj:
+        proj.update(add_proj)
+        for ind in right_join_inds:
+            proj.update({ind: 1})
+    proj.update({'_id': 0})
+    docs = get_colldocs(coll, subcoll, query, proj)
 
     if flatten:
         recs =[flatten_dict(r) for r in list(docs)]
