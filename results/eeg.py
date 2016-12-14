@@ -106,51 +106,7 @@ def handle_parse(dset, dset_field, field_type):
 
 
 class Results:
-    ''' represents HDF-compatible .mat's as dask stacks '''
-
-    source_pipeline = 'matlab' # by default
-
-    def __init__(s, optpath, csv_or_df=None, trial_thresh=15):
-        s.opt = h5py.File(optpath, 'r')
-        s.get_params()
-        s.init_filedf()
-        s.add_rejinfo()
-        s.add_demogs(csv_or_df)
-        s.apply_rej(trial_thresh)
-        s.save_demogs()
-        s.make_scales()
-        s.measure_pps = measure_pps
-
-    def get_params(s):
-        ''' extract data parameters from opt, relying upon opt_info. '''
-        prefix = 'opt/'
-        s.params = {param: handle_parse(s.opt, prefix + info[0], info[1])
-                    for param, info in opt_info.items()}
-
-    def init_filedf(s):
-        ''' initialize dataframe of .mat files in the opt's "outpath"
-            indexed by ID+session '''
-        files = glob(s.params['Data path'] + '/*.mat')
-        uid_fromfiles = [uid_frompath(fp) for fp in files]
-        uid_index = pd.MultiIndex.from_tuples(
-            uid_fromfiles, names=['ID', 'session'])
-        s.file_df = pd.DataFrame({'path': pd.Series(files, index=uid_index)})
-
-    def add_rejinfo(s):
-        ''' for each file, get # of accepted trials and interpolated chans '''
-
-        trials = s.load('trials', 'n_trials', [2, 0, 1], 'file_df')
-        trial_df = pd.DataFrame(trials.squeeze(),
-                                columns=['trials_' + cond for cond in s.params['Condition labels']],
-                                index=s.file_df.index)
-        s.file_df = s.file_df.join(trial_df)
-        interpchans = s.load('interpchans', 'n_interpchans',
-                             [2, 0, 1], 'file_df')
-        interpchan_df = pd.DataFrame(interpchans.squeeze(),
-                                     columns=['# of interpolated channels'],
-                                     index=s.file_df.index)
-        s.file_df = s.file_df.join(interpchan_df)
-
+    
     def add_demogs(s, csv_or_df):
         ''' read demographics file with ID/session columns, join to file_df '''
 
@@ -167,7 +123,6 @@ class Results:
 
         # note: this will exclude subs from demogs file with no data found
         s.demog_df = s.file_df.join(demog_df).sort_index()
-
 
     def apply_rej(s, trial_thresh, interpchan_thresh=12):
         ''' remove subs having too few trials or too many interp'd chans '''
@@ -280,20 +235,6 @@ class Results:
                                                for p in tmp_pairs]))
                 s.cohchan_sets[pset] = [s.montage.ch_names[i] for i in setchans]
 
-
-    def make_tfscales_matlab(s):
-        ep_lims = s.params['Temporal limits']
-        n_timepts = s.params['# of timepoints']
-
-        s.time = np.linspace(ep_lims[0], ep_lims[1], n_timepts + 1)[1:]
-        s.zero = convert_ms(s.time, 0)
-
-        # TF times / freqs
-        n_timepts_tf = int(n_timepts / s.params['TF time-downsample ratio'])
-        s.time_tf = np.linspace(ep_lims[0], ep_lims[1], n_timepts_tf + 1)[1:]
-        s.freq = np.array([2 * s.srate / scale[0]
-                           for scale in s.params['TF scales'][::-1]])  # reverse
-
     def time_ticks(s, interval=200):
         ''' time ticks for plots '''
         ms_start_plot = np.round(s.time[0] / 100) * 100  # start at round number
@@ -306,28 +247,6 @@ class Results:
 
         # for display purposes
         s.time_ticks_ms = [n / 1000 for n in time_ticks_ms]
-
-    def load(s, measure, dset_name, transpose_lst, df_attr='demog_df'):
-        ''' given measure, h5 dataset name, transpose list: load data '''
-
-        df = getattr(s, df_attr)
-
-        if measure in dir(s):
-            print(measure, 'already loaded')
-            if df.shape[0] != getattr(s, measure).shape[0]:
-                print('shape of loaded data does not match demogs, reloading')
-            else:
-                return np.array([])
-
-        dsets = [h5py.File(fn, 'r')[dset_name] for fn in df['path'].values]
-        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
-        stack = da.stack(arrays, axis=-1)  # concatenate along last axis
-        stack = stack.transpose(transpose_lst)  # do transposition
-
-        data = np.empty(stack.shape)
-        da.store(stack, data)
-        print(data.shape)
-        return data
 
     def baseline(s, measure, method, window, avgcond_baseline=False):
         ''' baseline a data array '''
@@ -359,6 +278,173 @@ class Results:
         new_data = baseline_func(data, pt_lims, -1, cond_dim)
         setattr(s, s.measure_pps[measure]['data'], new_data)
 
+    def prepare_mne(s):
+        ''' prepare an mne EvokedArray object from erp data '''
+        if 'erp' not in dir(s):
+            s.load_erp()
+
+        # create info
+        info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
+                               'eeg', s.montage)
+        # EvokedArray
+        chan_erps = s.erp.mean(axis=(0, 1)) / 1e6  # subject/condition mean
+        return mne.EvokedArray(chan_erps, info,
+                               tmin=s.params['Temporal limits'][0] / 1000)
+    
+    def save_mean(s, measure, spec_dict, saveas=None):
+        ''' save data-means and add as columns in s.demog_df. spec_dict is a
+            dict that specifies which values should be taken in each dimension.
+            if a dimension is unspecified, it will be averaged over. '''
+
+        final_dim = 'subject'
+
+        if measure in s.measure_pps.keys():
+            data, d_dims, d_dimlvls = get_data(s, measure)
+        else:
+            print('data not recognized')
+            return
+
+        # TODO: verify spec_dict accords with data_dims
+
+        if saveas:
+            if ~isinstance(spec_dict, OrderedDict):
+                spec_dict = OrderedDict(spec_dict)
+            dims, vals, lbls, stage_lens = \
+                handle_by(s, spec_dict, d_dims, d_dimlvls, ordered=True)
+        else:
+            dims, vals, lbls = handle_by(s, spec_dict, d_dims, d_dimlvls)
+
+        amean_lst = []
+        for dim_set, val_set, lbl_set in zip(dims, vals, lbls):
+            dimval_tups = [(d, v) for d, v in zip(dim_set, val_set)]
+            try:
+                amean = basic_slice(data, dimval_tups)
+                print('done slice')
+            except:
+                amean = compound_take(data, dimval_tups)
+                print('done compound take')
+
+            mean_dims = np.where([d != final_dim for d in d_dims])
+            amean = amean.mean(axis=tuple(mean_dims[0]))
+
+            amean_lst.append(amean)
+
+        amean_stack = np.stack(amean_lst, axis=-1)
+
+        if saveas:
+            dim_names = tuple(['subject'] + list(spec_dict.keys()))
+            dim_vals = []
+            for dim in range(len(lbls[0])):
+                uniq_vals = []
+                for tup in lbls:
+                    if tup[dim] not in uniq_vals:
+                        uniq_vals.append(tup[dim])
+                dim_vals.append(uniq_vals)
+            dim_vals = tuple([list(s.demog_df.index)] + dim_vals)
+
+            n_obs = amean_stack.shape[0]
+            reshape_tuple = tuple([n_obs] + stage_lens)
+            amean_hcube = np.reshape(amean_stack, reshape_tuple)
+
+            setattr(s, saveas, amean_hcube)
+            setattr(s, saveas + '_dims', dim_names)
+            setattr(s, saveas + '_dimlvls', dim_vals)
+            s.measure_pps.update({saveas: s.measure_pps[measure].copy()})
+            s.measure_pps[saveas]['data'] = saveas
+            s.measure_pps[saveas]['d_dims'] = saveas + '_dims'
+            s.measure_pps[saveas]['d_dimlvls'] = saveas + '_dimlvls'
+        else:
+            saveas = measure
+
+        lbl_lst = [saveas + '_' + nested_strjoin(lbl_set) for lbl_set in lbls]
+
+        amean_df = pd.DataFrame(amean_stack,
+                                index=s.demog_df.index, columns=lbl_lst)
+
+        s.demog_df = pd.concat([s.demog_df, amean_df], axis=1)
+
+class ResultsFromMATLAB(Results):
+    ''' represents HDF-compatible .mat's as dask stacks '''
+
+    source_pipeline = 'matlab' # by default
+
+    def __init__(s, optpath, csv_or_df=None, trial_thresh=15):
+        s.opt = h5py.File(optpath, 'r')
+        s.get_params()
+        s.init_filedf()
+        s.add_rejinfo()
+        s.add_demogs(csv_or_df)
+        s.apply_rej(trial_thresh)
+        s.save_demogs()
+        s.make_scales()
+        s.measure_pps = measure_pps
+
+    def get_params(s):
+        ''' extract data parameters from opt, relying upon opt_info. '''
+        prefix = 'opt/'
+        s.params = {param: handle_parse(s.opt, prefix + info[0], info[1])
+                    for param, info in opt_info.items()}
+
+    def init_filedf(s):
+        ''' initialize dataframe of .mat files in the opt's "outpath"
+            indexed by ID+session '''
+        files = glob(s.params['Data path'] + '/*.mat')
+        uid_fromfiles = [uid_frompath(fp) for fp in files]
+        uid_index = pd.MultiIndex.from_tuples(
+            uid_fromfiles, names=['ID', 'session'])
+        s.file_df = pd.DataFrame({'path': pd.Series(files, index=uid_index)})
+
+    def add_rejinfo(s):
+        ''' for each file, get # of accepted trials and interpolated chans '''
+
+        trials = s.load('trials', 'n_trials', [2, 0, 1], 'file_df')
+        trial_df = pd.DataFrame(trials.squeeze(),
+                                columns=['trials_' + cond for cond in s.params['Condition labels']],
+                                index=s.file_df.index)
+        s.file_df = s.file_df.join(trial_df)
+        interpchans = s.load('interpchans', 'n_interpchans',
+                             [2, 0, 1], 'file_df')
+        interpchan_df = pd.DataFrame(interpchans.squeeze(),
+                                     columns=['# of interpolated channels'],
+                                     index=s.file_df.index)
+        s.file_df = s.file_df.join(interpchan_df)
+
+    def make_tfscales_matlab(s):
+        ep_lims = s.params['Temporal limits']
+        n_timepts = s.params['# of timepoints']
+
+        s.time = np.linspace(ep_lims[0], ep_lims[1], n_timepts + 1)[1:]
+        s.zero = convert_ms(s.time, 0)
+
+        # TF times / freqs
+        n_timepts_tf = int(n_timepts / s.params['TF time-downsample ratio'])
+        s.time_tf = np.linspace(ep_lims[0], ep_lims[1], n_timepts_tf + 1)[1:]
+        s.freq = np.array([2 * s.srate / scale[0]
+                           for scale in s.params['TF scales'][::-1]])  # reverse
+
+
+    def load(s, measure, dset_name, transpose_lst, df_attr='demog_df'):
+        ''' given measure, h5 dataset name, transpose list: load data '''
+
+        df = getattr(s, df_attr)
+
+        if measure in dir(s):
+            print(measure, 'already loaded')
+            if df.shape[0] != getattr(s, measure).shape[0]:
+                print('shape of loaded data does not match demogs, reloading')
+            else:
+                return np.array([])
+
+        dsets = [h5py.File(fn, 'r')[dset_name] for fn in df['path'].values]
+        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
+        stack = da.stack(arrays, axis=-1)  # concatenate along last axis
+        stack = stack.transpose(transpose_lst)  # do transposition
+
+        data = np.empty(stack.shape)
+        da.store(stack, data)
+        print(data.shape)
+        return data
+
     def load_erp(s, filt=True, lp_cutoff=16,
                  baseline=True, bl_window=[-100, 0],
                  avgcond_baseline=False):
@@ -385,18 +471,6 @@ class Results:
         if baseline:
             s.baseline('erp', 'subtractive', bl_window, avgcond_baseline)
 
-    def prepare_mne(s):
-        ''' prepare an mne EvokedArray object from erp data '''
-        if 'erp' not in dir(s):
-            s.load_erp()
-
-        # create info
-        info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
-                               'eeg', s.montage)
-        # EvokedArray
-        chan_erps = s.erp.mean(axis=(0, 1)) / 1e6  # subject/condition mean
-        return mne.EvokedArray(chan_erps, info,
-                               tmin=s.params['Temporal limits'][0] / 1000)
 
     def load_power(s, baseline=False, bl_window=[-500, -200],
                    avgcond_baseline=False):
@@ -550,79 +624,6 @@ class Results:
                          np.array(s.params['Condition labels'], dtype=object),
                          np.array(s.montage.ch_names, dtype=object),
                          s.freq, s.time_tf)
-
-    def save_mean(s, measure, spec_dict, saveas=None):
-        ''' save data-means and add as columns in s.demog_df. spec_dict is a
-            dict that specifies which values should be taken in each dimension.
-            if a dimension is unspecified, it will be averaged over. '''
-
-        final_dim = 'subject'
-
-        if measure in s.measure_pps.keys():
-            data, d_dims, d_dimlvls = get_data(s, measure)
-        else:
-            print('data not recognized')
-            return
-
-        # TODO: verify spec_dict accords with data_dims
-
-        if saveas:
-            if ~isinstance(spec_dict, OrderedDict):
-                spec_dict = OrderedDict(spec_dict)
-            dims, vals, lbls, stage_lens = \
-                handle_by(s, spec_dict, d_dims, d_dimlvls, ordered=True)
-        else:
-            dims, vals, lbls = handle_by(s, spec_dict, d_dims, d_dimlvls)
-
-        amean_lst = []
-        for dim_set, val_set, lbl_set in zip(dims, vals, lbls):
-            dimval_tups = [(d, v) for d, v in zip(dim_set, val_set)]
-            try:
-                amean = basic_slice(data, dimval_tups)
-                print('done slice')
-            except:
-                amean = compound_take(data, dimval_tups)
-                print('done compound take')
-
-            mean_dims = np.where([d != final_dim for d in d_dims])
-            amean = amean.mean(axis=tuple(mean_dims[0]))
-
-            amean_lst.append(amean)
-
-        amean_stack = np.stack(amean_lst, axis=-1)
-
-        if saveas:
-            dim_names = tuple(['subject'] + list(spec_dict.keys()))
-            dim_vals = []
-            for dim in range(len(lbls[0])):
-                uniq_vals = []
-                for tup in lbls:
-                    if tup[dim] not in uniq_vals:
-                        uniq_vals.append(tup[dim])
-                dim_vals.append(uniq_vals)
-            dim_vals = tuple([list(s.demog_df.index)] + dim_vals)
-
-            n_obs = amean_stack.shape[0]
-            reshape_tuple = tuple([n_obs] + stage_lens)
-            amean_hcube = np.reshape(amean_stack, reshape_tuple)
-
-            setattr(s, saveas, amean_hcube)
-            setattr(s, saveas + '_dims', dim_names)
-            setattr(s, saveas + '_dimlvls', dim_vals)
-            s.measure_pps.update({saveas: s.measure_pps[measure].copy()})
-            s.measure_pps[saveas]['data'] = saveas
-            s.measure_pps[saveas]['d_dims'] = saveas + '_dims'
-            s.measure_pps[saveas]['d_dimlvls'] = saveas + '_dimlvls'
-        else:
-            saveas = measure
-
-        lbl_lst = [saveas + '_' + nested_strjoin(lbl_set) for lbl_set in lbls]
-
-        amean_df = pd.DataFrame(amean_stack,
-                                index=s.demog_df.index, columns=lbl_lst)
-
-        s.demog_df = pd.concat([s.demog_df, amean_df], axis=1)
-
 
 class ResultsFromEROStack(Results):
 
