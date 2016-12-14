@@ -402,7 +402,8 @@ def parse_cnth1_path(filepath):
               'uID': subject_piece + '_' + session_letter,
               'version': version,
               'bitrate': bitrate,
-              'n_chans': n_chans}
+              'n_chans': n_chans,
+              'rec_type': rec_type}
 
     return output
 
