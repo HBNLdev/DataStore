@@ -25,6 +25,46 @@ for row in layout:
     ordered_chans.extend([chan for chan in row if chan])
 
 
+''' dictionary mapping measures to their object info '''
+measure_pps = {'erp': {'data': 'erp', 'd_dims': 'erp_dims',
+                       'd_dimlvls': 'erp_dim_lsts', 'units': 'pot_units',
+                       'lims': 'pot_lims', 'cmap': plt.cm.RdBu_r,
+                       'load': 'load_erp'},
+               'power': {'data': 'power', 'd_dims': 'tf_dims',
+                         'd_dimlvls': 'tf_dim_lsts', 'units': 'db_units',
+                         'lims': 'db_lims', 'cmap': plt.cm.RdBu_r,
+                         'load': 'load_power'},
+               'itc': {'data': 'itc', 'd_dims': 'tf_dims',
+                       'd_dimlvls': 'tf_dim_lsts', 'units': 'itc_units',
+                       'lims': 'itc_lims', 'cmap': plt.cm.PuOr,
+                       'load': 'load_itc'},
+               'itc_Z': {'data': 'itc_Z', 'd_dims': 'tf_dims',
+                         'd_dimlvls': 'tf_dim_lsts', 'units': 'z_units',
+                         'lims': 'z_lims', 'cmap': plt.cm.PuOr,
+                         'load': 'load_itc_Z'},
+               'itc_fisher': {'data': 'itc_fisher', 'd_dims': 'tf_dims',
+                              'd_dimlvls': 'tf_dim_lsts', 'units': 'itc_units',
+                              'lims': 'itc_lims', 'cmap': plt.cm.PuOr,
+                              'load': 'load_itc_fisher'},
+               'coh': {'data': 'coh', 'd_dims': 'coh_dims',
+                       'd_dimlvls': 'coh_dim_lsts', 'units': 'coh_units',
+                       'lims': 'coh_lims', 'cmap': plt.cm.PuOr,
+                       'load': 'load_coh'},
+               'coh_Z': {'data': 'coh_Z', 'd_dims': 'coh_dims',
+                         'd_dimlvls': 'coh_dim_lsts', 'units': 'z_units',
+                         'lims': 'z_lims', 'cmap': plt.cm.PuOr,
+                         'load': 'load_coh_Z'},
+               'coh_fisher': {'data': 'coh_fisher', 'd_dims': 'coh_dims',
+                              'd_dimlvls': 'coh_dim_lsts', 'units': 'coh_units',
+                              'lims': 'coh_lims', 'cmap': plt.cm.PuOr,
+                              'load': 'load_coh_fisher'},
+               'phi': {'data': 'phi', 'd_dims': 'tf_dims',
+                       'd_dimlvls': 'tf_dim_lsts', 'units': 'phi_units',
+                       'lims': 'phi_lims', 'cmap': plt.cm.PuOr,
+                       'load': 'load_phi'},
+               }
+
+
 def n_colors(N):
     ''' given integer N, return generator for N distinct colors '''
     HSV_tuples = [(x * 1.0 / N, 0.5, 0.5) for x in range(N)]

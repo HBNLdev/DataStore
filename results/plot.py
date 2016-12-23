@@ -7,15 +7,17 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import scipy.stats as ss
+
 import mne
 from mne.viz import plot_connectivity_circle
 
-from ._array_utils import basic_slice, compound_take, handle_by, handle_pairs
+from ._array_utils import get_data, basic_slice, subject_slice, compound_take, handle_by, handle_pairs
 from ._plot_utils import (subplot_heuristic, figsize_heuristic,
                           is_nonstr_sequence, nested_strjoin,
                           MidpointNormalize,
                           blank_topo, plot_arcs, ordinalize_one,
                           ordered_chans, n_colors)
+from .stats import regress_linear
 
 ''' initialize matplotlib backend settings '''
 # print(mpl.matplotlib_fname())
@@ -28,60 +30,6 @@ titlefont_sz = 16
 titlefont_wt = 'bold'
 stitlefont_sz = 12
 stitlefont_wt = 'medium'
-
-''' dictionary mapping measures to their object info '''
-measure_pps = {'erp': {'data': 'erp', 'd_dims': 'erp_dims',
-                       'd_dimlvls': 'erp_dim_lsts', 'units': 'pot_units',
-                       'lims': 'pot_lims', 'cmap': plt.cm.RdBu_r,
-                       'load': 'load_erp'},
-               'power': {'data': 'power', 'd_dims': 'tf_dims',
-                         'd_dimlvls': 'tf_dim_lsts', 'units': 'db_units',
-                         'lims': 'db_lims', 'cmap': plt.cm.RdBu_r,
-                         'load': 'load_power'},
-               'itc': {'data': 'itc', 'd_dims': 'tf_dims',
-                       'd_dimlvls': 'tf_dim_lsts', 'units': 'itc_units',
-                       'lims': 'itc_lims', 'cmap': plt.cm.PuOr,
-                       'load': 'load_itc'},
-               'itc_Z': {'data': 'itc_Z', 'd_dims': 'tf_dims',
-                         'd_dimlvls': 'tf_dim_lsts', 'units': 'z_units',
-                         'lims': 'z_lims', 'cmap': plt.cm.PuOr,
-                         'load': 'load_itc_Z'},
-               'itc_fisher': {'data': 'itc_fisher', 'd_dims': 'tf_dims',
-                              'd_dimlvls': 'tf_dim_lsts', 'units': 'itc_units',
-                              'lims': 'itc_lims', 'cmap': plt.cm.PuOr,
-                              'load': 'load_itc_fisher'},
-               'coh': {'data': 'coh', 'd_dims': 'coh_dims',
-                       'd_dimlvls': 'coh_dim_lsts', 'units': 'coh_units',
-                       'lims': 'coh_lims', 'cmap': plt.cm.PuOr,
-                       'load': 'load_coh'},
-               'coh_Z': {'data': 'coh_Z', 'd_dims': 'coh_dims',
-                         'd_dimlvls': 'coh_dim_lsts', 'units': 'z_units',
-                         'lims': 'z_lims', 'cmap': plt.cm.PuOr,
-                         'load': 'load_coh_Z'},
-               'coh_fisher': {'data': 'coh_fisher', 'd_dims': 'coh_dims',
-                              'd_dimlvls': 'coh_dim_lsts', 'units': 'coh_units',
-                              'lims': 'coh_lims', 'cmap': plt.cm.PuOr,
-                              'load': 'load_coh_fisher'},
-               'phi': {'data': 'phi', 'd_dims': 'tf_dims',
-                       'd_dimlvls': 'tf_dim_lsts', 'units': 'phi_units',
-                       'lims': 'phi_lims', 'cmap': plt.cm.PuOr,
-                       'load': 'load_phi'},
-               }
-
-
-def get_data(r, measure):
-    ''' given a measure, retrieve data and dimensional info '''
-
-    measure_d = r.measure_pps[measure]
-    if measure_d['data'] not in dir(r):
-        getattr(r, measure_d['load'])()
-
-    data = getattr(r, measure_d['data'])
-    d_dims = getattr(r, measure_d['d_dims'])
-    d_dimlvls = getattr(r, measure_d['d_dimlvls'])
-
-    return data, d_dims, d_dimlvls
-
 
 def get_plotparams(r, measure, lims=None, cmap_override=None):
     ''' given a measure, retrieve default plotting info '''
@@ -802,6 +750,102 @@ def boxplot(r, measure, figure_by=None, subplot_by=None, set_by=None,
                 axarr[spi].set_ylabel(units, fontweight=stitlefont_wt)
             if spi % sp_dims[1] == len(sp_vals) - 1:
                 axarr[spi].legend(r, ld['m_lbls'])
+
+        if savedir:
+            save_fig(r, savedir, ptype, measure, f_lbls[fi])
+
+
+def scatter(r, measure, variate=None, figure_by=None, subplot_by=None, set_by=None,
+                        figsize_override=None, lbl_override=None, savedir=None):
+
+    # variate should be a column of demog_df
+
+    ptype = 'scatter'
+    size = 20
+    alpha = 0.4
+    final_dim = 'subject'
+
+    if measure not in dir(r):
+        print('measure not found')
+        return
+    else:
+        data, d_dims, d_dimlvls = get_data(r, measure)
+        units, lims, cmap = get_plotparams(r, measure)
+
+    # define variate as xvals here
+    # note that later, we will have to determine whether any other by-arguments
+    # use the 'subjects' dim, and, if they do, the xvals will have to be gotten
+    # based on that by-argument
+    xvec = r.demog_df[variate].values
+
+    f_dim, f_vals, f_lbls = handle_by(r, figure_by, d_dims, d_dimlvls)
+    sp_dim, sp_vals, sp_lbls = handle_by(r, subplot_by, d_dims, d_dimlvls)
+    s_dim, s_vals, s_lbls = handle_by(r, set_by, d_dims, d_dimlvls)
+
+    ld = {'f_lbls': f_lbls, 'sp_lbls': sp_lbls, 's_lbls': s_lbls,}
+    if lbl_override:
+        for var_name, new_vals in lbl_override.items():
+            if var_name in ld:
+                ld[var_name] = new_vals
+            else:
+                print('label not found')
+                return
+
+    n_sets = len(s_vals)
+    colors = list(n_colors(n_sets))
+
+    sp_dims = subplot_heuristic(len(sp_vals))
+    if figsize_override:
+        figsize = figsize_override
+    else:
+        figsize = figsize_heuristic(sp_dims)
+
+    for fi, fval in enumerate(f_vals):
+        f, axarr = plt.subplots(sp_dims[0], sp_dims[1],
+                                sharex=True, sharey=True, figsize=figsize)
+        f.suptitle(ld['f_lbls'][fi], fontsize=titlefont_sz,
+                   fontweight=titlefont_wt)
+        try:
+            axarr = axarr.ravel()
+        except:
+            axarr = [axarr]
+        for spi, spval in enumerate(sp_vals):
+            for si, sval in enumerate(s_vals):
+                h_lst = []
+                vals = [fval, spval, sval]
+                dims = [f_dim[fi], sp_dim[spi], s_dim[si]]
+                dimval_tups = [(d, v) for d, v in zip(dims, vals)]
+                try:
+                    xvals = subject_slice(xvec, dimval_tups)
+                    yvals = basic_slice(data, dimval_tups)
+                    print('slice')
+                except:
+                    yvals = compound_take(data, dimval_tups)
+                    print('compound take')
+                # check to make sure the size is correct
+                mean_dims = np.where([d != final_dim for d in d_dims])
+                yvals = yvals.mean(axis=tuple(mean_dims[0]))
+                h = axarr[spi].scatter(xvals, yvals, s=size, c=colors[si], marker='o',
+                                   alpha=alpha)
+                # do regression, if applicable
+                y_pred, coef, r2 = regress_linear(xvals, yvals)
+                axarr[spi].plot(xvals, y_pred, color=colors[si], linewidth=3,
+                                   alpha=alpha)
+                regr_text = 'b: {:.2f}, r^2: {:.2f}'.format(coef, r2)
+                axarr[spi].text(0.05, 0.05, regr_text, color=colors[si],
+                    transform=axarr[spi].transAxes, fontsize=14, fontweight='bold', va='bottom')
+                h_lst.append(h)
+            axarr[spi].set_title(ld['sp_lbls'][spi], fontweight=stitlefont_wt)
+            # axarr[spi].legend(loc='upper left')
+            # xticks describe variate
+            # axarr[spi].set_xticks(np.arange(n_sets) + width)
+            # axarr[spi].set_xticklabels(ld['s_lbls'])
+            # axarr[spi].set_xlabel(d_dims[s_dim[si]], fontweight=stitlefont_wt)
+            # y label describes measure
+            if spi % sp_dims[1] == 0:
+                axarr[spi].set_ylabel(units, fontweight=stitlefont_wt)
+            if (spi % sp_dims[1] == len(sp_vals) - 1) and bool(ld['s_lbls']):
+                axarr[spi].legend(h_lst, ld['s_lbls'])
 
         if savedir:
             save_fig(r, savedir, ptype, measure, f_lbls[fi])

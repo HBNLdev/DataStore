@@ -3,14 +3,32 @@
     of clustering those test-statistics given a threshold '''
 
 import numpy as np
+from sklearn import linear_model
+
 import mne
 from mne.stats import (permutation_cluster_1samp_test,
                        permutation_cluster_test,
                        spatio_temporal_cluster_1samp_test,
                        spatio_temporal_cluster_test)
 
-from .plot import measure_pps, get_data
-from ._array_utils import permute_data
+from ._plot_utils import measure_pps
+from ._array_utils import get_data, permute_data
+
+
+
+def regress_linear(xvals, yvals):
+    ''' given equal length vectors, do a linear regression. returns the coefficient (slope) and variance explained '''
+
+    if len(xvals.shape) < 2:
+        xvals = xvals.reshape(-1, 1)
+    if len(yvals.shape) < 2:
+        yvals = yvals.reshape(-1, 1)
+    regr = linear_model.LinearRegression()
+    regr.fit(xvals, yvals)
+
+    pred_y = regr.predict(xvals)
+
+    return pred_y, regr.coef_[0][0], regr.score(xvals, yvals)
 
 
 # should be able to do:

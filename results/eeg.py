@@ -12,9 +12,8 @@ import pandas as pd
 import mne
 from mne.channels import read_ch_connectivity
 
-from .plot import measure_pps, get_data
-from ._plot_utils import nested_strjoin, freq_tick_heuristic
-from ._array_utils import (convert_ms, baseline_sub, baseline_div, handle_by,
+from ._plot_utils import measure_pps, nested_strjoin, freq_tick_heuristic
+from ._array_utils import (get_data, convert_ms, baseline_sub, baseline_div, handle_by,
                            basic_slice, compound_take, reverse_dimorder)
 
 
@@ -122,7 +121,7 @@ class Results:
         uid_inds(demog_df)  # ID and session as indices if they exist
 
         # note: this will exclude subs from demogs file with no data found
-        s.demog_df = s.file_df.join(demog_df).sort_index()
+        s.demog_df = s.file_df.join(demog_df)
 
     def apply_rej(s, trial_thresh, interpchan_thresh=12):
         ''' remove subs having too few trials or too many interp'd chans '''
@@ -210,9 +209,6 @@ class Results:
                               for hz in freq_plotlims_hz]
 
         # only CSD beyond this if statement
-        if not s.params['CSD matrix']:
-            s.pot_lims, s.pot_units = [-10, 16], r'$\mu$V'
-            return
         if s.params['CSD matrix'].shape[0] <= 2:
             s.pot_lims, s.pot_units = [-10, 16], r'$\mu$V'
             return
@@ -641,7 +637,7 @@ class ResultsFromEROStack(Results):
     'Measures available': ['wave_totpow'],
     'TF scales': None,
     'TF time-downsample ratio': 2,
-    'CSD matrix': None,
+    'CSD matrix': np.array([0]),
     'Coherence pair subsets': None,
     'Coherence pairs': None,
     'Coherence pair subset index': None,
@@ -692,7 +688,7 @@ class ResultsFromEROStack(Results):
     def init_filedf(s):
         # for now, just pass the stack data_df
         if s.cond_stack:
-            s.file_df = s.stack.data_df_fullconds_uID_nodupes
+            s.file_df = s.stack.data_df_fullconds_uID_nodupes.copy()
         else:
             s.file_df = s.stack.data_df.copy()
         uid_inds(s.file_df)
