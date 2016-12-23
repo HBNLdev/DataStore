@@ -136,7 +136,8 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
 
 def careful_join(comp_df, collection, subcoll=None, do_fill=False,
                  min_age=-np.inf, max_age=np.inf,
-                 session_datecol_in='date'):
+                 session_datecol_in='date',
+                 add_query={}, add_proj={}):
     ''' given a compilation dataframe indexed by ID/session (comp_df) with an age column,
         and with a session date column named by session_datecol_in,
         join a collection / subcollection while handling:
@@ -156,16 +157,22 @@ def careful_join(comp_df, collection, subcoll=None, do_fill=False,
     # parse the target name to get knowledge about it
     i = get_kdict(collection, subcoll_safe)
     if isinstance(i['date_lbl'], list):
-        old_datecol = subcoll_safe[:3] + '_' + '-'.join(i['date_lbl'])
+        old_datecol_orig = '-'.join(i['date_lbl'])
     else:
-        old_datecol = subcoll_safe[:3] + '_' + i['date_lbl']
+        old_datecol_orig = i['date_lbl']
+    old_datecol = subcoll_safe[:3] + '_' + old_datecol_orig
     new_datecol = subcoll_safe[:3] + '_date'
     fup_col = subcoll_safe[:3] + '_followup'
 
     # prepare data to join, rename the date column, and
     # drop rows which have the same ID and followup number
     # (should be very few of these, but they are erroneous)
-    join_df = prepare_joindata(comp_df, collection, subcoll,
+    proj = {}
+    if add_proj:
+        default_proj = {'_id': 0, 'ID': 1, 'session': 1, 'followup': 1, old_datecol_orig: 1}
+        proj.update(default_proj)
+        proj.update(add_proj)
+    join_df = prepare_joindata(comp_df, collection, subcoll, add_query, proj,
                                 left_join_inds=['ID', 'session'])
     join_df.rename(columns={old_datecol: new_datecol}, inplace=True)
     join_df = join_df.reset_index().drop_duplicates(['ID', fup_col]).\

@@ -1,9 +1,24 @@
 ''' utils for manipulating and slicing arrays '''
 
 import numpy as np
+
 import itertools
 
 
+def get_data(r, measure):
+    ''' given a measure, retrieve data and dimensional info '''
+
+    measure_d = r.measure_pps[measure]
+    if measure_d['data'] not in dir(r):
+        getattr(r, measure_d['load'])()
+
+    data = getattr(r, measure_d['data'])
+    d_dims = getattr(r, measure_d['d_dims'])
+    d_dimlvls = getattr(r, measure_d['d_dimlvls'])
+
+    return data, d_dims, d_dimlvls
+
+    
 # array functions
 def permute_data(a, a_dimnames, out_dimnames):
     ''' given array a and a_dimnames, a tuple naming its dimensions,
@@ -96,18 +111,26 @@ def compound_take(a, dimval_tups):
     return a
 
 
-def basic_slice(a, in_dimval_tups):
-    ''' given array a and list of (dim, val) tuples, basic-slice a '''
-    slicer = [slice(None)] * len(a.shape)  # initialize slicer
-
-    # if the elements of the tuples are tuples, unpack and put in series
+def unpack_dimvaltups(in_dimval_tups):
+    ''' given list of dim, val tuples, if any are themselves tuples, unpack them and remove Nones '''
     dimval_tups = []
     for dvt in in_dimval_tups:
         if isinstance(dvt[0], tuple):
             for d, v in zip(*dvt):
                 dimval_tups.append((d, v))
+        elif dvt[0] is None:
+            continue
         else:
             dimval_tups.append(dvt)
+
+    return dimval_tups
+
+def basic_slice(a, in_dimval_tups):
+    ''' given array a and list of (dim, val) tuples, basic-slice a '''
+    slicer = [slice(None)] * len(a.shape)  # initialize slicer
+
+    # if the elements of the tuples are tuples, unpack and put in series
+    dimval_tups = unpack_dimvaltups(in_dimval_tups)
 
     # build the slice list
     dimval_tups.sort(reverse=True)  # sort descending by dims
@@ -132,6 +155,25 @@ def basic_slice(a, in_dimval_tups):
     return a[tuple(slicer)]
 
 
+def subject_slice(vec, in_dimval_tups):
+    ''' given vector and list of (dim, val) tuples, slice but only if they apply to the subject dimension '''
+
+    dimval_tups = unpack_dimvaltups(in_dimval_tups)
+
+    subject_dimval_tups = []
+    for d, v in dimval_tups:
+        if d == 0: # subject dimension (dedicated)
+            subject_dimval_tups.append(v)
+
+    if len(subject_dimval_tups) is 1:
+        return vec[subject_dimval_tups[0]]
+    elif len(subject_dimval_tups) is 0:
+        return vec
+    else:
+        print('too many by arguments reference the subject dimension')
+        raise
+
+
 def handle_pairs(s, pairs_arg):
     ''' handle a pairs argument for plot.arctopo '''
     if isinstance(pairs_arg, list):
@@ -150,6 +192,9 @@ def handle_by(s, by_stage, d_dims, d_dimlvls, ordered=False):
         of the data will be distributed across a plotting object.
         returns lists of the dimension, indices, and labels requested.
         if given a list, create above lists as products of requests '''
+
+    if not by_stage:
+        return [None], [None], []
 
     if len(by_stage) > 1:
         # create list versions of the dim, vals, and labels
@@ -187,20 +232,20 @@ def interpret_by(s, by_stage, data_dims, data_dimlvls):
         else:  # if levels were specified
             labels = by_stage[1]
             print(data_dimlvls[dim])
-            if data_dimlvls[dim].dtype == np.float64:  # if array data
+            if data_dimlvls[dim].dtype == np.float64:  # if array data, should be changed to float?
                 vals = []
                 for lbl in labels:
                     if isinstance(lbl, list):
                         if len(lbl) == 2:
-                            tmp_inds = range(np.argmin(np.fabs( \
+                            tmp_inds = range(np.argmin(np.fabs(
                                 data_dimlvls[dim] - lbl[0])),
-                                np.argmin(np.fabs( \
+                                np.argmin(np.fabs(
                                     data_dimlvls[dim] - lbl[1])) + 1)
                         else:
-                            tmp_inds = [np.argmin(np.fabs( \
+                            tmp_inds = [np.argmin(np.fabs(
                                 data_dimlvls[dim] - lp)) for lp in lbl]
                     else:
-                        tmp_inds = np.argmin(np.fabs( \
+                        tmp_inds = np.argmin(np.fabs(
                             data_dimlvls[dim] - lbl))
                     vals.append(tmp_inds)
             else:  # if non-array data (labeled, like conditions)

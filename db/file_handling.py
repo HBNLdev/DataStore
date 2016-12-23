@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 
 from .organization import unflatten_dict, Mdb
-from .utils import next_file_with_base
+from .utils import next_file_with_base, join_allcols
 
 site_hash = {'a': 'uconn',
              'b': 'indiana',
@@ -201,6 +201,7 @@ def parse_filename_tester():
                 (info['session'] != case[6]) or (int(info['run']) != case[7])):
             print(info, ' mismatch for case: ', case)
 
+
 def parse_mt_name(file_or_path):
     if os.path.sep in file_or_path:
         name = os.path.split(file_or_path)[1]
@@ -231,6 +232,7 @@ def parse_STinv_path(path):
     info.update(fn_parts)
 
     return info
+
 
 def parse_rd_path(filepath):
     path_parts = filepath.split(os.path.sep)
@@ -283,6 +285,7 @@ def parse_rd_path(filepath):
               'path': filepath}
 
     return output
+
 
 def parse_cnt_path(filepath):
     full_filename = os.path.split(filepath)[1]
@@ -346,6 +349,7 @@ def parse_cnt_path(filepath):
 
     return output
 
+
 def parse_cnth1_path(filepath):
     full_dir, full_filename = os.path.split(filepath)
 
@@ -398,9 +402,11 @@ def parse_cnth1_path(filepath):
               'uID': subject_piece + '_' + session_letter,
               'version': version,
               'bitrate': bitrate,
-              'n_chans': n_chans}
+              'n_chans': n_chans,
+              'rec_type': rec_type}
 
     return output
+
 
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
     file_list = []
@@ -455,6 +461,7 @@ def join_ufields(row, exp=None):
 ##
 ##############################
 
+
 def parse_maybe_numeric(st):
     proc = st.replace('-', '')
     dec = False
@@ -469,7 +476,56 @@ def parse_maybe_numeric(st):
     return st
 
 
+def extract_session_fromuID(v):
+    return v.split('_')[0][0]
+
+
+def column_split(v, ind=0, sep='_'):
+    return v.split('_')[ind]
+
+
+class RestingDAT:
+
+    ''' represents David's files containing estimates of resting state power for various frequency bands
+        and bipolar derived channels '''
+
+    bands = ['3-5', '5-7', '7-9', '9-12', '12-16', '16-20', '20-28']
+    channels = ['FP1-F3', 'FP2-F4', 'FP1-F7', 'FP2-F8', 'F7-F3', 'F8-F4', 'F7-T7', 'F8-T8', 'F3-C3', 'F4-C4',
+                'FZ-CZ', 'CZ-PZ', 'T7-C3', 'T8-C4', 'T7-P7', 'T8-P8', 'C3-P3', 'C4-P4', 'P7-P3', 'P8-P4', 'P7-O1',
+                'P8-O2', 'P3-O1', 'P4-O2', 'PZ-O1', 'PZ-O2', 'O1-O2', 'CZ-C3', 'CZ-C4', 'PZ-P3', 'PZ-P4', 'F7-C3',
+                'F8-C4', 'FP1-FP2', 'F3-FZ', 'FZ-F4',]
+
+    columns = ['uID', 'age']
+    for band in bands:
+        for chan in channels:
+            columns.append('_'.join((chan, band)))
+
+    def __init__(s, path):
+        s.path = path
+
+    def ns_to_dataframe(s):
+        file_df = pd.read_csv(s.path, delim_whitespace=True, header=None)
+        file_df.columns = s.columns
+        file_df['session'] = file_df['uID'].apply(extract_session_fromuID)
+        file_df['ID'] = file_df['uID'].apply(column_split, args=[1, '_'])
+        file_df.set_index(['ID', 'session'], drop=False, inplace=True)
+        file_df['uID_hbnl'] = file_df['uID']
+        file_df['uID'] = file_df[['ID', 'session']].apply(join_allcols, axis=1)
+        s.file_df = file_df
+
+    def mc_to_dataframe(s, session):
+        s.columns[0] = 'ID'
+        file_df = pd.read_csv(s.path, delim_whitespace=True, header=None)
+        file_df.columns = s.columns
+        file_df['ID'] = file_df['ID'].apply(int).apply(str)
+        file_df['session'] = session
+        file_df.set_index(['ID', 'session'], drop=False, inplace=True)
+        file_df['uID'] = file_df[['ID', 'session']].apply(join_allcols, axis=1)
+        s.file_df = file_df
+
+
 class CNTH1_File:
+
     def __init__(s, filepath):
         s.filepath = filepath
         s.filename = os.path.split(filepath)[1]

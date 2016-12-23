@@ -12,6 +12,7 @@ from .compilation import join_collection
 from .organization import Mdb
 from .pipeline import version_info, chan_mapping, powertype_mapping
 from .pipeline_st import build_paramstr
+from .utils import join_allcols
 
 opt_info = {'Add baseline': ('add_baseline', 'array'),
             'Calculation type': ('calc_type', 'array'),
@@ -50,13 +51,6 @@ chans = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ',
          'P6', 'C1', 'C2', 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ',
          'P2', 'P1', 'CPZ']
 
-
-def join_allcols(rec, sep='_'):
-    ''' dataframe apply function that simply joins the whole rows contents (should be strings),
-        using sep as the separator '''
-    return sep.join(rec)
-
-
 def prepare_erodf(ero_df):
     ''' given an ero_df prepared by EROStack.tf_mean_lowmem_multiwin_chans,
         that is row-index by ID, session, powertype, experiment, and condition,
@@ -72,7 +66,7 @@ def prepare_erodf(ero_df):
     return ero_df3
 
 
-def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked']):
+def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked'], n_chans=['64', '32', '21']):
     ''' given a dataframe indexed by ID and session, a desired ERO processing type,
         a dict mapping desired experiments to desired cases within each,
         and a list of desired power types,
@@ -88,7 +82,8 @@ def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked']):
     nchans_df.dropna(subset=['cnt_n_chans'], inplace=True)
     groups = nchans_df.groupby(level=nchans_df.index.names)
     nchans_df_nodupes = groups.last()
-    df_out = df.join(nchans_df_nodupes['cnt_n_chans'])
+    nchans_df_nodupes_selectchans = nchans_df_nodupes[nchans_df_nodupes['cnt_n_chans'].isin(n_chans)]
+    df_out = df.join(nchans_df_nodupes_selectchans['cnt_n_chans'])
 
     prc_ver = proc_type[1]
     parent_dir = version_info[prc_ver]['storage path']
@@ -391,33 +386,62 @@ class EROStack:
                                    convert_scale(s.params['Times'], win[1]),
                                    convert_scale(freq_array, win[2]),
                                    convert_scale(freq_array, win[3]))
-            time_lbl = '-'.join([str(t) for t in win[0:2]]) + 'ms'
-            freq_lbl = '-'.join([str(f) for f in win[2:4]]) + 'Hz'
+            time_lbl = 'to'.join([str(t) for t in win[0:2]]) + 'ms'
+            freq_lbl = 'to'.join([str(f) for f in win[2:4]]) + 'Hz'
             win_lbl = '_'.join([time_lbl, freq_lbl])
             print(winds)
             win_inds.append(winds)
             win_lbls.append(win_lbl)
 
-        try:
-            cinds = dict()
-            for chan_len, chan_lst in s.chanlen_dict.items():
-                cinds[chan_len] = sorted(chan_lst.index(c) for c in channels)
-                chan_lbls = [chan_lst[ci] for ci in cinds[chan_len]]
-        except IndexError:
-            print('channel not recognized')
-            return
+        cinds = dict()
+        minds = dict()
+        for chan_len, chan_lst in s.chanlen_dict.items():
+            minds[chan_len] = False
+            tmp_cinds = []
+            for c in channels:
+                try:
+                    tmp_cinds.append(chan_lst.index(c))
+                except ValueError:
+                    print(c, 'not present for', chan_len, '--> filling with nans')
+                    minds[chan_len] = True
+            cinds[chan_len] = sorted(tmp_cinds)
+        max_chans = max(s.chanlen_dict.keys())
+        max_chans_labels = s.chanlen_dict[max_chans]
+        chan_lbls = [max_chans_labels[ci] for ci in cinds[max_chans]]  # this effectively sorts the channel labels
+
+        # because the indexing order for the 21-channel montage is so different, it needs to be specially handled
+        if 20 in s.chanlen_dict.keys():
+            c20_newind_oldind = dict()
+            for clbl_ind, clbl in enumerate(chan_lbls):
+                try:
+                    c20_newind_oldind[clbl_ind] = s.chanlen_dict[20].index(clbl)
+                except ValueError:
+                    pass
 
         n_files = len(s.data_df['path'].values)
         n_windows = len(windows)
-        n_chans = len(channels)
+        n_chans = len(chan_lbls)
         mean_array = np.empty((n_files, n_windows, n_chans))
+        mean_array.fill(np.nan)  # fill with nan
 
         fpi = 0
         for fp, fl, cl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values, s.data_df['chan_len'].values)):
             for wi, winds in enumerate(win_inds):
-                mean_array[fpi, wi, :] = fp['data'] \
-                    [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
-                                         winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                if minds[cl] or cl == 20:
+                    if cl == 20:
+                        data_vec = fp['data'] \
+                            [:, winds[fl][0]:winds[fl][1] + 1,
+                                                 winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                        for new_ind, old_ind in c20_newind_oldind.items():
+                            mean_array[fpi, wi, new_ind] = data_vec[old_ind]
+                    else:
+                        mean_array[fpi, wi, :len(cinds[cl])] = fp['data'] \
+                            [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
+                                                 winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                else:
+                    mean_array[fpi, wi, :] = fp['data'] \
+                        [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
+                                    winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
             fpi += 1
 
         mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows * n_chans))
@@ -516,6 +540,66 @@ class EROStack:
 
         return data_array
 
+    def survey_conds(s):
+
+        cond_lst = list(set(s.data_df.index.get_level_values('condition')))
+        n_conds = len(cond_lst)
+        g = s.data_df.reset_index('condition').groupby(level=['ID', 'session'] )
+        cond_counts = g['condition'].count()
+        cond_deficient_uIDs = cond_counts.index[(cond_counts < n_conds).values]
+        data_df_fullconds = s.data_df.drop(cond_deficient_uIDs)
+        data_df_fullconds_uID = data_df_fullconds.reset_index().set_index(['ID', 'session'])
+        fullcond_uIDs = list(set(data_df_fullconds_uID.index.values))
+        data_df_fullconds_uIDconds = data_df_fullconds_uID.set_index('condition', append=True)
+        g = data_df_fullconds_uID.groupby(level=data_df_fullconds_uID.index.names)
+        data_df_fullconds_uID_nodupes = g.first()
+        
+        s.cond_lst = cond_lst
+        s.fullcond_uIDs = fullcond_uIDs
+        s.data_df_fullconds = data_df_fullconds
+        s.data_df_fullconds_uIDconds = data_df_fullconds_uIDconds
+        s.data_df_fullconds_uID_nodupes = data_df_fullconds_uID_nodupes
+
+    def load_data_interp_conds(s):
+
+        if 'cond_lst' not in dir(s):
+            s.survey_conds()
+
+        n_subjects = len(s.fullcond_uIDs)
+        n_conds = len(s.cond_lst)
+        n_chans = int(s.params['# of channels'][0][0])
+        time_vec = s.params['Times'][0]
+        n_times = time_vec.size
+        max_freqsize = max(s.freqlen_dict)
+        n_freqs = s.freqlen_dict[max_freqsize].shape[1]
+        print('{} subjects, {} conds, {} chans, {} times, {} freqs'.\
+            format(n_subjects, n_conds, n_chans, n_times, n_freqs))
+
+        # subjects, conditions, channels, freq, timepoints
+        data_array = np.empty((n_subjects, n_conds, n_chans, n_times, n_freqs))
+
+        uidi = -1
+        for ID, session in s.data_df_fullconds_uID_nodupes.index:
+            uidi += 1
+            for ci, cond in enumerate(s.cond_lst):
+                ID_ses_cond = (ID, session, cond)
+                # print(ID_ses_cond)
+                row = s.data_df_fullconds_uIDconds.loc[ID_ses_cond]
+                file_path = row['path']
+                fl = row['freq_len']
+                pointer = h5py.File(file_path, 'r')
+                data = pointer['data'][:]  # is chans x times x freq
+                if fl != max_freqsize:
+                    new_data = np.empty((n_chans, n_times, max_freqsize))
+                    for ctfi, chan_tf in enumerate(data):
+                        new_data[ctfi, :, :] = interp_freqdomain_fast(chan_tf, time_vec,
+                                                                      s.freqlen_dict[fl][0],
+                                                                      s.freqlen_dict[max_freqsize][0])
+                    data = new_data
+                data_array[uidi, ci, :, :, :] = data
+
+        return data_array
+
     def retrieve_dbdata(s, times, freqs):
         # for mat in s.data_df.iterrows():
         #     proj = C.format_EROprojection()
@@ -579,6 +663,7 @@ class EROMat:
             s.params.update({param:
                                  handle_parse(mat, prefix + info[0], info[1])})
         mat.close()
+        s.params['Times'] = s.params['Times'].astype('float64')
 
     def load_data(s):
         ''' prepare 3d ERO data '''

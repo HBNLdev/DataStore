@@ -1,4 +1,4 @@
-''' represents intermediate results from MATLAB processing pipeline '''
+''' represents EEG results from MATLAB processing pipeline or ERO-mats '''
 
 import os
 from glob import glob
@@ -12,10 +12,13 @@ import pandas as pd
 import mne
 from mne.channels import read_ch_connectivity
 
-from .plot import measure_pps, get_data
-from ._plot_utils import nested_strjoin
-from ._array_utils import (convert_ms, baseline_sub, baseline_div, handle_by,
+from ._plot_utils import measure_pps, nested_strjoin, freq_tick_heuristic
+from ._array_utils import (get_data, convert_ms, baseline_sub, baseline_div, handle_by,
                            basic_slice, compound_take, reverse_dimorder)
+
+
+time_plotlims_ms = [-100, 800]
+freq_plotlims_hz = [0, 32]
 
 # values are tuples of h5py fieldname and datatype
 opt_info = {'Options path': ('optpath', 'text'),
@@ -102,51 +105,7 @@ def handle_parse(dset, dset_field, field_type):
 
 
 class Results:
-    ''' represents HDF-compatible .mat's as dask stacks '''
-
-    source_pipeline = 'matlab' # by default
-
-    def __init__(s, optpath, csv_or_df=None, trial_thresh=15):
-        s.opt = h5py.File(optpath, 'r')
-        s.get_params()
-        s.init_filedf()
-        s.add_rejinfo()
-        s.add_demogs(csv_or_df)
-        s.apply_rej(trial_thresh)
-        s.save_demogs()
-        s.make_scales()
-        s.measure_pps = measure_pps
-
-    def get_params(s):
-        ''' extract data parameters from opt, relying upon opt_info. '''
-        prefix = 'opt/'
-        s.params = {param: handle_parse(s.opt, prefix + info[0], info[1])
-                    for param, info in opt_info.items()}
-
-    def init_filedf(s):
-        ''' initialize dataframe of .mat files in the opt's "outpath"
-            indexed by ID+session '''
-        files = glob(s.params['Data path'] + '/*.mat')
-        uid_fromfiles = [uid_frompath(fp) for fp in files]
-        uid_index = pd.MultiIndex.from_tuples(
-            uid_fromfiles, names=['ID', 'session'])
-        s.file_df = pd.DataFrame({'path': pd.Series(files, index=uid_index)})
-
-    def add_rejinfo(s):
-        ''' for each file, get # of accepted trials and interpolated chans '''
-
-        trials = s.load('trials', 'n_trials', [2, 0, 1], 'file_df')
-        trial_df = pd.DataFrame(trials.squeeze(),
-                                columns=['trials_' + cond for cond in s.params['Condition labels']],
-                                index=s.file_df.index)
-        s.file_df = s.file_df.join(trial_df)
-        interpchans = s.load('interpchans', 'n_interpchans',
-                             [2, 0, 1], 'file_df')
-        interpchan_df = pd.DataFrame(interpchans.squeeze(),
-                                     columns=['# of interpolated channels'],
-                                     index=s.file_df.index)
-        s.file_df = s.file_df.join(interpchan_df)
-
+    
     def add_demogs(s, csv_or_df):
         ''' read demographics file with ID/session columns, join to file_df '''
 
@@ -162,8 +121,7 @@ class Results:
         uid_inds(demog_df)  # ID and session as indices if they exist
 
         # note: this will exclude subs from demogs file with no data found
-        s.demog_df = s.file_df.join(demog_df).sort_index()
-
+        s.demog_df = s.file_df.join(demog_df)
 
     def apply_rej(s, trial_thresh, interpchan_thresh=12):
         ''' remove subs having too few trials or too many interp'd chans '''
@@ -235,20 +193,22 @@ class Results:
             s.make_tfscales_erostack()
 
         s.zero_tf = convert_ms(s.time_tf, 0)
-        s.freq_ticks_pt = range(0, len(s.freq), 2)
-        s.freq_ticks_hz = ['{0:.1f}'.format(f) for f in s.freq[::2]]
+        freq_tick_space = freq_tick_heuristic(s.freq)
+        s.freq_ticks_pt = range(0, len(s.freq), freq_tick_space)
+        s.freq_ticks_hz = ['{0:.1f}'.format(f) for f in s.freq[::freq_tick_space]]
         s.time_ticks()  # additional helper function for ticks
 
         # time plot limits
-        time_plotlims_ms = [-100, 600]
+        
         s.time_plotlims = [convert_ms(s.time, ms) for ms in time_plotlims_ms]
         s.time_tf_plotlims = [convert_ms(s.time_tf, ms)
                               for ms in time_plotlims_ms]
 
+        # freq plot limits
+        s.freq_tf_plotlims = [convert_ms(s.freq, hz)
+                              for hz in freq_plotlims_hz]
+
         # only CSD beyond this if statement
-        if not s.params['CSD matrix']:
-            s.pot_lims, s.pot_units = [-10, 16], r'$\mu$V'
-            return
         if s.params['CSD matrix'].shape[0] <= 2:
             s.pot_lims, s.pot_units = [-10, 16], r'$\mu$V'
             return
@@ -271,20 +231,6 @@ class Results:
                                                for p in tmp_pairs]))
                 s.cohchan_sets[pset] = [s.montage.ch_names[i] for i in setchans]
 
-
-    def make_tfscales_matlab(s):
-        ep_lims = s.params['Temporal limits']
-        n_timepts = s.params['# of timepoints']
-
-        s.time = np.linspace(ep_lims[0], ep_lims[1], n_timepts + 1)[1:]
-        s.zero = convert_ms(s.time, 0)
-
-        # TF times / freqs
-        n_timepts_tf = int(n_timepts / s.params['TF time-downsample ratio'])
-        s.time_tf = np.linspace(ep_lims[0], ep_lims[1], n_timepts_tf + 1)[1:]
-        s.freq = np.array([2 * s.srate / scale[0]
-                           for scale in s.params['TF scales'][::-1]])  # reverse
-
     def time_ticks(s, interval=200):
         ''' time ticks for plots '''
         ms_start_plot = np.round(s.time[0] / 100) * 100  # start at round number
@@ -297,28 +243,6 @@ class Results:
 
         # for display purposes
         s.time_ticks_ms = [n / 1000 for n in time_ticks_ms]
-
-    def load(s, measure, dset_name, transpose_lst, df_attr='demog_df'):
-        ''' given measure, h5 dataset name, transpose list: load data '''
-
-        df = getattr(s, df_attr)
-
-        if measure in dir(s):
-            print(measure, 'already loaded')
-            if df.shape[0] != getattr(s, measure).shape[0]:
-                print('shape of loaded data does not match demogs, reloading')
-            else:
-                return np.array([])
-
-        dsets = [h5py.File(fn, 'r')[dset_name] for fn in df['path'].values]
-        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
-        stack = da.stack(arrays, axis=-1)  # concatenate along last axis
-        stack = stack.transpose(transpose_lst)  # do transposition
-
-        data = np.empty(stack.shape)
-        da.store(stack, data)
-        print(data.shape)
-        return data
 
     def baseline(s, measure, method, window, avgcond_baseline=False):
         ''' baseline a data array '''
@@ -350,6 +274,173 @@ class Results:
         new_data = baseline_func(data, pt_lims, -1, cond_dim)
         setattr(s, s.measure_pps[measure]['data'], new_data)
 
+    def prepare_mne(s):
+        ''' prepare an mne EvokedArray object from erp data '''
+        if 'erp' not in dir(s):
+            s.load_erp()
+
+        # create info
+        info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
+                               'eeg', s.montage)
+        # EvokedArray
+        chan_erps = s.erp.mean(axis=(0, 1)) / 1e6  # subject/condition mean
+        return mne.EvokedArray(chan_erps, info,
+                               tmin=s.params['Temporal limits'][0] / 1000)
+    
+    def save_mean(s, measure, spec_dict, saveas=None):
+        ''' save data-means and add as columns in s.demog_df. spec_dict is a
+            dict that specifies which values should be taken in each dimension.
+            if a dimension is unspecified, it will be averaged over. '''
+
+        final_dim = 'subject'
+
+        if measure in s.measure_pps.keys():
+            data, d_dims, d_dimlvls = get_data(s, measure)
+        else:
+            print('data not recognized')
+            return
+
+        # TODO: verify spec_dict accords with data_dims
+
+        if saveas:
+            if ~isinstance(spec_dict, OrderedDict):
+                spec_dict = OrderedDict(spec_dict)
+            dims, vals, lbls, stage_lens = \
+                handle_by(s, spec_dict, d_dims, d_dimlvls, ordered=True)
+        else:
+            dims, vals, lbls = handle_by(s, spec_dict, d_dims, d_dimlvls)
+
+        amean_lst = []
+        for dim_set, val_set, lbl_set in zip(dims, vals, lbls):
+            dimval_tups = [(d, v) for d, v in zip(dim_set, val_set)]
+            try:
+                amean = basic_slice(data, dimval_tups)
+                print('done slice')
+            except:
+                amean = compound_take(data, dimval_tups)
+                print('done compound take')
+
+            mean_dims = np.where([d != final_dim for d in d_dims])
+            amean = amean.mean(axis=tuple(mean_dims[0]))
+
+            amean_lst.append(amean)
+
+        amean_stack = np.stack(amean_lst, axis=-1)
+
+        if saveas:
+            dim_names = tuple(['subject'] + list(spec_dict.keys()))
+            dim_vals = []
+            for dim in range(len(lbls[0])):
+                uniq_vals = []
+                for tup in lbls:
+                    if tup[dim] not in uniq_vals:
+                        uniq_vals.append(tup[dim])
+                dim_vals.append(uniq_vals)
+            dim_vals = tuple([list(s.demog_df.index)] + dim_vals)
+
+            n_obs = amean_stack.shape[0]
+            reshape_tuple = tuple([n_obs] + stage_lens)
+            amean_hcube = np.reshape(amean_stack, reshape_tuple)
+
+            setattr(s, saveas, amean_hcube)
+            setattr(s, saveas + '_dims', dim_names)
+            setattr(s, saveas + '_dimlvls', dim_vals)
+            s.measure_pps.update({saveas: s.measure_pps[measure].copy()})
+            s.measure_pps[saveas]['data'] = saveas
+            s.measure_pps[saveas]['d_dims'] = saveas + '_dims'
+            s.measure_pps[saveas]['d_dimlvls'] = saveas + '_dimlvls'
+        else:
+            saveas = measure
+
+        lbl_lst = [saveas + '_' + nested_strjoin(lbl_set) for lbl_set in lbls]
+
+        amean_df = pd.DataFrame(amean_stack,
+                                index=s.demog_df.index, columns=lbl_lst)
+
+        s.demog_df = pd.concat([s.demog_df, amean_df], axis=1)
+
+class ResultsFromMATLAB(Results):
+    ''' represents HDF-compatible .mat's as dask stacks '''
+
+    source_pipeline = 'matlab' # by default
+
+    def __init__(s, optpath, csv_or_df=None, trial_thresh=15):
+        s.opt = h5py.File(optpath, 'r')
+        s.get_params()
+        s.init_filedf()
+        s.add_rejinfo()
+        s.add_demogs(csv_or_df)
+        s.apply_rej(trial_thresh)
+        s.save_demogs()
+        s.make_scales()
+        s.measure_pps = measure_pps
+
+    def get_params(s):
+        ''' extract data parameters from opt, relying upon opt_info. '''
+        prefix = 'opt/'
+        s.params = {param: handle_parse(s.opt, prefix + info[0], info[1])
+                    for param, info in opt_info.items()}
+
+    def init_filedf(s):
+        ''' initialize dataframe of .mat files in the opt's "outpath"
+            indexed by ID+session '''
+        files = glob(s.params['Data path'] + '/*.mat')
+        uid_fromfiles = [uid_frompath(fp) for fp in files]
+        uid_index = pd.MultiIndex.from_tuples(
+            uid_fromfiles, names=['ID', 'session'])
+        s.file_df = pd.DataFrame({'path': pd.Series(files, index=uid_index)})
+
+    def add_rejinfo(s):
+        ''' for each file, get # of accepted trials and interpolated chans '''
+
+        trials = s.load('trials', 'n_trials', [2, 0, 1], 'file_df')
+        trial_df = pd.DataFrame(trials.squeeze(),
+                                columns=['trials_' + cond for cond in s.params['Condition labels']],
+                                index=s.file_df.index)
+        s.file_df = s.file_df.join(trial_df)
+        interpchans = s.load('interpchans', 'n_interpchans',
+                             [2, 0, 1], 'file_df')
+        interpchan_df = pd.DataFrame(interpchans.squeeze(),
+                                     columns=['# of interpolated channels'],
+                                     index=s.file_df.index)
+        s.file_df = s.file_df.join(interpchan_df)
+
+    def make_tfscales_matlab(s):
+        ep_lims = s.params['Temporal limits']
+        n_timepts = s.params['# of timepoints']
+
+        s.time = np.linspace(ep_lims[0], ep_lims[1], n_timepts + 1)[1:]
+        s.zero = convert_ms(s.time, 0)
+
+        # TF times / freqs
+        n_timepts_tf = int(n_timepts / s.params['TF time-downsample ratio'])
+        s.time_tf = np.linspace(ep_lims[0], ep_lims[1], n_timepts_tf + 1)[1:]
+        s.freq = np.array([2 * s.srate / scale[0]
+                           for scale in s.params['TF scales'][::-1]])  # reverse
+
+
+    def load(s, measure, dset_name, transpose_lst, df_attr='demog_df'):
+        ''' given measure, h5 dataset name, transpose list: load data '''
+
+        df = getattr(s, df_attr)
+
+        if measure in dir(s):
+            print(measure, 'already loaded')
+            if df.shape[0] != getattr(s, measure).shape[0]:
+                print('shape of loaded data does not match demogs, reloading')
+            else:
+                return np.array([])
+
+        dsets = [h5py.File(fn, 'r')[dset_name] for fn in df['path'].values]
+        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
+        stack = da.stack(arrays, axis=-1)  # concatenate along last axis
+        stack = stack.transpose(transpose_lst)  # do transposition
+
+        data = np.empty(stack.shape)
+        da.store(stack, data)
+        print(data.shape)
+        return data
+
     def load_erp(s, filt=True, lp_cutoff=16,
                  baseline=True, bl_window=[-100, 0],
                  avgcond_baseline=False):
@@ -376,18 +467,6 @@ class Results:
         if baseline:
             s.baseline('erp', 'subtractive', bl_window, avgcond_baseline)
 
-    def prepare_mne(s):
-        ''' prepare an mne EvokedArray object from erp data '''
-        if 'erp' not in dir(s):
-            s.load_erp()
-
-        # create info
-        info = mne.create_info(s.montage.ch_names, s.params['Sampling rate'],
-                               'eeg', s.montage)
-        # EvokedArray
-        chan_erps = s.erp.mean(axis=(0, 1)) / 1e6  # subject/condition mean
-        return mne.EvokedArray(chan_erps, info,
-                               tmin=s.params['Temporal limits'][0] / 1000)
 
     def load_power(s, baseline=False, bl_window=[-500, -200],
                    avgcond_baseline=False):
@@ -542,84 +621,12 @@ class Results:
                          np.array(s.montage.ch_names, dtype=object),
                          s.freq, s.time_tf)
 
-    def save_mean(s, measure, spec_dict, saveas=None):
-        ''' save data-means and add as columns in s.demog_df. spec_dict is a
-            dict that specifies which values should be taken in each dimension.
-            if a dimension is unspecified, it will be averaged over. '''
-
-        final_dim = 'subject'
-
-        if measure in s.measure_pps.keys():
-            data, d_dims, d_dimlvls = get_data(s, measure)
-        else:
-            print('data not recognized')
-            return
-
-        # TODO: verify spec_dict accords with data_dims
-
-        if saveas:
-            if ~isinstance(spec_dict, OrderedDict):
-                spec_dict = OrderedDict(spec_dict)
-            dims, vals, lbls, stage_lens = \
-                handle_by(s, spec_dict, d_dims, d_dimlvls, ordered=True)
-        else:
-            dims, vals, lbls = handle_by(s, spec_dict, d_dims, d_dimlvls)
-
-        amean_lst = []
-        for dim_set, val_set, lbl_set in zip(dims, vals, lbls):
-            dimval_tups = [(d, v) for d, v in zip(dim_set, val_set)]
-            try:
-                amean = basic_slice(data, dimval_tups)
-                print('done slice')
-            except:
-                amean = compound_take(data, dimval_tups)
-                print('done compound take')
-
-            mean_dims = np.where([d != final_dim for d in d_dims])
-            amean = amean.mean(axis=tuple(mean_dims[0]))
-
-            amean_lst.append(amean)
-
-        amean_stack = np.stack(amean_lst, axis=-1)
-
-        if saveas:
-            dim_names = tuple(['subject'] + list(spec_dict.keys()))
-            dim_vals = []
-            for dim in range(len(lbls[0])):
-                uniq_vals = []
-                for tup in lbls:
-                    if tup[dim] not in uniq_vals:
-                        uniq_vals.append(tup[dim])
-                dim_vals.append(uniq_vals)
-            dim_vals = tuple([list(s.demog_df.index)] + dim_vals)
-
-            n_obs = amean_stack.shape[0]
-            reshape_tuple = tuple([n_obs] + stage_lens)
-            amean_hcube = np.reshape(amean_stack, reshape_tuple)
-
-            setattr(s, saveas, amean_hcube)
-            setattr(s, saveas + '_dims', dim_names)
-            setattr(s, saveas + '_dimlvls', dim_vals)
-            s.measure_pps.update({saveas: s.measure_pps[measure].copy()})
-            s.measure_pps[saveas]['data'] = saveas
-            s.measure_pps[saveas]['d_dims'] = saveas + '_dims'
-            s.measure_pps[saveas]['d_dimlvls'] = saveas + '_dimlvls'
-        else:
-            saveas = measure
-
-        lbl_lst = [saveas + '_' + nested_strjoin(lbl_set) for lbl_set in lbls]
-
-        amean_df = pd.DataFrame(amean_stack,
-                                index=s.demog_df.index, columns=lbl_lst)
-
-        s.demog_df = pd.concat([s.demog_df, amean_df], axis=1)
-
-
 class ResultsFromEROStack(Results):
 
     # notes:
     
     # should NOT have inconsistent freq_vecs
+    # if using conditions dimension, should be condition-complete across subjects
 
     source_pipeline = 'erostack'
 
@@ -630,15 +637,21 @@ class ResultsFromEROStack(Results):
     'Measures available': ['wave_totpow'],
     'TF scales': None,
     'TF time-downsample ratio': 2,
-    'CSD matrix': None,
+    'CSD matrix': np.array([0]),
     'Coherence pair subsets': None,
     'Coherence pairs': None,
     'Coherence pair subset index': None,
     }
 
 
-    def __init__(s, erostack_obj, batch_id='erostack1', csv_or_df=None, trial_thresh=15):
+    def __init__(s, erostack_obj, batch_id='erostack1', csv_or_df=None, trial_thresh=15,
+                    cond_stack=False):
+
         s.stack = erostack_obj
+        s.cond_stack = cond_stack
+        if s.cond_stack and 'cond_lst' not in dir(s.stack):
+            s.stack.survey_conds()
+        
         s.get_params(batch_id)
         s.init_filedf()
         s.add_rejinfo()
@@ -653,7 +666,10 @@ class ResultsFromEROStack(Results):
 
         s.params = s.default_params.copy()
         s.params['Batch ID'] = batch_id
-        s.params['Condition labels'] = [s.stack.params['Condition']]
+        if s.stack.cond_lst:
+            s.params['Condition labels'] = s.stack.cond_lst
+        else:
+            s.params['Condition labels'] = [s.stack.params['Condition']]
         s.params['Sampling rate'] = s.stack.params['Sampling rate']
         s.params['# of timepoints'] = np.array([[float(s.stack.params['Times'].size)]])
         s.params['Temporal limits'] = np.array([[s.stack.params['Times'][0][0]], [s.stack.params['Times'][0][-1]]])
@@ -671,8 +687,10 @@ class ResultsFromEROStack(Results):
 
     def init_filedf(s):
         # for now, just pass the stack data_df
-
-        s.file_df = s.stack.data_df
+        if s.cond_stack:
+            s.file_df = s.stack.data_df_fullconds_uID_nodupes.copy()
+        else:
+            s.file_df = s.stack.data_df.copy()
         uid_inds(s.file_df)
 
     def add_rejinfo(s):
@@ -680,7 +698,7 @@ class ResultsFromEROStack(Results):
         # data_df should already have trials
 
         # interpchans is always 0 here
-        s.file_df['# of interpolated channels'] = [0]*s.stack.data_df.shape[0]
+        s.file_df['# of interpolated channels'] = [0]*s.file_df.shape[0]
 
     def make_tfscales_erostack(s):
         
@@ -692,10 +710,20 @@ class ResultsFromEROStack(Results):
                    avgcond_baseline=False):
         ''' load (total) power data and divisively baseline-normalize '''
 
-        power = s.stack.load_data_interp()
+        if s.cond_stack:
+            power = s.stack.load_data_interp_conds()
+        else:
+            power = s.stack.load_data_interp()
         s.power = power.swapaxes(3, 4)
         # power is (subjects, conditions, channels, freq, timepoints,)
 
+        # if 62 channels, most likely includes the x eog chan, which we'll remove
+        if s.power.shape[2] == 62:
+            stack_chans = s.stack.params['Channels']
+            eogchan_ind = stack_chans.index('X')
+            use_inds = list(range(len(stack_chans)))
+            use_inds.remove(eogchan_ind)
+            s.power = s.power[:, :, use_inds, :, :]
 
         s.tf_dims = ('subject', 'condition', 'channel',
                      'frequency', 'timepoint')

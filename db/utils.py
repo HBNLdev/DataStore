@@ -19,3 +19,8 @@ def list_to_file( lst, filename, replace=False ):
             of.write( str(item)+'\n' )
         of.close()
     return
+
+def join_allcols(rec, sep='_'):
+    ''' dataframe apply function that simply joins the whole rows contents (should be strings),
+        using sep as the separator '''
+    return sep.join(rec)

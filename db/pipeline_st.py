@@ -5,13 +5,20 @@ import subprocess
 import time
 from collections import defaultdict
 
+import numpy as np
+
+from .compilation import join_collection
+
 proctype_info = {'v40center9': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v4.0_custom.rb',
+                                 'old storage path': '/processed_data/mat-files-v40/',
                                  'storage path': '/processed_data/mat-files-ps-v40/',
                                  'experiments': ['vp3', 'aod', 'ant']},
                  'v60center9': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v6.0_custom.rb',
+                                 'old storage path': '/processed_data/mat-files-v60/',
                                  'storage path': '/processed_data/mat-files-ps-v60/',
                                  'experiments': ['vp3', 'aod', 'ant', 'ans', 'cpt', 'ern', 'err', 'gng', 'stp']},
                  'v60all': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v6.0_custom.rb',
+                             'old storage path': '/processed_data/mat-files-v60/',
                              'storage path': '/processed_data/mat-files-ps-v60/',
                              'experiments': ['vp3', 'aod', 'ant', 'ans', 'cpt', 'ern', 'err', 'gng', 'stp']},
                  }
@@ -143,6 +150,61 @@ def get_stmat_calls(docs, file_lim=None):
 
     return call_edir_lst
 
+def add_stpaths(df, proc_type, exp_cases, age='old'):
+    ''' given a dataframe indexed by ID and session, a desired ERO processing type,
+        and a dict mapping desired experiments to desired cases within each,
+        return a dataframe with added columns that locate the corresponding paths to ST-mats,
+        if they exist. '''
+
+    uIDs = [ID + '_' + session for ID, session in df.index.tolist()]
+    query = {'uID': {'$in': uIDs}, 'experiment': {'$in': list(exp_cases.keys())}}
+    proj = {'_id': 0, 'ID': 1, 'session': 1, 'rec_type':1, 'filepath': 1, 'site': 1}
+    nchans_df = join_collection(df, 'cnth1s',
+                                add_query=query, add_proj=proj,
+                                left_join_inds=['ID', 'session'], right_join_inds=['ID', 'session'])
+
+    nchans_df.dropna(subset=['cnt_filepath'], inplace=True)
+    groups = nchans_df.groupby(level=nchans_df.index.names)
+    nchans_df_nodupes = groups.last()
+    df_out = df.join(nchans_df_nodupes[['cnt_rec_type', 'cnt_filepath', 'cnt_site']])
+
+    if age is 'old':
+        apply_func = build_oldpath_apply
+    else:
+        apply_func = build_path_apply
+
+    for exp, cases in exp_cases.items():
+        for case in cases:
+            apply_args = [proc_type, exp, case]
+            pathcol_name = '_'.join([proc_type, exp, case])
+            df_out[pathcol_name] = df_out.apply(apply_func, axis=1, args=apply_args)
+
+    return df_out
+
+def build_oldpath_apply(rec, proc_type, exp, case):
+    rec_type = rec['cnt_rec_type']
+    cnth1_fp = rec['cnt_filepath']
+    site = rec['cnt_site']
+    try:
+        fp = build_old_eventualpath(proc_type, rec_type, exp, case, cnth1_fp, site)
+        if os.path.exists(fp):
+            return fp
+        else:
+            return np.nan
+    except:
+        return np.nan
+
+def build_path_apply(rec, proc_type, exp, case):
+    rec_type = rec['cnt_rec_type']
+    cnth1_fp = rec['cnt_filepath']
+    try:
+        fp = build_eventualpath(proc_type, rec_type, exp, case, cnth1_fp)
+        if os.path.exists(fp):
+            return fp
+        else:
+            return np.nan
+    except:
+        return np.nan
 
 def organize_docs(docs):
     ''' given a mongo cursor of cnth1 docs, organize them into a dict where the keys are 4-tuples of
@@ -274,7 +336,6 @@ def get_params(proc_type, rec_type, exp, case):
 
     return pdict
 
-
 def build_eventualpath(proc_type, rec_type, exp, case, cnth1_fp):
     ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat path '''
 
@@ -284,9 +345,18 @@ def build_eventualpath(proc_type, rec_type, exp, case, cnth1_fp):
     cnth1_fn = os.path.split(cnth1_fp)[1]
     fname = '.'.join([cnth1_fn, case, 'st', 'mat'])
     fp = os.path.join(parent_dir, rec_type, exp, exp + '-' + case, param_str, fname)
-
     return fp
 
+def build_old_eventualpath(proc_type, rec_type, exp, case, cnth1_fp, site):
+    ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat path '''
+
+    parent_dir = proctype_info[proc_type]['old storage path']
+    n_chans = rec_type[-2:]
+    param_str = build_paramstr(proc_type, n_chans, exp)
+    cnth1_fn = os.path.split(cnth1_fp)[1]
+    fname = '.'.join([cnth1_fn, case, 'st', 'mat'])
+    fp = os.path.join(parent_dir, rec_type, exp, exp + '-' + case, param_str, site, fname)
+    return fp
 
 def build_eventualdir(proc_type, rec_type, exp, case):
     ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat dir '''
