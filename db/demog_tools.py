@@ -4,14 +4,16 @@ import numpy as np
 from collections import defaultdict
 
 default_field_eponyms = {'ID', 'famID', 'mID', 'fID', 'sex', 'twin'}
-default_dx_sxc = {'dx4': 'alc_dep_dx', 'dx5': 'cor_ald5dx',
-                  'sxc4': 'cor_alc_dep_max_sx_cnt',
-                  'sxc5': 'cor_ald5sx_max_cnt'}
+# default_dx_sxc = {'cor_alc_dep_dx_fam': 'fam_dx4',
+#                   'cor_alc_dep_dx': 'dx4',
+#                   'cor_ald5dx': 'dx5',
+#                   'cor_alc_dep_max_sx_cnt': 'sxc4',
+#                   'cor_ald5sx_max_cnt': 'sxc5'}
 
 def_fields = {f:f for f in default_field_eponyms}
-def_fields.update(default_dx_sxc)
+# def_fields.update(default_dx_sxc)
 
-sex_to_parentfield = {'m':'fID', 'f':'mID'}
+sex_to_parentfield = {'m':'fID', 'f':'mID', 'M':'fID', 'F':'mID'}
 score_map = {'self': 1, 'twin': 1,
              'mother':0.5, 'father':0.5, 'fullsib':0.5, 'child':0.5,
              'mgm': 0.25, 'mgf': 0.25, 'fgm': 0.25, 'fgf': 0.25,
@@ -28,43 +30,72 @@ def conv_159(v):
     else:
         return np.nan
 
-def harmonize_fields(row, field1, field2):
+def harmonize_fields_max(row, field1, field2):
     ''' harmonize two columns by return the max of the two '''
     if row[field1]==row[field2] or \
         (np.isnan(row[field1]) and np.isnan(row[field2])):
         return row[field1]
     else:
         return max(row[field1], row[field2])
+
+def harmonize_fields_left(row, field1, field2):
+    ''' harmonize two columns such that field1 overrules field2, but field2 is accepted if field1 is missing '''
+    if np.isnan(row['field1']):
+        return row['field2']
+    else:
+        return row['field1']
     
-def prepare_for_fhd(in_df):
-    ''' prepare a dataframe for FHD calculation '''
-    df = in_df.copy()
-    df['cor_alc_dep_dx'] = df['cor_alc_dep_dx'].apply(conv_159)
-    df['aldep1'] = df.apply(
-        harmonize_fields, axis=1, args=['alc_dep_dx', 'cor_alc_dep_dx'])
-    if 'session' in df.index.names:
-        df.reset_index('session', inplace=True)
-    df['ID'] = df.index.get_level_values('ID')
-    drop_lst = ['alc_dep_dx', 'fID', 'famID', 'mID', 'sex', 'cor_alc_dep_dx',
-                'cor_ald5dx', 'cor_sex', 'aldep1', 'ID']
-    drop_cols = [col for col in df.columns if col not in drop_lst]
-    return df.drop(drop_cols, axis=1)
+def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
+    ''' prepare a dataframe for FHD calculation by removing irrelevant columns
+        and assuring the necessary columns are present '''
 
-def calc_fhd(sDF, in_fDF, field_dict=None):
-    ''' main function to apply to a DF, adds columns '''
-    fd = def_fields.copy()
-    if field_dict:
-        fd.update(field_dict)
-    fDF = in_fDF.rename(columns={v:k for k,v in fd.items()})
-    #sDF['fhd_dx4'], sDF['fhd_dx5'], sDF['fhd_sxc4'], sDF['fhd_sxc5'], \
-    #    sDF['n_rels'] = zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF]))
-    sDF['fhd_dx4_ratio'], sDF['fhd_dx4_sum'], \
-        sDF['n_rels'] = \
-            zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF]))
-    # sDF['fhd_dx4_ratio_rob'], sDF['fhd_dx4_sum_rob'], \
-    #sDF['fhd_dx4_nrels'] = sDF.apply(calc_fhd_row, axis=1, args=[fDF])
+    # reduce to only necessary columns
+    check_cols = list(default_field_eponyms)
+    if extra_cols:
+        check_cols.extend(extra_cols)
+    drop_cols = [col for col in in_df.columns if col not in check_cols]
+    df = in_df.drop(drop_cols, axis=1)
 
-def calc_fhd_row(row, df, degrees=[1, 2], descend=False, cat_norm=True):
+    # make sure indexed only by ID
+    df.reset_index(inplace=True)
+    df_tmp = df.set_index('ID', drop=False) # keep a copy of ID column for convenience
+    g = df_tmp.groupby(level='ID') # make sure no duplicates by ID
+    df = g.last() # note this means that affectedness data should have been joined on ID, or else it may get dropped
+
+    if all(col in df.columns for col in check_cols):
+        print('df has all requisite columns')
+    else:
+        print('df missing requisite columns')
+        raise
+
+    for col in extra_cols:
+        if do_conv_159 and (0 not in df[col].unique()): # expecting column to be in the COGA 159 format here
+            df[col] = df[col].apply(conv_159)
+    
+    return df
+
+def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
+                        degrees=[1, 2], descend=False, rename_cols=None):
+    ''' main function to apply to a DF '''
+    if rename_cols:
+        fd = def_fields.copy()
+        fd.update(rename_cols)
+        rename_dict = {k:v for k,v in fd.items()}
+        fDF = in_fDF.rename(columns=rename_dict)
+
+    sDF = prepare_for_fhd(in_sDF)
+    fDF = prepare_for_fhd(in_fDF, [aff_col], do_conv_159)
+    
+    # drop missing data of affectedness column from fDF
+    # don't do this because they tell us about family structure even if they lack affectedness info
+    # fDF = fDF.dropna(subset=[aff_col])
+
+    sDF['fhd_dx4_ratio'], sDF['fhd_dx4_sum'], sDF['n_rels'] = \
+            zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF, aff_col]))
+
+    return sDF
+    
+def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
     ''' row-wise apply function '''
     famDF = df[ df['famID'] == row['famID'] ]
     I = Individual(row, famDF)
@@ -75,11 +106,8 @@ def calc_fhd_row(row, df, degrees=[1, 2], descend=False, cat_norm=True):
     if 2 in degrees:
         I.second_degree(descend) # 0.25
     print('.',end='')
-    I.count('dx4')
-    return I.ratio_score('dx4', 1, cat_norm), I.sum_score('dx4', 1, cat_norm), \
-           I.n_rels
-           # I.ratio_score_rob('dx4', 1, cat_norm), \
-           # I.sum_score_rob('dx4', 1, cat_norm), \
+    I.count(aff)
+    return I.ratio_score(aff, 1, cat_norm), I.sum_score(aff, 1, cat_norm), I.n_rels
            
 
 class Individual:
@@ -91,7 +119,7 @@ class Individual:
         s.df = fam_df
         try:
             s.parent_field = sex_to_parentfield[row['sex']]
-        except:
+        except KeyError:
             s.parent_field = None
 
         s.rel_set = set()
@@ -170,7 +198,7 @@ class Individual:
 
     def sum_score(s, ckfield, ckfield_max, cat_norm=True):
         ''' score FHD as a sum '''
-        score_num = 0
+        score_num = known_count = 0
         for rel_type, rel_IDs in s.rel_dict.items():
             weight = score_map[rel_type]
             tmp_score = tmp_count = 0
@@ -182,6 +210,7 @@ class Individual:
                     else: # subject found, has value
                         tmp_score += weight * rel_val/ckfield_max
                         tmp_count += 1
+                        known_count += 1
                 except: # subject not found at all
                     pass
             if cat_norm: # normalize in each relative category
@@ -189,7 +218,10 @@ class Individual:
                     score_num += tmp_score / tmp_count
             else:
                 score_num += tmp_score
-        return score_num
+        if known_count == 0: # if nothing known
+            return np.nan
+        else:
+            return score_num
 
     def sum_score_rob(s, ckfield, ckfield_max, cat_norm=True, prop=0.3):
         ''' score FHD as a sum, removing a random proportion of scores '''
@@ -199,7 +231,7 @@ class Individual:
         np.random.shuffle(remove_lst)
         remove_lst_iter = iter(remove_lst)
 
-        score_num = 0
+        score_num = known_count = 0
         for rel_type, rel_IDs in s.rel_dict.items():
             weight = score_map[rel_type]
             tmp_score = tmp_count = 0
@@ -212,6 +244,7 @@ class Individual:
                         if next(remove_lst_iter):
                             tmp_score += weight * rel_val/ckfield_max
                             tmp_count += 1
+                            known_count += 1
                         else:
                             continue
                 except: # subject not found at all
@@ -221,7 +254,10 @@ class Individual:
                     score_num += tmp_score / tmp_count
             else:
                 score_num += tmp_score
-        return score_num
+        if known_count == 0: # if nothing known
+            return np.nan
+        else:
+            return score_num
 
     def count(s, ckfield):
         ''' count relatives '''
