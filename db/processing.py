@@ -61,6 +61,7 @@ class pipelineStep( ProcessBacked ):
 
     def_description = {'input type': None,
                         'process function': characterize,
+                        'named inputs':{},
                         'output type': None}
 
     def __init__(s,description_in= {} ):
@@ -83,7 +84,7 @@ class pipelineStep( ProcessBacked ):
 
     def execute(s,input):
 
-        return s.description['process function'](input)
+        return s.description['process function'](input,**s.description['named inputs'])
 
 
 class pipe( ProcessBacked ):
@@ -168,6 +169,28 @@ class workingPipe( ProcessBacked ):
 
         else:
             return False
+
+    def assemble_step_inputs(s):
+        s.step_inputs = []
+        s.combined_inputs = {}
+        for step in s.pipe.steps:
+            inputs = s.pipe.description['named inputs']
+            s.step_inputs.append( inputs )
+            for k,v in inputs.items():
+                if k in s.combined_inputs:
+                    comb = s.combined_inputs[k]
+                    if type(comb) == set:
+                        s.combined_inputs[k] = comb.add(v)
+                    else:
+                        s.combined_inputs[k] = set([comb, v])
+                else:
+                    s.combined_inputs[k] = v
+
+        for k,v in s.combined_inputs.items():
+            if type(v) == set:
+                if len(v) == 1:
+                    s.combined_iputs[k] = v.pop()
+        
 
     def data_for_db(s):
         if 'store_id' not in dir( s.batch ):

@@ -858,6 +858,39 @@ class EROpheno_label_set:
         return out_cols
 
 
+# Compilation functions for use with processing module
+standard_cols = ['uID', 'nearest session to fMRI', 'Sl. No.', 'NYU fMRI ID',
+             'fMRI test date', 'followup', 'POP', 'alc_dep_dx',
+             'alc_dep_ons', 'PH', 'fhd_dx4_ratio', 'fhd_dx4_sum',
+             'n_rels', 'date', 'sex', 'handedness', 'current_age',
+             'session_age', 'alc_dep_dx_f', 'alc_dep_dx_m', 'fID', 'mID',
+             'famID', 'famtype', 'DNA', 'SmS', 'genoID', 'rel2pro',
+             'ruID', 'self-reported', 'core-race', 'site', 'system',
+             'twin', 'genotyped', 'methylation']
+
+def PR_load_session_file(path, cols=standard_cols ):   
+    df = pd.read_csv( path, converters={'ID':str})
+    df.set_index(['ID','session'], inplace=True)
+    
+    comp_df = df[ cols ]
+    
+    return comp_df
+load_session_file.store_name = 'db/eromat.load_session_file'
+
+def PR_stack_from_mat_lst(df,proc_type):
+    path_cols = [ c for c in df.columns if proc_type in c ]
+    mat_list = []
+    for pc in path_cols:
+        mat_list.extend( list( df[pc].dropna().values ) )
+    stack = EROStack( mat_list )
+    return stack
+stack_from_mat_lst.store_name = 'db/eromat.stack_from_mat_lst'
+
+def PR_get_tf_means(erostack,tf_windows,electrodes):
+    return erostack.tf_mean_lowmem_multiwin_chans(tf_windows,electrodes)
+get_tf_means.store_name = 'db/eromat.get_tf_means'
+
+
 '''
 Usage example for post processing tools:
 

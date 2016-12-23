@@ -6,6 +6,7 @@ import datetime
 import pymongo
 import pandas as pd
 
+
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 
 # utility functions
@@ -61,7 +62,6 @@ class MongoBacked:
 
     Mdb = MongoConn['COGA']
     def_info = {}
-    Mdb = MongoConn['COGA']
 
     def store(s):
         ''' store the record info (in data attr) into the target collection '''
@@ -104,7 +104,7 @@ class MongoBacked:
 # expose Mdb for use at module level
 Mdb = MongoBacked.Mdb
 
-Mdb = MongoBacked.Mdb
+
 
 class SourceInfo(MongoBacked):
 
