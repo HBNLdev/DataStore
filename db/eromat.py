@@ -66,7 +66,7 @@ def prepare_erodf(ero_df):
     return ero_df3
 
 
-def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked']):
+def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked'], n_chans=['64', '32', '21']):
     ''' given a dataframe indexed by ID and session, a desired ERO processing type,
         a dict mapping desired experiments to desired cases within each,
         and a list of desired power types,
@@ -82,7 +82,8 @@ def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked']):
     nchans_df.dropna(subset=['cnt_n_chans'], inplace=True)
     groups = nchans_df.groupby(level=nchans_df.index.names)
     nchans_df_nodupes = groups.last()
-    df_out = df.join(nchans_df_nodupes['cnt_n_chans'])
+    nchans_df_nodupes_selectchans = nchans_df_nodupes[nchans_df_nodupes['cnt_n_chans'].isin(n_chans)]
+    df_out = df.join(nchans_df_nodupes_selectchans['cnt_n_chans'])
 
     prc_ver = proc_type[1]
     parent_dir = version_info[prc_ver]['storage path']
@@ -392,26 +393,55 @@ class EROStack:
             win_inds.append(winds)
             win_lbls.append(win_lbl)
 
-        try:
-            cinds = dict()
-            for chan_len, chan_lst in s.chanlen_dict.items():
-                cinds[chan_len] = sorted(chan_lst.index(c) for c in channels)
-                chan_lbls = [chan_lst[ci] for ci in cinds[chan_len]]
-        except IndexError:
-            print('channel not recognized')
-            return
+        cinds = dict()
+        minds = dict()
+        for chan_len, chan_lst in s.chanlen_dict.items():
+            minds[chan_len] = False
+            tmp_cinds = []
+            for c in channels:
+                try:
+                    tmp_cinds.append(chan_lst.index(c))
+                except ValueError:
+                    print(c, 'not present for', chan_len, '--> filling with nans')
+                    minds[chan_len] = True
+            cinds[chan_len] = sorted(tmp_cinds)
+        max_chans = max(s.chanlen_dict.keys())
+        max_chans_labels = s.chanlen_dict[max_chans]
+        chan_lbls = [max_chans_labels[ci] for ci in cinds[max_chans]]  # this effectively sorts the channel labels
+
+        # because the indexing order for the 21-channel montage is so different, it needs to be specially handled
+        if 20 in s.chanlen_dict.keys():
+            c20_newind_oldind = dict()
+            for clbl_ind, clbl in enumerate(chan_lbls):
+                try:
+                    c20_newind_oldind[clbl_ind] = s.chanlen_dict[20].index(clbl)
+                except ValueError:
+                    pass
 
         n_files = len(s.data_df['path'].values)
         n_windows = len(windows)
-        n_chans = len(channels)
+        n_chans = len(chan_lbls)
         mean_array = np.empty((n_files, n_windows, n_chans))
+        mean_array.fill(np.nan)  # fill with nan
 
         fpi = 0
         for fp, fl, cl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values, s.data_df['chan_len'].values)):
             for wi, winds in enumerate(win_inds):
-                mean_array[fpi, wi, :] = fp['data'] \
-                    [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
-                                winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                if minds[cl] or cl == 20:
+                    if cl == 20:
+                        data_vec = fp['data'] \
+                            [:, winds[fl][0]:winds[fl][1] + 1,
+                                                 winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                        for new_ind, old_ind in c20_newind_oldind.items():
+                            mean_array[fpi, wi, new_ind] = data_vec[old_ind]
+                    else:
+                        mean_array[fpi, wi, :len(cinds[cl])] = fp['data'] \
+                            [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
+                                                 winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                else:
+                    mean_array[fpi, wi, :] = fp['data'] \
+                        [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
+                                    winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
             fpi += 1
 
         mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows * n_chans))
@@ -549,7 +579,7 @@ class EROStack:
         data_array = np.empty((n_subjects, n_conds, n_chans, n_times, n_freqs))
 
         uidi = -1
-        for ID, session in s.fullcond_uIDs:
+        for ID, session in s.data_df_fullconds_uID_nodupes.index:
             uidi += 1
             for ci, cond in enumerate(s.cond_lst):
                 ID_ses_cond = (ID, session, cond)
@@ -633,6 +663,7 @@ class EROMat:
             s.params.update({param:
                                  handle_parse(mat, prefix + info[0], info[1])})
         mat.close()
+        s.params['Times'] = s.params['Times'].astype('float64')
 
     def load_data(s):
         ''' prepare 3d ERO data '''
