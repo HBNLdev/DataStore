@@ -61,7 +61,11 @@ class MongoBacked:
 
     Mdb = MongoConn['COGA']
     def_info = {}
-    Mdb = MongoConn['COGA']
+
+    def __init__(s, info={}):
+        I = s.def_info.copy()
+        I.update(info)
+        s.data = I
 
     def store(s):
         ''' store the record info (in data attr) into the target collection '''
@@ -104,8 +108,6 @@ class MongoBacked:
 # expose Mdb for use at module level
 Mdb = MongoBacked.Mdb
 
-Mdb = MongoBacked.Mdb
-
 class SourceInfo(MongoBacked):
 
     '''  a record containing info about the data source
@@ -139,10 +141,6 @@ class RawEEGData(MongoBacked):
 
     collection = 'raw_eegdata'
 
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
 
 class EEGData(MongoBacked):
 
@@ -150,10 +148,6 @@ class EEGData(MongoBacked):
 
     collection = 'cnth1s'
 
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
 
 class ERPData(MongoBacked):
 
@@ -161,10 +155,6 @@ class ERPData(MongoBacked):
 
     collection = 'avgh1s'
 
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
 
 class ERPPeak(MongoBacked):
 
@@ -172,10 +162,6 @@ class ERPPeak(MongoBacked):
 
     collection = 'ERPpeaks'
 
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
 
 class RestingPower(MongoBacked):
 
@@ -183,21 +169,12 @@ class RestingPower(MongoBacked):
 
     collection = 'resting_power'
 
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
 
 class STransformInverseMats(MongoBacked):
 
     ''' *.mat file containing inverse S-tranformed ERO power data '''
 
     collection = 'STinverseMats'
-
-    def __init__(s,info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
 
 
 class EEGBehavior(MongoBacked):
@@ -206,29 +183,12 @@ class EEGBehavior(MongoBacked):
 
     collection = 'EEGbehavior'
 
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
-
-    def compare_field(s):
-        pass
-
-    def update_field(s):
-        pass
-
-
 
 class Core(MongoBacked):
 
     ''' substance abuse info distilled from SSAGA questionnaires '''
 
     collection = 'core'
-
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
 
 
 class Internalizing(MongoBacked):
@@ -237,11 +197,6 @@ class Internalizing(MongoBacked):
 
     collection = 'internalizing'
 
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
-
 
 class Externalizing(MongoBacked):
 
@@ -249,10 +204,6 @@ class Externalizing(MongoBacked):
 
     collection = 'externalizing'
 
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
 
 class FHAM(MongoBacked):
 
@@ -260,10 +211,12 @@ class FHAM(MongoBacked):
 
     collection = 'fham'
 
-    def __init__(s, info={}):
-        I = s.def_info.copy()
-        I.update(info)
-        s.data = I
+
+class AllRels(MongoBacked):
+
+    ''' all relatives file '''
+
+    collection = 'allrels'
 
 
 class Questionnaire(MongoBacked):
