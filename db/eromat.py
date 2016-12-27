@@ -960,7 +960,7 @@ def PR_load_session_file(path, cols=standard_cols ):
     comp_df = df[ cols ]
     
     return comp_df
-load_session_file.store_name = 'db/eromat.load_session_file'
+PR_load_session_file.store_name = 'db/eromat.load_session_file'
 
 def PR_stack_from_mat_lst(df,proc_type):
     path_cols = [ c for c in df.columns if proc_type in c ]
@@ -969,11 +969,11 @@ def PR_stack_from_mat_lst(df,proc_type):
         mat_list.extend( list( df[pc].dropna().values ) )
     stack = EROStack( mat_list )
     return stack
-stack_from_mat_lst.store_name = 'db/eromat.stack_from_mat_lst'
+PR_stack_from_mat_lst.store_name = 'db/eromat.stack_from_mat_lst'
 
 def PR_get_tf_means(erostack,tf_windows,electrodes):
     return erostack.tf_mean_lowmem_multiwin_chans(tf_windows,electrodes)
-get_tf_means.store_name = 'db/eromat.get_tf_means'
+PR_get_tf_means.store_name = 'db/eromat.get_tf_means'
 
 
 '''
