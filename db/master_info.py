@@ -32,7 +32,7 @@ subjects_sparser_add = \
                'famID', 'mID', 'fID', 'POP', 'alc_dep_dx_f', 'alc_dep_dx_m']
 
 session_sadd = [field for field in subjects_sparser_add if 'age' not in field]
-session_sadd.extend(['session', 'followup', 'age'])
+session_sadd.extend(['session', 'followup', 'age', 'date'])
 
 def calc_date_w_Qs(dstr):
     ''' assumes date of form mm/dd/yyyy
@@ -65,6 +65,26 @@ def site_fromIDstr(IDstr):
     else:
         return 'suny'
 
+def build_parentID(rec, famID_col, parentID_col):
+    try:
+        return rec[famID_col] + '{0:03d}'.format(int(rec[parentID_col]))
+    except ValueError:
+        return np.nan
+
+def ID_nan_strintfloat_COGA(v):
+    try:
+        return str(int(float(v))) # will work for fully numeric IDs
+    except ValueError:
+        return np.nan
+
+def ID_nan_strint(v):
+    try:
+        return str(int(v)) # will work for fully numeric IDs
+    except ValueError:
+        if v[0].isalpha(): # (if an ACHP ID)
+            return str(v)
+        else: # if is a missing val ('.')
+            return np.nan
 
 def load_master(preloaded=None, force_reload=False, custom_path=None):
     
@@ -83,8 +103,9 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
 
         # read as csv
         master = pd.read_csv(master_path_use,
-        					 converters={'ID': str, 'mID': str, 'fID': str},
-                             na_values=['.'], low_memory=False)
+        					 converters={'ID': ID_nan_strint, 'famID': ID_nan_strint,
+                                         'mID': ID_nan_strint, 'fID': ID_nan_strint},
+                             na_values='.', low_memory=False)
         master.set_index('ID', drop=False, inplace=True)
 
         for dcol in ['DOB'] + [col for col in master.columns if '-date' in col]:
