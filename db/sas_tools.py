@@ -1,6 +1,8 @@
 ''' sas tools '''
 
 import os
+from collections import OrderedDict
+
 from sas7bdat import SAS7BDAT
 from .quest_import import map_ph4, map_ph4_ssaga
 
@@ -15,7 +17,7 @@ def extract_descriptions(path):
         dictionary will only contain an entry if there was new information present
         (if there was a description, and it was different from the label) '''
     f = SAS7BDAT(path)
-    kmap = {}
+    kmap = OrderedDict()
     for line in str(f.header).splitlines()[n_header_lines+1:]:
         line_parts = line.split(maxsplit=4)
         label = line_parts[1]
