@@ -1,12 +1,69 @@
 '''update collections'''
 
 from datetime import timedelta
+from tqdm import tqdm
 
+import numpy as np
 import pandas as pd
 
 from .master_info import load_master, master_path
 from .file_handling import identify_files, MT_File
 from .organization import Mdb, Subject, SourceInfo, Session, ERPPeak
+from .compilation import buildframe_fromdocs
+
+
+def subjects_from_followups():
+
+    fup_query = {'session': {'$ne': np.nan}}
+    fup_fields = ['ID', 'session', 'followup', 'date']
+    fup_proj = {f:1 for f in fup_fields}
+    fup_proj['_id'] = 0
+    fup_docs = Mdb['followups'].find(fup_query, fup_proj)
+    fup_df = buildframe_fromdocs(fup_docs, inds=['ID'])
+    fup_IDs = list(set(fup_df.index.get_level_values('ID').tolist()))
+
+    subject_query = {'ID': {'$in': fup_IDs}}
+    subject_fields = ['ID']
+    subject_proj = {f:1 for f in subject_fields}
+    subject_docs = Mdb['subjects'].find(subject_query, subject_proj)
+    subject_df = buildframe_fromdocs(subject_docs, inds=['ID'])
+
+    comb_df = subject_df.join(fup_df)
+
+    for ID, row in tqdm(comb_df.iterrows()):
+        session = row['session']
+        fup_field = session + '-fup'
+        date_field = session + '-fdate'
+        Mdb['subjects'].update_one({'_id': row['_id']},
+                                     {'$set': {fup_field: row['followup'],
+                                               date_field: row['date']}})
+
+
+def sessions_from_followups():
+
+    fup_query = {'session': {'$ne': np.nan}}
+    fup_fields = ['ID', 'session', 'followup', 'date']
+    fup_proj = {f:1 for f in fup_fields}
+    fup_proj['_id'] = 0
+    fup_docs = Mdb['followups'].find(fup_query, fup_proj)
+    fupsession_df = buildframe_fromdocs(fup_docs, inds=['ID', 'session'])
+    fup_IDs = list(set(fupsession_df.index.get_level_values('ID').tolist()))
+
+    session_query = {'ID': {'$in': fup_IDs}}
+    session_fields = ['ID', 'session']
+    session_proj = {f:1 for f in session_fields}
+    session_docs = Mdb['sessions'].find(session_query, session_proj)
+    session_df = buildframe_fromdocs(session_docs, inds=['ID', 'session'])  
+
+    combsession_df = session_df.join(fupsession_df)
+    combsession_df.dropna(subset=['date'], inplace=True)
+
+    for ID, row in tqdm(combsession_df.iterrows()):
+        fup_field = 'followup'
+        date_field = 'followup-date'
+        Mdb['sessions'].update_one({'_id': row['_id']},
+                                     {'$set': {fup_field: row['followup'],
+                                               date_field: row['date']}})    
 
 
 def subjects():

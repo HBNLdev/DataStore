@@ -257,9 +257,22 @@ class Subject(MongoBacked):
 
 class Session(MongoBacked):
 
-    ''' session info, including date and followup # '''
+    ''' HBNL (EEG) session info, including date and followup # '''
 
     collection = 'sessions'
+
+    def __init__(s, info={}):
+        I = s.def_info.copy()
+        I.update(info)
+        I['_ID'] = I['ID']
+        s.data = I
+
+
+class FollowUp(MongoBacked):
+
+    ''' COGA follow-up info, including mean date and corresponding session letter '''
+
+    collection = 'followups'
 
     def __init__(s, info={}):
         I = s.def_info.copy()

@@ -16,7 +16,7 @@ from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
                            import_questfolder_ssaga_ph123,
                            match_fups2sessions_fast_multi,
                            match_fups_sessions_generic, df_fromcsv)
-from .organization import (Subject, SourceInfo, Session, ERPPeak, Neuropsych,
+from .organization import (Subject, SourceInfo, Session, FollowUp, ERPPeak, Neuropsych,
     Questionnaire, Core, Internalizing, Externalizing, FHAM, AllRels, RawEEGData, EEGData, ERPData, RestingPower,
     STransformInverseMats, EEGBehavior, SSAGA, Mdb, EROcsv, EROcsvresults)
 from .file_handling import (identify_files,
@@ -24,6 +24,7 @@ from .file_handling import (identify_files,
                             MT_File, CNTH1_File, AVGH1_File, RestingDAT,
                             Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
                             ERO_CSV)
+from .followups import preparefupdfs_forbuild
 
 zork_path = '/processed_data/zork/zork-phase4-72/'
 
@@ -112,6 +113,17 @@ def sessions():
     sourceO = SourceInfo(Session.collection, (master_path, master_mtime))
     sourceO.store()
     Mdb[Session.collection].create_index([('ID', pymongo.ASCENDING)])
+
+def followups():
+
+    fup_dfs = preparefupdfs_forbuild()
+    for fup, df in fup_dfs.items():
+        print(fup)
+        for rec in tqdm(df.reset_index().to_dict(orient='records')):
+            fupO = FollowUp(rec)
+            fupO.storeNaTsafe()
+
+    Mdb[FollowUp.collection].create_index([('ID', pymongo.ASCENDING)])
 
 def add_sessions_info():    
     pass

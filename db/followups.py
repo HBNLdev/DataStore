@@ -13,9 +13,74 @@ from .compilation import buildframe_fromdocs
 p123_master_path = '/processed_data/zork/zork-phase123/subject/master/master.sas7bdat.csv'
 p4_master_path = '/processed_data/zork/zork-phase4-72/subject/master/master4_30nov2016.sas7bdat.csv'
 
-def match():
-    ''' main function. returns a dict of dicts. the outer keys are IDs.
+
+p1_cols = ['SSAGA_DT', 'CSAGA_DT', 'CSAGC_DT', 'FHAM_DT', 'TPQ_DT',
+               'ZUCK_DT', 'ERP_DT',]
+p2_cols = ['SAGA2_DT', 'CSGA2_DT', 'CSGC2_DT', 'ERP2_DT', 'FHAM2_DT',
+          'AEQ_DT', 'AEQA_DT', 'QSCL_DT', 'DAILY_DT', 'NEO_DT',
+          'SRE_DT', 'SSSC_DT']
+p3_cols = ['SAGA3_DT', 'CSGA3_DT', 'CSGC3_DT', 'ERP3_DT', 'FHAM3_DT',
+          'AEQ3_DT', 'AEQA3_DT', 'QSCL3_DT', 'DLY3_DT', 'NEO3_DT',
+          'SRE3_DT', 'SSSC3_DT']
+p4_col_prefixes = ['aeqg', 'aeqy', 'crv', 'cssaga', 'dp', 'hass',
+                  'neo', 'ssaga', 'sssc', 'ssv']
+
+
+def preparefupdfs_forbuild():
+
+    allphase_master_means, pcols = get_allphasemastermeans_pcols()
+
+    ID_session2fup = create_IDs2f(allphase_master_means)
+    ID_fup2session = invert_innerdicts(ID_session2fup)
+    ID_fup2session_df = IDmap2df(ID_fup2session, inner_keys='followup')
+
+    phase_dfs = make_fupdfs(allphase_master_means, pcols, ID_fup2session_df)
+
+    return phase_dfs
+
+
+def make_fupdfs(allphase_master_means, pcols, ID_fup2session_df):
+    ''' given the allphase_master_means df and the phase columns dict,
+        return a dict of dataframes that can be converted to records for the followups collection '''
+
+    phase_dfs = {}
+    for phase, phase_cols in pcols.items():
+        meandate_col = str(phase) + '_meandate'
+
+        phase_df = allphase_master_means[phase_cols + [meandate_col]]
+        phase_df = phase_df.join(ID_fup2session_df[phase])
+
+        phase_df.dropna(axis=0, how='all', inplace=True)
+        phase_df.dropna(axis=1, how='all', inplace=True)
+
+        phase_df.rename(columns={meandate_col: 'date', phase: 'session'}, inplace=True)
+        phase_df['followup'] = phase
+        phase_dfs[phase] = phase_df
+
+    return phase_dfs
+
+def IDmap2df(IDmap, inner_keys):
+    ''' given a dict in which the keys are IDs and the values are mappings between followups and sessions,
+        create a dataframe indexed by ID with the inner keys as columns and the inner values as values '''
+
+    IDmap_df = pd.DataFrame.from_dict(IDmap, orient='index')
+    IDmap_df.index.name = 'ID'
+    IDmap_df.columns.name = inner_keys
+
+    return IDmap_df
+
+def create_IDs2f(allphase_master_means):
+    ''' given the allphase_master_means df, create a dict of dicts. the outer keys are IDs.
         the inner keys are session letters. the inner values are followup designations '''
+
+    sdate_df = get_sessiondatedf(allphase_master_means)
+    sdate_df_fupmeans = add_datediffcols(sdate_df, allphase_master_means)
+    ID_session2fup = build_IDsessionfup_map(sdate_df_fupmeans)
+
+    return ID_session2fup
+
+
+def get_allphasemastermeans_pcols():
 
     p123m = import_mastercsv(p123_master_path)
     p4m = import_mastercsv(p4_master_path)
@@ -25,13 +90,27 @@ def match():
 
     allphase_master_means = make_meancols(allphase_master, pcols)
 
-    sdate_df = get_sessiondatedf(allphase_master_means)
+    return allphase_master_means, pcols
 
-    sdate_df_fupmeans = add_datediffcols(sdate_df, allphase_master_means)
 
-    ID_session2fup = build_IDsessionfup_map(sdate_df_fupmeans)
+def invert_innerdicts(d):
+    ''' given a dict of dicts, return a version in which the inner mapping has been inverted '''
 
-    return ID_session2fup
+    new_d = {}
+    for outer_key, inner_dict in d.items():
+        new_d[outer_key] = {v:k for k,v in inner_dict.items()}
+
+    return new_d
+
+
+def build_allmasterdf():
+
+    p123m = import_mastercsv(p123_master_path)
+    p4m = import_mastercsv(p4_master_path)
+    allphase_master = p123m.join(p4m, how='outer', rsuffix='p4')
+    
+    return allphase_master
+
 
 def build_IDsessionfup_map(sdate_df_fupmeans):
     ''' given an ID/session-indexed sessions dataframe with followup-session date difference info,
@@ -110,16 +189,9 @@ def define_phasedatecols(p4master_df):
         define the mapping between phases and date columns found in the COGA master files '''
 
     pcols = {}
-    pcols['p1'] = ['SSAGA_DT', 'CSAGA_DT', 'CSAGC_DT', 'FHAM_DT', 'TPQ_DT',
-               'ZUCK_DT', 'ERP_DT',]
-    pcols['p2'] = ['SAGA2_DT', 'CSGA2_DT', 'CSGC2_DT', 'ERP2_DT', 'FHAM2_DT',
-              'AEQ_DT', 'AEQA_DT', 'QSCL_DT', 'DAILY_DT', 'NEO_DT',
-              'SRE_DT', 'SSSC_DT']
-    pcols['p3'] = ['SAGA3_DT', 'CSGA3_DT', 'CSGC3_DT',
-              'AEQ3_DT', 'AEQA3_DT', 'QSCL3_DT', 'DLY3_DT', 'NEO3_DT',
-              'SRE3_DT', 'SSSC3_DT']
-    p4_col_prefixes = ['aeqg', 'aeqy', 'crv', 'cssaga', 'dp', 'hass',
-                      'neo', 'ssaga', 'sssc', 'ssv']
+    pcols['p1'] = p1_cols
+    pcols['p2'] = p2_cols
+    pcols['p3'] = p3_cols
     for fup in range(0, 7):
         potential_cols = [pfx+'_dtT'+str(fup+1) for pfx in p4_col_prefixes]
         pcols[fup] = [col for col in potential_cols if col in p4master_df.columns]
@@ -151,11 +223,19 @@ def robust_datemean(row):
         row_na_dates = row_na
     date_ints = row_na_dates.values.tolist()
     try:
-        rm = huber(date_ints)[0].item()
-        return rm
+        rm = huber(date_ints)[0].item()  # attempt to use huber robust mean
     except ValueError:
-        # print(row.name, 'failed to converge with', date_ints, 'using regular mean')
-        return int(np.mean(date_ints))
+        rm = int(np.mean(reject_outliers(np.array(date_ints))))  # use mean after rejecting outliers
+        # rm = int(np.mean(date_ints))
+    return rm
+        # return int(np.mean(date_ints))
+
+def reject_outliers(data, m = 2.5):
+    ''' return version of data only containing points inside arbitrary scaled absolute distance from the median '''
+    d = np.abs(data - np.median(data))
+    mdev = np.median(d)
+    s = d/mdev if mdev else 0.
+    return data[s<m]
 
 def extractfup_fromcolname(s):
     ''' given a column name that starts with a followup designation, extract the followup string and handle it '''
