@@ -88,6 +88,8 @@ def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked'], n_ch
     prc_ver = proc_type[1]
     parent_dir = version_info[prc_ver]['storage path']
 
+    df_out = df_out[ df_out['cnt_n_chans'].notnull() ]
+
     for exp, cases in exp_cases.items():
         for case in cases:
             for ptype in power_types:
@@ -107,7 +109,11 @@ def gen_path2(rec, parent_dir, proc_type, exp, case, power_type_short):
         param_str = build_paramstr(proc_type, raw_chans, exp)
     except KeyError:
         return np.nan  # also consider returning a default value here
-    n_chans = chan_mapping[raw_chans]
+    if 'center9' in proc_type:
+        n_chans = '20'
+    else:
+        n_chans = chan_mapping[raw_chans]
+
 
     path_start = os.path.join(parent_dir, param_str, n_chans, exp)
     fname = '_'.join([ID, session, exp, case, power_type_short])

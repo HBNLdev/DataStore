@@ -7,8 +7,6 @@ from collections import defaultdict
 
 import numpy as np
 
-from .compilation import join_collection
-
 proctype_info = {'v40center9': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v4.0_custom.rb',
                                  'old storage path': '/processed_data/mat-files-v40/',
                                  'storage path': '/processed_data/mat-files-ps-v40/',
@@ -149,37 +147,6 @@ def get_stmat_calls(docs, file_lim=None):
         call_edir_lst.append((call, edir))
 
     return call_edir_lst
-
-def add_stpaths(df, proc_type, exp_cases, age='old'):
-    ''' given a dataframe indexed by ID and session, a desired ERO processing type,
-        and a dict mapping desired experiments to desired cases within each,
-        return a dataframe with added columns that locate the corresponding paths to ST-mats,
-        if they exist. '''
-
-    uIDs = [ID + '_' + session for ID, session in df.index.tolist()]
-    query = {'uID': {'$in': uIDs}, 'experiment': {'$in': list(exp_cases.keys())}}
-    proj = {'_id': 0, 'ID': 1, 'session': 1, 'rec_type':1, 'filepath': 1, 'site': 1}
-    nchans_df = join_collection(df, 'cnth1s',
-                                add_query=query, add_proj=proj,
-                                left_join_inds=['ID', 'session'], right_join_inds=['ID', 'session'])
-
-    nchans_df.dropna(subset=['cnt_filepath'], inplace=True)
-    groups = nchans_df.groupby(level=nchans_df.index.names)
-    nchans_df_nodupes = groups.last()
-    df_out = df.join(nchans_df_nodupes[['cnt_rec_type', 'cnt_filepath', 'cnt_site']])
-
-    if age is 'old':
-        apply_func = build_oldpath_apply
-    else:
-        apply_func = build_path_apply
-
-    for exp, cases in exp_cases.items():
-        for case in cases:
-            apply_args = [proc_type, exp, case]
-            pathcol_name = '_'.join([proc_type, exp, case])
-            df_out[pathcol_name] = df_out.apply(apply_func, axis=1, args=apply_args)
-
-    return df_out
 
 def build_oldpath_apply(rec, proc_type, exp, case):
     rec_type = rec['cnt_rec_type']
