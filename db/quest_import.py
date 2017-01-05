@@ -1,18 +1,17 @@
 ''' tools for adding questionnaire data to mongo '''
 
 import os
+from collections import defaultdict
 from datetime import datetime, timedelta
 from glob import glob
-from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from sas7bdat import SAS7BDAT
+from tqdm import tqdm
 
+from .compilation import buildframe_fromdocs
 from .organization import Mdb, Questionnaire, SSAGA, SourceInfo
-
-quest_sparser_sub = {'achenbach': ['af_', 'bp_']}
 
 # note we defaultly use this dateformat because pandas sniffs to this format
 def_info = {'date_lbl': ['ADM_Y', 'ADM_M', 'ADM_D'],
@@ -20,13 +19,15 @@ def_info = {'date_lbl': ['ADM_Y', 'ADM_M', 'ADM_D'],
             'dateform': '%Y-%m-%d',
             'file_ext': '.sas7bdat.csv',
             # 'file_ext': '.sas7bdat',
-            'max_fups': 5,
+            'max_fups': 6,
             'id_lbl': 'ind_id',
+            'capitalize': False,
             }
 
 # these zork urls may change from distribution to distribution
 # change when needed
-core_pheno = '/pheno_all/core_pheno_20161018.zip'
+coga_master_ph123 = '/processed_data/zork/zork-phase123/subject/master/master.sas7bdat.csv'
+core_pheno = '/pheno_all/core_pheno_20161129.zip'
 fam_url = '/family_data/allfam_sas_3-20-12.zip'
 ach_url = '/Phase_IV/Achenbach%20January%202016%20Distribution.zip'
 cal_url = '/Phase_IV/CAL%20Forms%20Summer-Fall%202015%20Harvest_sas.zip'
@@ -35,6 +36,7 @@ cal_url = '/Phase_IV/CAL%20Forms%20Summer-Fall%202015%20Harvest_sas.zip'
 # for non-ssaga questionnaires, if there are multiple file_pfixes,
 # the files are assumed to be basically non-overlapping in terms of individuals
 # (one for adults, and one for adolescents)
+# for daily, dependence, and sensation should capitalize on import for phase4
 map_ph4 = {
     'achenbach': {'file_pfixes': ['asr4', 'ysr4'],
                   'zip_name': 'Achenbach',
@@ -55,16 +57,19 @@ map_ph4 = {
                 'zork_url': '/Phase_IV/crv4.zip'},
     'daily': {'file_pfixes': ['daily4'],
               'zip_name': 'daily',
-              'zork_url': '/Phase_IV/daily4.zip'},
+              'zork_url': '/Phase_IV/daily4.zip',
+              'capitalize': True},
     'dependence': {'file_pfixes': ['dpndnce4'],
                    'zip_name': 'dpndnce',
-                   'zork_url': '/Phase_IV/dpndnce4.zip'},
+                   'zork_url': '/Phase_IV/dpndnce4.zip',
+                   'capitalize': True},
     'neo': {'file_pfixes': ['neo4'],
             'zip_name': 'neo',
             'zork_url': '/Phase_IV/neo4.zip'},
     'sensation': {'file_pfixes': ['ssvscore4'],
                   'zip_name': 'ssv',
-                  'zork_url': '/Phase_IV/ssvscore4.zip'},
+                  'zork_url': '/Phase_IV/ssvscore4.zip',
+                  'capitalize': True},
     'sre': {'file_pfixes': ['sre_score4'],
             'zip_name': 'sre4',
             'zork_url': '/Phase_IV/sre4.zip'},
@@ -72,6 +77,7 @@ map_ph4 = {
 
 # for ssaga questionnaires, the multiple file_fpixes are perfectly overlapping,
 # so we end up joining them
+# capitalize all DX on import
 map_ph4_ssaga = {
     'cssaga': {'file_pfixes': ['cssaga4', 'dx_cssaga4'],
                'date_lbl': 'IntvDate',
@@ -107,19 +113,74 @@ map_subject = {'core': {'file_pfixes': 'core',
                           'zip_name': 'vcu',
                           'zork_url': '/vcu_ext_pheno/vcu_ext_all_121112_sas.zip'},
                'master': {'file_pfixes': 'master4',
-                         'zip_name': 'master4',
-                         'zork_url': '/Phase_IV/master4_sas.zip'}
+                          'zip_name': 'master4',
+                          'zork_url': '/Phase_IV/master4_sas.zip'}
                }
 
+# note these have variegated date labels!
+# for aeq, the score is not available for phases <4
+# for sensation, the score is not available for phase 2
 map_ph123 = {'aeq': {'file_pfixes': ['aeq', 'aeqa', 'aeq3', 'aeqa3'],
+                     'followup': {'aeq': 'p2', 'aeq3': 'p3', 'aeqa': 'p2', 'aeqa3': 'p3'},
+                     'date_lbl': {'aeq': 'AEQ_DT', 'aeqa': 'AEQA_DT', 'aeq3': 'AEQ3_DT', 'aeqa3': 'AEQA3_DT'},
                      'id_lbl': 'IND_ID'},
-             'craving': {'file_pfixes': ['craving', 'craving3']},
-             'daily': {'file_pfixes': ['daily', 'daily3']},
-             'dependence': {'file_pfixes': ['dpndnce', 'dpndnce3']},
-             'neo': {'file_pfixes': ['neo', 'neo3']},
-             'sensation': {'file_pfixes': ['sssc', 'ssvscore', 'sssc3']},
-             'sre': {'file_pfixes': ['sre', 'sre3']},
+             'craving': {'file_pfixes': ['craving', 'craving3'],
+                         'followup': {'craving': 'p2', 'craving3': 'p3', },
+                         'date_lbl': {'craving': 'QSCL_DT', 'craving3': 'QSCL3_DT'},
+                         'id_lbl': 'IND_ID'},
+             'daily': {'file_pfixes': ['daily', 'daily3'],
+                       'followup': {'daily': 'p2', 'daily3': 'p3', },
+                       'date_lbl': {'daily': 'DAILY_DT', 'daily3': 'DLY3_DT'},
+                       'id_lbl': 'IND_ID'},
+             'dependence': {'file_pfixes': ['dpndnce', 'dpndnce3'],
+                            'followup': {'dpndnce': 'p2', 'dpndnce3': 'p3', },
+                            'date_lbl': {'dpndnce': 'QSCL_DT', 'dpndnce3': 'QSCL3_DT'},
+                            'id_lbl': 'IND_ID'},
+             'neo': {'file_pfixes': ['neo', 'neo3'],
+                     'followup': {'neo': 'p2', 'neo3': 'p3', },
+                     'date_lbl': {'neo': 'NEO_DT', 'neo3': 'NEO3_DT'},
+                     'id_lbl': 'IND_ID'},
+             'sensation': {'file_pfixes': ['sssc', 'ssvscore', 'sssc3'],
+                           'followup': {'sssc': 'p2', 'sssc3': 'p3', 'ssvscore': 'p3'},
+                           'date_lbl': {'sssc': 'SSSC_DT', 'sssc3': 'SSSC3_DT', 'ssvscore': 'ZUCK_DT'},
+                           'id_lbl': 'IND_ID'},
+             'sre': {'file_pfixes': ['sre', 'sre3'],
+                     'followup': {'sre': 'p2', 'sre3': 'p3', },
+                     'date_lbl': {'sre': 'SRE_DT', 'sre3': 'SRE3_DT'},
+                     'id_lbl': 'IND_ID'},
              }
+
+map_ph123_ssaga = {'cssaga': {'file_pfixes': ['cssaga', 'csaga2', 'csaga3', 'dx_csaga', 'dx_csag2', 'dx_csag3'],
+                              'followup': {'cssaga': 'p1', 'csaga2': 'p2', 'csaga3': 'p3',
+                                           'dx_csaga': 'p1', 'dx_csag2': 'p2', 'dx_csag3': 'p3'},
+                              'date_lbl': {'cssaga': 'CSAGA_COMB_DT', 'csaga2': 'CSAG2_DT', 'csaga3': 'CSAG2_DT',
+                                           'dx_csaga': None, 'dx_csag2': None, 'dx_csag3': None},
+                              'joindate_from': {'dx_csaga': 'cssaga', 'dx_csag2': 'csaga2', 'dx_csag3': 'csaga3'},
+                              'id_lbl': 'IND_ID',
+                              'dateform': '%m/%d/%Y', },
+                   'pssaga': {'file_pfixes': ['pssaga', 'psaga2', 'psaga3', 'dx_psaga', 'dx_psag2', 'dx_psag3'],
+                              'followup': {'pssaga': 'p1', 'psaga2': 'p2', 'psaga3': 'p3',
+                                           'dx_psaga': 'p1', 'dx_psag2': 'p2', 'dx_psag3': 'p3'},
+                              'date_lbl': {'pssaga': 'CSAGP_DT', 'psaga2': 'CSGP2_DT', 'psaga3': 'CSGP2_DT',
+                                           'dx_psaga': None, 'dx_psag2': None, 'dx_psag3': None},
+                              'joindate_from': {'dx_psaga': 'pssaga', 'dx_psag2': 'psaga2', 'dx_psag3': 'psaga3'},
+                              'id_lbl': 'IND_ID',
+                              'dateform': '%m/%d/%Y', },
+                   'ssaga': {'file_pfixes': ['ssaga', 'ssaga2', 'ssaga3', 'dx_ssaga', 'dx_saga2rv', 'dx_saga3rv'],
+                             'followup': {'ssaga': 'p1', 'ssaga2': 'p2', 'ssaga3': 'p3',
+                                          'dx_ssaga': 'p1', 'dx_saga2rv': 'p2', 'dx_saga3rv': 'p3'},
+                             'date_lbl': {'ssaga': None, 'ssaga2': None, 'ssaga3': None,
+                                          'dx_ssaga': None, 'dx_saga2rv': None, 'dx_saga3rv': None},
+                             'joindate_lbl': {'ssaga': 'SSAGA_DT', 'ssaga2': 'SAGA2_DT', 'ssaga3': 'SAGA3_DT',
+                                              'dx_ssaga': 'SSAGA_DT', 'dx_saga2rv': 'SAGA2_DT',
+                                              'dx_saga3rv': 'SAGA3_DT'},
+                             'joindate_from': {'ssaga': None, 'ssaga2': None, 'ssaga3': None,
+                                               'dx_ssaga': None, 'dx_saga2rv': None, 'dx_saga3rv': None},
+                             'id_lbl': 'IND_ID',
+                             'dateform': '%m/%d/%Y', }
+                   }
+
+map_ph123_ssaga['ssaga']['joindate_from'] = {k: coga_master_ph123 for k in map_ph123_ssaga['ssaga']['date_lbl'].keys()}
 
 
 def sasdir_tocsv(target_dir):
@@ -183,6 +244,33 @@ def parse_date(dstr, dateform):
         return None
 
 
+def parse_date2_apply(dstr, dateform):
+    dstr = str(dstr)
+
+    if dstr != 'nan':
+        try:
+            return datetime.strptime(dstr, dateform)
+        except ValueError:
+            return None
+    else:
+        return None
+
+
+def parse_date_apply_pd(dstr, dateform):
+    dstr = str(dstr)
+
+    if dstr != 'nan':
+        try:
+            return datetime.strptime(dstr, dateform)
+        except ValueError:
+            try:
+                return datetime.strptime(dstr, '%Y-%m-%d')
+            except ValueError:
+                return None
+    else:
+        return None
+
+
 def df_fromcsv(fullpath, id_lbl='ind_id', na_val=''):
     ''' convert csv into dataframe, converting ID column to standard '''
 
@@ -196,6 +284,7 @@ def df_fromcsv(fullpath, id_lbl='ind_id', na_val=''):
     # convert id to str and save as new column
     df[id_lbl] = df[id_lbl].apply(int).apply(str)
     df['ID'] = df[id_lbl]
+    df.set_index('ID', drop=False, inplace=True)
 
     return df
 
@@ -222,18 +311,14 @@ def build_inputdict(name, knowledge_dict):
     return idict
 
 
-def import_questfolder(qname, kmap, path):
+def import_questfolder_ph4(qname, kmap, path):
     ''' import all questionnaire data in one folder '''
 
     # build inputs
     i = build_inputdict(qname, kmap)
     i['path'] = path
     print(i)
-
-    if 'dx_' in qname:
-        subfolder = qname[3:]
-    else:
-        subfolder = qname
+    subfolder = qname
 
     # get dict of filepaths and followup numbers
     file_dict = quest_pathfollowup(i['path'] + subfolder + '/',
@@ -247,26 +332,35 @@ def import_questfolder(qname, kmap, path):
 
         # read csv in as dataframe
         tmp_path = os.path.join(i['path'], file)
-        print(tmp_path)        
+        print(tmp_path)
         df = df_fromcsv(tmp_path, i['id_lbl'], i['na_val'])
 
         if df.empty:
             continue
+
+        if i['capitalize']:
+            capitalizer = {col: col.upper() for col in df.columns if col not in [i['date_lbl'], i['id_lbl']]}
+            df.rename(columns=capitalizer, inplace=True)
 
         # df = df_fromsas( os.path.join(i['path'], f), i['id_lbl'])
 
         # if date_lbl is a list, replace columns with one strjoined column
         try:
             if type(i['date_lbl']) == list:
-                new_col = pd.Series([''] * df.shape[0], index=df.index)
+                newdatecol_name = '-'.join(i['date_lbl'])
+                new_datecol = pd.Series([''] * df.shape[0], index=df.index)
                 hyphen_col = pd.Series(['-'] * df.shape[0], index=df.index)
-                new_col += df[i['date_lbl'][0]].apply(int).apply(str)
+                new_datecol += df[i['date_lbl'][0]].apply(int).apply(str)
                 for e in i['date_lbl'][1:]:
-                    new_col += hyphen_col
-                    new_col += df[e].apply(int).apply(str)
-                df['-'.join(i['date_lbl'])] = new_col
-        except:
-            print('expected date cols were not present')
+                    new_datecol += hyphen_col
+                    new_datecol += df[e].apply(int).apply(str)
+                df[newdatecol_name] = new_datecol
+            else:
+                newdatecol_name = i['date_lbl']
+            df['date'] = df[newdatecol_name]
+        except KeyError:
+            print('expected date columns were not present')
+            df['date'] = np.nan
 
         # attempt to convert columns to dates
         for c in df:
@@ -285,7 +379,7 @@ def import_questfolder(qname, kmap, path):
         sourceO.store()
 
 
-def import_questfolder_ssaga(qname, kmap, path):
+def import_questfolder_ssaga_ph4(qname, kmap, path):
     ''' import all questionnaire data in one folder,
         joining multiple files of the same type '''
 
@@ -313,15 +407,9 @@ def import_questfolder_ssaga(qname, kmap, path):
                             i['id_lbl'], i['na_val'])
             # df = df_fromsas( os.path.join(i['path'], f), i['id_lbl'])
 
-            # if date_lbl is a list, replace columns with one strjoined column
-            if type(i['date_lbl']) == list:
-                new_col = pd.Series([''] * df.shape[0], index=df.index)
-                hyphen_col = pd.Series(['-'] * df.shape[0], index=df.index)
-                new_col += df[i['date_lbl'][0]].apply(int).apply(str)
-                for e in i['date_lbl'][1:]:
-                    new_col += hyphen_col
-                    new_col += df[e].apply(int).apply(str)
-                df['-'.join(i['date_lbl'])] = new_col
+            if fname[:3] == 'dx_':  # capitalize DX column names (for backward compatibility with phase <4)
+                capitalizer = {col: col.upper() for col in df.columns if col not in [i['date_lbl'], i['id_lbl']]}
+                df.rename(columns=capitalizer, inplace=True)
 
             # attempt to convert columns to dates
             for c in df:
@@ -347,28 +435,140 @@ def import_questfolder_ssaga(qname, kmap, path):
             else:
                 join_df = join_df.join(df, rsuffix='extra')
 
-        # tmp_qname = qname
-        # if qname in ['ssaga', 'cssaga', 'pssaga']:
-        #     filename = os.path.split(tmp_path)[1]
-        #     if filename[:2] == 'dx':
-        #         tmp_qname = 'dx_' + qname
+        join_df['date'] = join_df[i['date_lbl']]
 
+        join_df.drop('ID', axis=1, inplace=True)
         join_df.reset_index(inplace=True)
         print(join_df.shape)
         # convert to records and store in mongo coll, noting followup_num,
         # and separately for the full questionnaire and diagnoses
 
-        for drec in join_df[list(nondx_cols) + ['ID']].to_dict(orient='records'):
+        for drec in join_df[list(nondx_cols) + ['ID', 'date']].to_dict(orient='records'):
             ro = SSAGA(qname, followup_num, info=drec)
             ro.storeNaTsafe()
 
-        for drec in join_df[list(dx_cols) + ['ID', i['date_lbl']]].to_dict(orient='records'):
+        for drec in join_df[list(dx_cols) + ['ID', 'date', i['date_lbl']]].to_dict(orient='records'):
             ro = SSAGA('dx_' + qname, followup_num, info=drec)
             ro.storeNaTsafe()
 
         datemod = datetime.fromtimestamp(os.path.getmtime(i['path']))
         sourceO = SourceInfo('ssaga', (i['path'], datemod), qname)
         sourceO.store()
+
+
+def import_questfolder_ph123(qname, kmap, path):
+    ''' import all questionnaire data in one folder,
+        joining multiple files of the same type '''
+
+    # build inputs
+    i = build_inputdict(qname, kmap)
+    i['path'] = path
+    print(i)
+
+    # get dict of filepaths and followup numbers
+
+    # build input dict here
+    file_list = [i['path'] + qname + '/' + fpx + i['file_ext'] for fpx in i['file_pfixes']]
+    print(file_list)
+    if not file_list:
+        print('There were no files in the path specified.')
+
+    for f in file_list:
+
+        fname = os.path.split(f)[1]
+        fpx = fname.split('.')[0]
+        print(f)
+        # read csv in as dataframe
+        df = df_fromcsv(os.path.join(i['path'], f),
+                        i['id_lbl'], i['na_val'])
+
+        date_col = i['date_lbl'][fpx]
+        if not date_col:
+            joiner = i['joindate_from'][fpx]
+            if '/' in joiner:
+                date_col = i['joindate_lbl'][fpx]
+                join_path = joiner
+                join_df = df_fromcsv(join_path, 'IND_ID')
+            else:
+                date_col = kmap[qname]['date_lbl'][joiner]
+                join_path = i['path'] + qname + '/' + joiner + i['file_ext']
+                join_df = df_fromcsv(join_path, 'IND_ID')
+            df = df.join(join_df[date_col])
+
+        # create normalized date column, converting to datetime
+        df['date'] = df[date_col].apply(parse_date_apply_pd, args=(i['dateform'],))
+
+        # df.set_index('ID', inplace=True)
+        df.drop(i['id_lbl'], axis=1, inplace=True)
+
+        followup = i['followup'][fpx]
+        for drec in df.to_dict(orient='records'):
+            ro = Questionnaire(qname, followup, info=drec)
+            ro.storeNaTsafe()
+
+
+def import_questfolder_ssaga_ph123(qname, kmap, path):
+    ''' import all questionnaire data in one folder,
+        joining multiple files of the same type '''
+
+    # build inputs
+    i = build_inputdict(qname, kmap)
+    i['path'] = path
+    print(i)
+
+    # get dict of filepaths and followup numbers
+
+    # build input dict here
+    file_list = [i['path'] + qname + '/' + fpx + i['file_ext'] for fpx in i['file_pfixes']]
+    print(file_list)
+    if not file_list:
+        print('There were no files in the path specified.')
+
+    for f in file_list:
+
+        fname = os.path.split(f)[1]
+        fpx = fname.split('.')[0]
+        print(f)
+        # read csv in as dataframe
+        df = df_fromcsv(os.path.join(i['path'], f),
+                        i['id_lbl'], i['na_val'])
+        date_col = i['date_lbl'][fpx]
+
+        if fname[:3] == 'dx_':  # capitalize DX column names (for backward compatibility with phase <4)
+            capitalizer = {col: col.upper() for col in df.columns if col not in [date_col, i['id_lbl']]}
+            df.rename(columns=capitalizer, inplace=True)
+
+        if not date_col:
+            joiner = i['joindate_from'][fpx]
+            if '/' in joiner:
+                date_col = i['joindate_lbl'][fpx]
+                join_path = joiner
+                join_df = df_fromcsv(join_path, 'IND_ID')
+            else:
+                date_col = kmap[qname]['date_lbl'][joiner]
+                join_path = i['path'] + qname + '/' + joiner + i['file_ext']
+                join_df = df_fromcsv(join_path, 'IND_ID')
+            df = df.join(join_df[date_col])
+
+        # create normalized date column, converting to datetime
+        df['date'] = df[date_col].apply(parse_date_apply_pd, args=(i['dateform'],))
+
+        # df.set_index('ID', inplace=True)
+        df.drop(i['id_lbl'], axis=1, inplace=True)
+
+        followup = i['followup'][fpx]
+        if fname[:3] == 'dx_':
+            for drec in df.to_dict(orient='records'):
+                ro = SSAGA('dx_' + qname, followup, info=drec)
+                ro.storeNaTsafe()
+        else:
+            for drec in df.to_dict(orient='records'):
+                ro = SSAGA(qname, followup, info=drec)
+                ro.storeNaTsafe()
+
+                # datemod = datetime.fromtimestamp(os.path.getmtime(i['path']))
+                # sourceO = SourceInfo('ssaga', (i['path'], datemod), qname)
+                # sourceO.store()
 
 
 def match_fups2sessions(qname, knowledge_dict, path, q_collection):
@@ -390,7 +590,13 @@ def match_fups2sessions(qname, knowledge_dict, path, q_collection):
         qc = q.find({'questname': qname})
     print('matching fups to sessions')
     for qrec in tqdm(qc):
-        testdate = qrec[i['date_lbl']]
+        try:
+            testdate = qrec[i['date_lbl']]
+        except TypeError:  # if the i['date_lbl'] is itself a dict (unhashable)
+            testdate = qrec['date']
+        except KeyError:
+            print('no date for ' + qrec['ID'])
+            continue
         # try to access subject record, notify if not possible
         try:
             s_rec = s.find({'ID': qrec['ID']})[0]
@@ -410,3 +616,143 @@ def match_fups2sessions(qname, knowledge_dict, path, q_collection):
             min_ind = np.argmin(session_date_diffs)
             best_match = session_datecols[min_ind][0]
         q.update_one({'_id': qrec['_id']}, {'$set': {'session': best_match}})
+
+
+def match_fups2sessions_fast(qname, knowledge_dict, path, q_collection):
+    ''' for each record in a questionnaire's subcollection,
+        find the nearest session '''
+
+    print('matching fups to sessions')
+
+    # build inputs
+    i = build_inputdict(qname, knowledge_dict)
+    i['path'] = path
+    # determine matching session letters (across followups)
+    if type(i['date_lbl']) == list:
+        i['date_lbl'] = '-'.join(i['date_lbl'])
+
+    quest_collection = Mdb[q_collection]
+    quest_proj = {'_id': 1, 'ID': 1, 'date': 1, 'followup': 1, 'questname': 1, }
+    if 'ssaga' in qname:
+        quest_docs = quest_collection.find({'questname': {'$in': [qname, 'dx_' + qname]}}, quest_proj)
+    else:
+        quest_docs = quest_collection.find({'questname': qname}, quest_proj)
+    quest_df = buildframe_fromdocs(quest_docs, inds=['ID'])
+
+    if quest_df.empty:
+        print('nothing in that collection, skipping')
+
+    quest_df.rename(columns={'date': 'quest_date', '_id': 'quest__id'}, inplace=True)
+    IDs = quest_df.index.tolist()
+    followups = quest_df['followup'].unique()
+    if 'p1' in followups:
+        followups.remove('p1')  # don't match phase 1 at this point
+    quests = quest_df['questname'].unique()
+
+    session_proj = {'_id': 1, 'ID': 1, 'session': 1, 'date': 1}
+    session_docs = Mdb['sessions'].find({'ID': {'$in': IDs}}, session_proj)
+    session_df = buildframe_fromdocs(session_docs, inds=['ID'])
+    session_df.rename(columns={'date': 'session_date', '_id': 'session__id'}, inplace=True)
+
+    resolve_df = session_df.join(quest_df)
+    resolve_df['date_diff'] = (resolve_df['session_date'] - resolve_df['quest_date']).abs()
+    resolve_df.set_index('session', append=True, inplace=True)
+    # resolve_df['nearest_session'] = np.nan
+
+    IDfupQN_session_map = dict()
+    for ID in IDs:
+        ID_df = resolve_df.ix[resolve_df.index.get_level_values('ID') == ID, :]
+        if ID_df.empty:
+            continue
+        for fup in followups:
+            fup_df = ID_df[ID_df['followup'] == fup]
+            if fup_df.empty:
+                continue
+            for q in quests:
+                q_df = fup_df[fup_df['questname'] == q]
+                if q_df.empty:
+                    continue
+                try:
+                    best_session = q_df['date_diff'].argmin()[1]
+                except TypeError:  # trying to subscript a nan
+                    best_session = None
+                IDfupQN_session_map[(ID, fup, q)] = best_session
+
+    # update quest collection based on the above
+    IDfupQN_idx = pd.MultiIndex.from_tuples(list(IDfupQN_session_map.keys()), names=('ID', 'followup', 'questname'))
+    IDfupQN_series = pd.Series(list(IDfupQN_session_map.values()), index=IDfupQN_idx, name='nearest_session')
+
+    quest_df_forupdate = quest_df.set_index(['followup', 'questname'], append=True)
+    quest_df_forupdate = quest_df_forupdate.join(IDfupQN_series)
+
+    for ind, qrow in quest_df_forupdate.iterrows():
+        quest_collection.update_one({'_id': qrow['quest__id']}, {'$set': {'session': qrow['nearest_session']}})
+
+        # update sessions collection (or an analogue)
+
+
+def match_fups2sessions_fast_multi(q_collection, followups=None, quests=None):
+    ''' for a questionnaire collection, match its followups to sessions '''
+
+    print('matching fups to sessions')
+
+    quest_collection = Mdb[q_collection]
+    if not followups:
+        followups = quest_collection.distinct('followup')
+    if not quests:
+        quests = quest_collection.distinct('questname')
+
+    for fup in followups:
+        for questname in quests:
+            match_fups_sessions_generic(quest_collection, fup, questname)
+
+
+def match_fups_sessions_generic(q_collection, fup, questname):
+    print('matching fups for', fup, questname)
+
+    quest_collection = Mdb[q_collection]
+    quest_query = {'followup': fup, 'questname': questname}
+    quest_proj = {'_id': 1, 'ID': 1, 'date': 1, 'followup': 1, 'questname': 1, }
+    quest_docs = quest_collection.find(quest_query, quest_proj)
+    quest_df = buildframe_fromdocs(quest_docs, inds=['ID'])
+    if quest_df.empty:
+        print('no questionnaire docs of this kind found')
+        return
+    if 'date' not in quest_df.columns:
+        print('no date info available for this questionnaire-fup combination')
+        return
+    quest_df.rename(columns={'date': 'quest_date', '_id': 'quest__id'}, inplace=True)
+    IDs = quest_df.index.tolist()
+
+    session_proj = {'_id': 1, 'ID': 1, 'session': 1, 'date': 1}
+    session_docs = Mdb['sessions'].find({'ID': {'$in': IDs}}, session_proj)
+    session_df = buildframe_fromdocs(session_docs, inds=['ID'])
+    if session_df.empty:
+        print('no session docs of this kind found')
+        return
+    session_df.rename(columns={'date': 'session_date', '_id': 'session__id'}, inplace=True)
+
+    resolve_df = session_df.join(quest_df)
+    resolve_df['date_diff'] = (resolve_df['session_date'] - resolve_df['quest_date']).abs()
+    resolve_df.set_index('session', append=True, inplace=True)
+    # resolve_df['nearest_session'] = np.nan
+
+    ID_session_map = dict()
+    for ID in IDs:
+        ID_df = resolve_df.ix[resolve_df.index.get_level_values('ID') == ID, :]
+        if ID_df.empty:
+            continue
+        try:
+            best_session = ID_df['date_diff'].argmin()[1]
+        except TypeError:  # trying to subscript a nan
+            best_session = None
+        ID_session_map[ID] = best_session
+
+    ID_session_series = pd.Series(ID_session_map, name='nearest_session')
+    ID_session_series.index.name = 'ID'
+
+    quest_df_forupdate = quest_df.join(ID_session_series)
+
+    for ind, qrow in tqdm(quest_df_forupdate.iterrows()):
+        quest_collection.update_one({'_id': qrow['quest__id']},
+                                    {'$set': {'session': qrow['nearest_session']}})

@@ -10,18 +10,21 @@ import pandas as pd
 from tqdm import tqdm
 import pymongo
 
-from .master_info import load_master, master_path
-from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123,
-    import_questfolder, import_questfolder_ssaga,
-    match_fups2sessions, df_fromcsv)
-from .organization import (Subject, SourceInfo, Session, ERPPeak, Neuropsych,
-    Questionnaire, Core, Internalizing, Externalizing, FHAM, RawEEGData, EEGData, ERPData, RestingPower,
+from .master_info import load_master, master_path, ID_nan_strintfloat_COGA, build_parentID
+from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
+                           import_questfolder_ph4, import_questfolder_ssaga_ph4, import_questfolder_ph123,
+                           import_questfolder_ssaga_ph123,
+                           match_fups2sessions_fast_multi,
+                           match_fups_sessions_generic, df_fromcsv)
+from .organization import (Subject, SourceInfo, Session, FollowUp, ERPPeak, Neuropsych,
+    Questionnaire, Core, Internalizing, Externalizing, FHAM, AllRels, RawEEGData, EEGData, ERPData, RestingPower,
     STransformInverseMats, EEGBehavior, SSAGA, Mdb, EROcsv, EROcsvresults)
 from .file_handling import (identify_files,
                             parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path,
                             MT_File, CNTH1_File, AVGH1_File, RestingDAT,
                             Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
                             ERO_CSV)
+from .followups import preparefupdfs_forbuild
 
 
 buildAssociations = { 
@@ -61,7 +64,8 @@ def builderEngine(which='all'):
                 funcs.append(build_func)
     return funcs
 
-zork_path = '/processed_data/zork/zork-phase4-71/'
+
+zork_path = '/processed_data/zork/zork-phase4-72/'
 
 # utility functions
 
@@ -149,6 +153,17 @@ def sessions():
     sourceO.store()
     Mdb[Session.collection].create_index([('ID', pymongo.ASCENDING)])
 
+def followups():
+
+    fup_dfs = preparefupdfs_forbuild()
+    for fup, df in fup_dfs.items():
+        print(fup)
+        for rec in tqdm(df.reset_index().to_dict(orient='records')):
+            fupO = FollowUp(rec)
+            fupO.storeNaTsafe()
+
+    Mdb[FollowUp.collection].create_index([('ID', pymongo.ASCENDING)])
+
 def add_sessions_info():    
     pass
 
@@ -186,25 +201,73 @@ def neuropsych_xmls():
                             list(zip(xml_files, datemods)), 'all')
     sourceO.store()
 
+def questionnaires_ph123():
+    ''' import all questionnaire info from phases 1 through 3
+        unused because difficult but should fix it later '''
+    # takes  ~20 seconds per questionnaire
+    # phase 1, 2, and 3 non-SSAGA
+    kmap = map_ph123
+    path = '/processed_data/zork/zork-phase123/session/'
+    followups = ['p2', 'p3']
+    for qname in kmap.keys():
+        print(qname)
+        import_questfolder_ph123(qname, kmap, path)
+        for fup in followups:
+            match_fups_sessions_generic(Questionnaire.collection, fup, qname)
+
+def questionnaires_ph123_ssaga():
+    ''' import all questionnaire info from phases 1 through 3
+        unused because difficult but should fix it later '''
+    # takes  ~20 seconds per questionnaire
+    # phase 1, 2, and 3 non-SSAGA
+    kmap = map_ph123_ssaga
+    path = '/processed_data/zork/zork-phase123/session/'
+    followups = ['p2', 'p3']
+    for qname in kmap.keys():
+        print(qname)
+        import_questfolder_ssaga_ph123(qname, kmap, path)
+        for fup in followups:
+            match_fups_sessions_generic(SSAGA.collection, fup, qname)
+            match_fups_sessions_generic(SSAGA.collection, fup, 'dx_' + qname)
+
 def questionnaires_ph4():
     # takes  ~20 seconds per questionnaire
     # phase 4 non-SSAGA
-    kmap = map_ph4
+    kmap = map_ph4.copy()
+    del kmap['cal']
     path = zork_path + 'session/'
+    followups = list(range(7))
     for qname in kmap.keys():
-            print(qname)
-            import_questfolder(qname, kmap, path)
-            match_fups2sessions(qname, kmap, path, Questionnaire.collection)
+        print(qname)
+        import_questfolder_ph4(qname, kmap, path)
+        for fup in followups:
+            match_fups_sessions_generic(Questionnaire.collection, fup, qname)
 
-def questionnaires_ssaga():
+def questionnaires_ph4_ssaga():
     ''' import all session-based questionnaire info related to SSAGA '''
     # SSAGA
-    kmap = map_ph4_ssaga
+    kmap = map_ph4_ssaga.copy()
     path = zork_path + 'session/'
+    followups = list(range(7))
     for qname in kmap.keys():
-            print(qname)
-            import_questfolder_ssaga(qname, kmap, path)
-            match_fups2sessions(qname, kmap, path, SSAGA.collection)
+        print(qname)
+        import_questfolder_ssaga_ph4(qname, kmap, path)
+        for fup in followups:
+            match_fups_sessions_generic(SSAGA.collection, fup, qname)
+            match_fups_sessions_generic(SSAGA.collection, fup, 'dx_' + qname)
+
+
+def ssaga_all():
+    ph123_path = '/processed_data/zork/zork-phase123/session/'
+    ph4_path = zork_path + 'session/'
+    match_followups = ['p2', 'p3', 0, 1, 2, 3, 4, 5, 6]
+    for qname in map_ph123_ssaga.keys():
+        print(qname)
+        import_questfolder_ssaga_ph123(qname, map_ph123_ssaga, ph123_path)
+    for qname in map_ph4_ssaga.keys():
+        print(qname)
+        import_questfolder_ssaga_ph4(qname, map_ph4_ssaga, ph4_path)
+    match_fups2sessions_fast_multi(SSAGA.collection, followups=match_followups)
 
 def core():
     # fast
@@ -245,6 +308,28 @@ def externalizing():
         ro = Externalizing(drec)
         ro.store()
     sourceO = SourceInfo(Externalizing.collection, (path, datemod))
+    sourceO.store()
+
+def allrels():
+
+    folder = zork_path + 'subject/rels/'
+    file = 'allrels_30nov2016.sas7bdat.csv'
+    path = folder + file
+    datemod = datetime.fromtimestamp(os.path.getmtime(path))
+    
+    import_convcols = ['IND_ID', 'FAM_ID', 'F_ID', 'M_ID']
+    import_convdict = {col:ID_nan_strintfloat_COGA for col in import_convcols}
+    rename_dict = {'FAM_ID': 'famID', 'IND_ID': 'ID', 'TWIN': 'twin', 'SEX': 'sex'}
+
+    rel_df = pd.read_csv(path, converters=import_convdict, low_memory=False)
+    rel_df = rel_df.rename(columns=rename_dict)
+    rel_df['fID'] = rel_df[['famID', 'F_ID']].apply(build_parentID, axis=1, args=['famID', 'F_ID'])
+    rel_df['mID'] = rel_df[['famID', 'M_ID']].apply(build_parentID, axis=1, args=['famID', 'M_ID'])
+
+    for drec in tqdm(rel_df.to_dict(orient='records')):
+        ro = AllRels(drec)
+        ro.store()
+    sourceO = SourceInfo(AllRels.collection, (path, datemod))
     sourceO.store()
 
 def fham():
@@ -452,18 +537,6 @@ def mat_st_inv_toc():
         infoD['prc_ver'] = f.split(os.path.sep)[2][-2]
         matO = STransformInverseMats(infoD)
         matO.store()
-
-def questionnaires_ph123():
-    ''' import all session-based questionnaire info from phase 4
-        unused because difficult but should fix it later '''
-    # takes  ~20 seconds per questionnaire
-    # phase 1, 2, and 3 non-SSAGA
-    kmap = map_ph123
-    path = '/processed_data/zork/zork-phase123/session/'
-    for qname in kmap.keys():
-        print(qname)
-        import_questfolder(qname, kmap, path)
-        match_fups2sessions(qname, kmap, path, Questionnaire.collection)
 
 def neuropsych_TOLT():
     # 30 seconds

@@ -342,13 +342,13 @@ def build_paramstr(proc_type, n_chans, exp):
 
     if proc_type == 'v40center9':
         return 'e1-n10-s9-t100-v800'
-
     if proc_type == 'v60center9':
         ps = 'e1'
     elif proc_type == 'v60all':
         ps = 'e' + nchans_to_eparam[n_chans]
     else:
-        print('processing type not recognized')
+        print('processing type not recognized, the following are acceptable:')
+        print(['v40center9', 'v60center9' 'v60all'])
         return
 
     if exp in ['ans', 'ant', 'aod', 'vp3']:

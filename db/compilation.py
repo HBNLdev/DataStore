@@ -6,7 +6,7 @@ import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
 from .organization import Mdb, flatten_dict
-from .quest_import import quest_sparser_sub
+from .quest_utils import quest_sparser_sub
 from .master_info import (subjects_sparser_sub, subjects_sparser_add,
                             session_sadd)
 
