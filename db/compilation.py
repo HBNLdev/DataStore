@@ -187,6 +187,13 @@ def buildframe_fromdocs(docs, inds=['ID','session']):
     return df
 
 
+def txt2list(path):
+    ''' given path to text file, return a list of its lines '''
+    with open(path, 'r') as f:
+        lst = [line.strip() for line in f]
+    return lst
+
+
 def format_sparseproj(coll, subcoll=None):
     ''' format a projection to sparsify a collection / subcollection '''
     if coll in sparse_addmaps.keys():
@@ -199,7 +206,7 @@ def format_sparseproj(coll, subcoll=None):
 def format_ERPprojection(conds_peaks, chans, measures=['amp', 'lat']):
     ''' format a projection to retrieve specific ERP peak information '''
     proj = default_ERPfields.copy()
-    proj.update({'.'.join([cp, chan, m]): 1
+    proj.update({'.'.join(['data', cp, chan, m]): 1
                  for cp in conds_peaks for chan in chans for m in measures})
     return proj
 
