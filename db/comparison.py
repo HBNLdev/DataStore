@@ -1,4 +1,6 @@
-import numpy as np
+''' tools for comparing two dataframes '''
+
+from collections import OrderedDict
 
 
 def basic_diagnostics(df):
@@ -15,85 +17,74 @@ def basic_diagnostics(df):
     return diag_str
 
 
-def index_eq(df1_in, df2_in, do_sort=False):
-    ''' given 2 dataframes, print diagnostics related to whether the two have the same indices '''
+def index_sort(df1, df2):
+    ''' in place '''
 
-    df1 = df1_in.copy()
-    df2 = df2_in.copy()
+    if not df1.index.is_monotonic:
+        print('sorting index of lefthand index')
+        df1.sort_index(inplace=True)
+    if not df2.index.is_monotonic:
+        print('sorting index of righthand index')
+        df2.sort_index(inplace=True)
 
-    if do_sort and not df1.index.is_monotonic and not df2.index.is_monotonic:
-        print('sorting')
-        df1 = df1.sort_index()
-        df2 = df2.sort_index()
 
-    index_len_match = len(df1.index) == len(df2.index)
-    if index_len_match:
-        print('same number of indices')
-        index_bool = (df1.index == df2.index)
-        all_index_match = index_bool.all()
-        if all_index_match:
-            print('all indices match')
-        else:
-            print('some indices do not match')
-            diff_ilocs = np.where(~index_bool)[0]
-            print('indices differ at', len(diff_ilocs), 'ilocs:', diff_ilocs)
-            diff_inds1 = df1.index[~index_bool]
-            diff_inds2 = df2.index[~index_bool]
-            print('lefthand inds:', diff_inds1)
-            print('righthand inds:', diff_inds2)
+def columns_sort(df1, df2):
+    ''' not in place '''
+
+    if (df1.columns != df1.columns.sort_values()).any():
+        print('sorting columns of lefthand index')
+        df1 = df1.reindex_axis(sorted(df1.columns), axis=1)
+
+    if (df2.columns != df2.columns.sort_values()).any():
+        print('sorting columns of lefthand index')
+        df2 = df2.reindex_axis(sorted(df2.columns), axis=1)
+
+    return df1, df2
+
+
+def series_eq(s1, s2):
+    ''' if the input series are exacty equal, return true. otherwise, return false,
+        while printing some diagnostics '''
+
+    len_match = len(s1) == len(s2)
+    if len_match:
+        print('same number of elements')
+        eq_bool = (s1 == s2)
+        all_match = eq_bool.all()
+        if all_match:
+            print('all elements match')
+            return True
     else:
-        print('different number of indices')
+        print('different number of elements')
 
-    df1_novelinds = df1.index[~df1.index.isin(df2.index)]
-    df2_novelinds = df2.index[~df2.index.isin(df1.index)]
-    if df1_novelinds.size > 0:
-        print('lefthand df had', df1_novelinds.size, 'novel inds:', df1_novelinds)
-    if df2_novelinds.size > 0:
-        print('righthand df had', df2_novelinds.size, 'novel inds:', df2_novelinds)
+    s1_novels = s1[~s1.isin(s2)]
+    s2_novels = s2[~s2.isin(s1)]
+    if s1_novels.size > 0:
+        print('lefthand df had', s1_novels.size, 'novel elements:', s1_novels)
+    if s2_novels.size > 0:
+        print('righthand df had', s2_novels.size, 'novel elements:', s2_novels)
 
-
-def column_eq(df1, df2):
-    ''' given 2 dataframes, print diagnostics related to whether the two have the same columns '''
-
-    column_len_match = len(df1.columns) == len(df2.columns)
-    if column_len_match:
-        print('same number of columns')
-        column_bool = (df1.columns == df2.columns)
-        all_columns_match = column_bool.all()
-        if all_columns_match:
-            print('all columns match')
-        else:
-            print('some columns do not match')
-            diff_ilocs = np.where(~column_bool)[0]
-            print('indices differ at', len(diff_ilocs), 'ilocs:', diff_ilocs)
-            diff_inds1 = df1.columns[~column_bool]
-            diff_inds2 = df2.columns[~column_bool]
-            print('lefthand inds:', diff_inds1)
-            print('righthand inds:', diff_inds2)
-    else:
-        print('different number of columns')
-
-    df1_novelcols = df1.columns[~df1.columns.isin(df2.columns)]
-    df2_novelcols = df2.columns[~df2.columns.isin(df1.columns)]
-    if df1_novelcols.size > 0:
-        print('lefthand df had', df1_novelcols.size, 'novel inds:', df1_novelcols)
-    if df2_novelcols.size > 0:
-        print('righthand df had', df2_novelcols.size, 'novel inds:', df2_novelcols)
+    return False
 
 
-def contents_eq(df1_in, df2_in, join_how='left', lsuffix='_larry', rsuffix='_ricky'):
+def contents_eq(df1_in, df2_in, join_how='inner', lsuffix='_larry', rsuffix='_ricky', ind_sort=False):
     ''' given two similar dataframes with differences, make a diff dataframe
         which contains the differing rows and columns '''
 
-    if df1_in.shape != df2_in.shape:
-        print('input dfs had different shapes')
-        print('it is suggested to treat them with index/col conditioning first')
-        print('to get more meaningful results')
+    print('index diagnostics:')
+    if ind_sort:
+        index_sort(df1_in, df2_in)
+    inds_eq = series_eq(df1_in.index, df2_in.index)
+    if not inds_eq:
+        print('inds differ, consider how you are joining for meaningful results')
+        print('see the join_how param, which is inner by default')
+    print('~~~')
 
-    if df1_in.shape[0] < df2_in.shape[0]:
-        print('lefthand df has fewer rows, a left join is suggested')
-    else:
-        print('righthand df has fewer rows, a right join is suggested')
+    print('column diagnostics:')
+    cols_eq = series_eq(df1_in.columns, df2_in.columns)
+    if not cols_eq:
+        print('differing columns will be appended to the diff dataframe')
+    print('~~~')
 
     df1_tmp = df1_in.fillna('NA')
     df2_tmp = df2_in.fillna('NA')
@@ -155,6 +146,7 @@ def contents_eq(df1_in, df2_in, join_how='left', lsuffix='_larry', rsuffix='_ric
 
     return dfj.loc[df1.index[anydiff_rows], out_cols]
 
+
 def check_column(diff_df, col_name, lsuffix='_larry', rsuffix='_ricky'):
     ''' given a diff dataframe, and the name of a column,
         return the subset of the diff dataframe related to that column
@@ -165,20 +157,34 @@ def check_column(diff_df, col_name, lsuffix='_larry', rsuffix='_ricky'):
     out_subset = diff_df.ix[diff_df[lcol_name] != diff_df[rcol_name], [lcol_name, rcol_name]]
     return out_subset
 
+
 def check_allcoldiffs(diff_df, lsuffix='_larry', rsuffix='_ricky'):
     ''' given a diff dataframe, create a dictionary whose keys are differing columns,
         and whose values are the differing subsets related to those columns '''
-    
+
     lsl = len(lsuffix)
     rsl = len(rsuffix)
-    
+
     df1_cols = [col[:-lsl] for col in diff_df.columns if col[-lsl:] == lsuffix]
     df2_cols = [col[:-rsl] for col in diff_df.columns if col[-rsl:] == rsuffix]
-    
-    match_cols = list(set(df1_cols) & set(df2_cols))
-    
-    diff_dict = {}
-    for col in match_cols:
+
+    match_cols = list(set(df1_cols) | set(df2_cols))
+
+    diff_dict = OrderedDict()
+    for col in sorted(match_cols):
         diff_dict[col] = check_column(diff_df, col, lsuffix=lsuffix, rsuffix=rsuffix)
-        
+
     return diff_dict
+
+
+def print_diffdict(diff_dict):
+    ''' given a diff dict, print its contents '''
+
+    cdum = 1
+    for column, df in diff_dict.items():
+        print('______________________________________________________________')
+        print(cdum, '|', column)
+        print(df)
+        print('______________________________________________________________')
+        print('')
+        cdum += 1
