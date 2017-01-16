@@ -146,24 +146,24 @@ def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True,
 def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, rename_cols=None):
     '''
 
-        fast version of calc_fhd that always uses only primary and secondary forebears,
-        and normalizes the score within each sibling category
+    fast version of calc_fhd that always uses only primary and secondary forebears,
+    and normalizes the score within each sibling category
 
-        inputs:
+    inputs:
 
-        in_sDF:     a dataframe indexed by ID or ID + session, including the individuals for whom you want to calculate FHD
-        in_fDF:     a dataframe indexed by ID, including the whole family of the individuals in in_sDF. must include
-                        'ID', 'famID', 'mID', 'fID', 'sex', and aff_col
-        aff_col:    the affectedness column for which to calculate density
-        conv_159:   if True, convert aff_col from a (1, 5, 9) to a (0, 1, nan) coding
-        rename_cols: a dict mapping old column names to new column names if the DFs use a different naming scheme
+    in_sDF:     a dataframe indexed by ID or ID + session, including the individuals for whom you want to calculate FHD
+    in_fDF:     a dataframe indexed by ID, including the whole family of the individuals in in_sDF. must include
+                    'ID', 'famID', 'mID', 'fID', 'sex', and aff_col
+    aff_col:    the affectedness column for which to calculate density
+    conv_159:   if True, convert aff_col from a (1, 5, 9) to a (0, 1, nan) coding
+    rename_cols: a dict mapping old column names to new column names if the DFs use a different naming scheme
 
-        outputs:
+    outputs:
 
-        sDF:        a copy of in_sDF with 3 columns added:
-                        fhd_dx4_ratio   ratio of family history density
-                        fhd_dx4_sum     sum of family history density
-                        n_rels          number of relatives for whom affectedness was known
+    sDF:        a copy of in_sDF with 3 columns added:
+                    fhd_dx4_ratio   ratio of family history density
+                    fhd_dx4_sum     sum of family history density
+                    n_rels          number of relatives for whom affectedness was known
 
     '''
 
@@ -178,6 +178,8 @@ def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, renam
     sDF['fhd_dx4_ratio'] = ratio_series
     sDF['fhd_dx4_sum'] = sum_series
     sDF['n_rels'] = count_series
+
+    sDF.ix[sDF['n_rels'].isnull(), 'n_rels'] = 0
 
     return sDF
 
@@ -328,9 +330,6 @@ class Family:
 
         for ID, cat_dict in s.ID_rels_dict_conv.items():
 
-            if ID == '40058182':
-                pause = 0
-
             fhd_num = 0
             fhd_denom = 0
             rel_count = 0
@@ -393,9 +392,6 @@ class Individual:
 
     def ratio_score(s, ckfield, ckfield_max, cat_norm=True):
         ''' score FHD as a ratio '''
-
-        if s.ID == '40058182':
-            pause = 0
 
         score_num = score_denom = 0
         for rel_type, rel_IDs in s.rel_dict.items():
