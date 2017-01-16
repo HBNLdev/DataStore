@@ -184,7 +184,7 @@ def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, renam
     return sDF
 
 
-def fam_fhd(fDF):
+def fam_fhd(fDF, calc_degrees={1, 2}):
     ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
         affectedness is known, the FHD sum scores, and the FHD ratio scores '''
 
@@ -196,7 +196,9 @@ def fam_fhd(fDF):
 
     for fam in fams:
         famDF = fDF[fDF['famID'] == fam]
-        famO = Family(famDF)
+        famO = Family(famDF, calc_degrees=calc_degrees)
+        famO.define_rels()
+        famO.calc_famfhd()
         all_counts.update(famO.count_dict)
         all_sums.update(famO.fhdsum_dict)
         all_ratios.update(famO.fhdratio_dict)
@@ -226,10 +228,7 @@ class Family:
     def __init__(s, famDF):
         s.df = famDF
         s.dx_dict = famDF['cor_alc_dep_dx'].dropna().to_dict()
-        s.build_graph()
-        s.define_rels()
-        s.convert_IDrelsdict()
-        s.calc_famfhd()
+        s.G = s.build_graph()
 
     def build_graph(s):
         ''' builds the graph. individuals are nodes, and edges are directed from parents to children. '''
@@ -243,7 +242,7 @@ class Family:
             G.add_edge(fID, ID)
             G.add_edge(mID, ID)
 
-        s.G = G
+        return G
 
     def define_rels(s):
         ''' builds a dict of dicts of sets in which:
@@ -284,6 +283,8 @@ class Family:
                     ID_rels_dict[node][predsucc_lbl].add(pred_succ)
 
         s.ID_rels_dict = ID_rels_dict
+
+        s.convert_IDrelsdict()
 
     def convert_IDrelsdict(s):
 
