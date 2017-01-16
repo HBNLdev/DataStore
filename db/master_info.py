@@ -1,7 +1,7 @@
 '''EEGmaster
 '''
 
-master_path = '/processed_data/master-file/EEG-master-file-22.csv'
+master_path = '/processed_data/master-file/old/EEG-master-file-21.csv'
 
 import os
 from datetime import datetime

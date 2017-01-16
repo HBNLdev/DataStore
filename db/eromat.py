@@ -28,7 +28,7 @@ opt_info = {'Add baseline': ('add_baseline', 'array'),
             'Mat file': ('filenm', 'text'),
             'Run': ('file_run', 'array'),
             'Session': ('file_session', 'text'),
-            'File index': ('i_file', 'array'),
+            # 'File index': ('i_file', 'array'),
             'Natural log': ('ln_calc', 'array'),
             '# of channels': ('n_chans_present', 'array'),
             'Output type': ('out_type', 'array'),
@@ -660,8 +660,11 @@ class EROMat:
         prefix = 'opt/'
         s.params = {}
         for param, info in opt_info.items():
-            s.params.update({param:
-                                 handle_parse(mat, prefix + info[0], info[1])})
+            try:
+                s.params.update({param:
+                                     handle_parse(mat, prefix + info[0], info[1])})
+            except KeyError:
+                print('param extraction failed for', param, 'for', s.filepath)
         mat.close()
         s.params['Times'] = s.params['Times'].astype('float64')
 

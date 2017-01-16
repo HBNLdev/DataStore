@@ -235,7 +235,7 @@ def reject_outliers(data, m = 2.5):
     d = np.abs(data - np.median(data))
     mdev = np.median(d)
     s = d/mdev if mdev else 0.
-    return data[s<m]
+    return data[s < m]
 
 def extractfup_fromcolname(s):
     ''' given a column name that starts with a followup designation, extract the followup string and handle it '''
