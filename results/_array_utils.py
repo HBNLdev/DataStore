@@ -61,6 +61,10 @@ def convert_ms(time_array, ms):
     return np.argmin(np.fabs(time_array - ms))
 
 
+def drop_na(a):
+
+    return a[~np.isnan(a)]
+
 def compound_take(a, dimval_tups):
     ''' given array, apply multiple indexing operations '''
 

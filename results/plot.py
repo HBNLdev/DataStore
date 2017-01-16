@@ -11,7 +11,8 @@ import scipy.stats as ss
 import mne
 from mne.viz import plot_connectivity_circle
 
-from ._array_utils import get_data, basic_slice, subject_slice, compound_take, handle_by, handle_pairs
+from ._array_utils import (get_data, basic_slice, subject_slice,
+                            compound_take, handle_by, handle_pairs, drop_na)
 from ._plot_utils import (subplot_heuristic, figsize_heuristic,
                           is_nonstr_sequence, nested_strjoin,
                           MidpointNormalize,
@@ -828,8 +829,8 @@ def scatter(r, measure, variate=None, figure_by=None, subplot_by=None, set_by=No
                 h = axarr[spi].scatter(xvals, yvals, s=size, c=colors[si], marker='o',
                                    alpha=alpha)
                 # do regression, if applicable
-                y_pred, coef, r2 = regress_linear(xvals, yvals)
-                axarr[spi].plot(xvals, y_pred, color=colors[si], linewidth=3,
+                x_pred, y_pred, coef, r2 = regress_linear(xvals, yvals)
+                axarr[spi].plot(x_pred, y_pred, color=colors[si], linewidth=3,
                                    alpha=alpha)
                 regr_text = 'b: {:.2f}, r^2: {:.2f}'.format(coef, r2)
                 axarr[spi].text(0.05, 0.05, regr_text, color=colors[si],
