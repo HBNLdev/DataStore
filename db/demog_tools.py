@@ -227,7 +227,7 @@ class Family:
         s.build_graph()
         s.define_rels()
         s.convert_IDrelsdict()
-        s.calc_ratio()
+        s.calc_famfhd()
 
     def build_graph(s):
         ''' builds the graph. individuals are nodes, and edges are directed from parents to children. '''
@@ -244,8 +244,12 @@ class Family:
         s.G = G
 
     def define_rels(s):
+        ''' builds a dict of dicts of sets in which:
+                - outer keys are IDs
+                - inner keys are relative categories
+                - inner values are sets of IDs that belong in that category '''
 
-        ID_preds_dict = defaultdict(lambda: defaultdict(set))
+        ID_rels_dict = defaultdict(lambda: defaultdict(set))
 
         for node in s.G.nodes():
 
@@ -256,7 +260,7 @@ class Family:
                 except KeyError:
                     pred_sex = '?'
                 pred_lbl = pred_sex + 'pred'
-                ID_preds_dict[node][pred_lbl].add(pred)
+                ID_rels_dict[node][pred_lbl].add(pred)
 
                 # predecessors of predecessors (grandparents)
                 for pred_pred in s.G.predecessors(pred):
@@ -265,59 +269,64 @@ class Family:
                     except KeyError:
                         predpred_sex = '?'
                     predpred_lbl = pred_lbl + predpred_sex + 'pred'
-                    ID_preds_dict[node][predpred_lbl].add(pred_pred)
+                    ID_rels_dict[node][predpred_lbl].add(pred_pred)
 
                     # successors of predecessors of predecessors (aunts and uncles)
                     for pred_pred_succ in s.G.successors(pred_pred):
                         predpredsucc_lbl = predpred_lbl + 'succ'
-                        ID_preds_dict[node][predpredsucc_lbl].add(pred_pred_succ)
+                        ID_rels_dict[node][predpredsucc_lbl].add(pred_pred_succ)
 
                 # successors of predecessors (siblings)
                 for pred_succ in s.G.successors(pred):
                     predsucc_lbl = pred_lbl + 'succ'
-                    ID_preds_dict[node][predsucc_lbl].add(pred_succ)
+                    ID_rels_dict[node][predsucc_lbl].add(pred_succ)
 
-        s.ID_preds_dict = ID_preds_dict
+        s.ID_rels_dict = ID_rels_dict
 
     def convert_IDrelsdict(s):
 
-        ID_preds_dict_conv = s.ID_preds_dict.copy()
+        ''' convert the rels dict by collapsing categories containing successors of parents and grandparents
+            into sibling, half-sibling, and parental sibling categories '''
 
-        for ID, cat_dict in s.ID_preds_dict.items():
+        ID_rels_dict_conv = s.ID_rels_dict.copy()
 
-            ID_preds_dict_conv[ID]['sibs'] = cat_dict['Fpredsucc'] & cat_dict['Mpredsucc']
+        for ID, cat_dict in s.ID_rels_dict.items():
+
+            ID_rels_dict_conv[ID]['sibs'] = cat_dict['Fpredsucc'] & cat_dict['Mpredsucc']
             try:
-                ID_preds_dict_conv[ID]['sibs'].remove(ID)
+                ID_rels_dict_conv[ID]['sibs'].remove(ID)
             except KeyError:
                 pass
-            ID_preds_dict_conv[ID]['hsibs'] = cat_dict['Fpredsucc'] ^ cat_dict['Mpredsucc']
-            ID_preds_dict_conv[ID]['Fpredsibs'] = cat_dict['FpredFpredsucc'] & cat_dict['FpredMpredsucc']
+            ID_rels_dict_conv[ID]['hsibs'] = cat_dict['Fpredsucc'] ^ cat_dict['Mpredsucc']
+            ID_rels_dict_conv[ID]['Fpredsibs'] = cat_dict['FpredFpredsucc'] & cat_dict['FpredMpredsucc']
             try:
-                ID_preds_dict_conv[ID]['Fpredsibs'].remove(next(iter(ID_preds_dict_conv[ID]['Fpred'])))
+                ID_rels_dict_conv[ID]['Fpredsibs'].remove(next(iter(ID_rels_dict_conv[ID]['Fpred'])))
             except:
                 pass
-            ID_preds_dict_conv[ID]['Mpredsibs'] = cat_dict['MpredFpredsucc'] & cat_dict['MpredMpredsucc']
+            ID_rels_dict_conv[ID]['Mpredsibs'] = cat_dict['MpredFpredsucc'] & cat_dict['MpredMpredsucc']
             try:
-                ID_preds_dict_conv[ID]['Mpredsibs'].remove(next(iter(ID_preds_dict_conv[ID]['Mpred'])))
+                ID_rels_dict_conv[ID]['Mpredsibs'].remove(next(iter(ID_rels_dict_conv[ID]['Mpred'])))
             except:
                 pass
 
-            del ID_preds_dict_conv[ID]['Fpredsucc']
-            del ID_preds_dict_conv[ID]['Mpredsucc']
-            del ID_preds_dict_conv[ID]['FpredFpredsucc']
-            del ID_preds_dict_conv[ID]['FpredMpredsucc']
-            del ID_preds_dict_conv[ID]['MpredFpredsucc']
-            del ID_preds_dict_conv[ID]['MpredMpredsucc']
+            del ID_rels_dict_conv[ID]['Fpredsucc']
+            del ID_rels_dict_conv[ID]['Mpredsucc']
+            del ID_rels_dict_conv[ID]['FpredFpredsucc']
+            del ID_rels_dict_conv[ID]['FpredMpredsucc']
+            del ID_rels_dict_conv[ID]['MpredFpredsucc']
+            del ID_rels_dict_conv[ID]['MpredMpredsucc']
 
-        s.ID_preds_dict_conv = ID_preds_dict_conv
+        s.ID_rels_dict_conv = ID_rels_dict_conv
 
-    def calc_ratio(s):
+    def calc_famfhd(s):
+
+        ''' using converted rels dict, calculate FHD creating 3 dicts which contain the results '''
 
         fhdratio_dict = dict()
         fhdsum_dict = dict()
         count_dict = dict()
 
-        for ID, cat_dict in s.ID_preds_dict_conv.items():
+        for ID, cat_dict in s.ID_rels_dict_conv.items():
 
             if ID == '40058182':
                 pause = 0
