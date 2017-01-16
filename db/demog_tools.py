@@ -1,7 +1,6 @@
 ''' tools for demographic info, mainly calculating family history density '''
 
 from collections import defaultdict
-from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -19,12 +18,19 @@ def_fields = {f: f for f in default_field_eponyms}
 # def_fields.update(default_dx_sxc)
 
 sex_to_parentfield = {'m': 'fID', 'f': 'mID', 'M': 'fID', 'F': 'mID'}
-score_map = {'self': 1, 'twin': 1,
-             'mother': 0.5, 'father': 0.5, 'fullsib': 0.5, 'child': 0.5,
-             'mgm': 0.25, 'mgf': 0.25, 'fgm': 0.25, 'fgf': 0.25,
-             'msib': 0.25, 'fsib': 0.25,
-             'gp': 0.25, 'parentsib': 0.25, 'gc': 0.25, 'sibchild': 0.25,
-             'halfsib': 0.25}
+indscore_map = {'self': 1, 'twin': 1,
+                'mother': 0.5, 'father': 0.5, 'fullsib': 0.5, 'child': 0.5,
+                'mgm': 0.25, 'mgf': 0.25, 'fgm': 0.25, 'fgf': 0.25,
+                'msib': 0.25, 'fsib': 0.25,
+                'gp': 0.25, 'parentsib': 0.25, 'gc': 0.25, 'sibchild': 0.25,
+                'halfsib': 0.25}
+
+# here, M means male, F means female, pred means predecessor, and sib means sibling
+famscore_map = {'Mpred': 0.5, 'Fpred': 0.5, 'sibs': 0.5,
+                'MpredMpred': 0.25, 'MpredFpred': 0.25,
+                'FpredFpred': 0.25, 'FpredMpred': 0.25,
+                'Mpredsibs': 0.25, 'Fpredsibs': 0.25,
+                'hsibs': 0.25}
 
 
 def conv_159(v):
@@ -85,6 +91,8 @@ def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
 
 
 def prepare_dfs(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
+    ''' prepare the main dataframes used by calc_fhd functions so that they are fit for usage! '''
+
     if rename_cols:
         fd = def_fields.copy()
         fd.update(rename_cols)
@@ -97,10 +105,33 @@ def prepare_dfs(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rena
     return sDF, fDF
 
 
-def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
+def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True,
              degrees=[1, 2], descend=False, cat_norm=True, rename_cols=None):
-    ''' main function to apply to a DF '''
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
+    '''
+
+    inputs:
+
+    in_sDF:     a dataframe indexed by ID or ID + session, including the individuals for whom you want to calculate FHD
+    in_fDF:     a dataframe indexed by ID, including the whole family of the individuals in in_sDF. must include
+                    'ID', 'famID', 'mID', 'fID', 'sex', and aff_col
+    aff_col:    the affectedness column for which to calculate density
+    conv_159:   if True, convert aff_col from a (1, 5, 9) to a (0, 1, nan) coding
+    degrees:    the degrees of relatives to include in density calculations. 1 = primary, 2 = secondary
+    descend:    if True, include descendants in density calculations (i.e. children)
+    cat_norm:   if True, normalize the score from potentially large categories to not exceed its maximum
+                    (this mainly refers to sibling categories)
+    rename_cols: a dict mapping old column names to new column names if the DFs use a different naming scheme
+
+    outputs:
+
+    sDF:        a copy of in_sDF with 3 columns added:
+                    fhd_dx4_ratio   ratio of family history density
+                    fhd_dx4_sum     sum of family history density
+                    n_rels          number of relatives for whom affectedness was known
+
+    '''
+
+    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, conv_159, rename_cols)
 
     # drop missing data of affectedness column from fDF
     # don't do this because they tell us about family structure even if they lack affectedness info
@@ -112,10 +143,31 @@ def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
     return sDF
 
 
-def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
-    ''' fast version of the above that always uses only primary and secondary forebears,
-        and normalizes the score within each sibling category '''
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
+def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, rename_cols=None):
+    '''
+
+        fast version of calc_fhd that always uses only primary and secondary forebears,
+        and normalizes the score within each sibling category
+
+        inputs:
+
+        in_sDF:     a dataframe indexed by ID or ID + session, including the individuals for whom you want to calculate FHD
+        in_fDF:     a dataframe indexed by ID, including the whole family of the individuals in in_sDF. must include
+                        'ID', 'famID', 'mID', 'fID', 'sex', and aff_col
+        aff_col:    the affectedness column for which to calculate density
+        conv_159:   if True, convert aff_col from a (1, 5, 9) to a (0, 1, nan) coding
+        rename_cols: a dict mapping old column names to new column names if the DFs use a different naming scheme
+
+        outputs:
+
+        sDF:        a copy of in_sDF with 3 columns added:
+                        fhd_dx4_ratio   ratio of family history density
+                        fhd_dx4_sum     sum of family history density
+                        n_rels          number of relatives for whom affectedness was known
+
+    '''
+
+    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, conv_159, rename_cols)
 
     all_counts, all_sums, all_ratios = fam_fhd(fDF)
 
@@ -131,6 +183,9 @@ def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, re
 
 
 def fam_fhd(fDF):
+    ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
+        affectedness is known, the FHD sum scores, and the FHD ratio scores '''
+
     all_counts = dict()
     all_sums = dict()
     all_ratios = dict()
@@ -148,7 +203,7 @@ def fam_fhd(fDF):
 
 
 def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
-    ''' row-wise apply function '''
+    ''' row-wise apply function for calc_fhd '''
     famDF = df[df['famID'] == row['famID']]
     I = Individual(row, famDF)
     if 0 in degrees:
@@ -162,86 +217,20 @@ def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
     return I.ratio_score(aff, 1, cat_norm), I.sum_score(aff, 1, cat_norm), I.n_rels
 
 
-def careful_add(d, k, v):
-    if k not in d.keys():
-        d[k] = v
-
-
-famscore_map = {'Mpred': 0.5, 'Fpred': 0.5, 'sibs': 0.5,
-                'MpredMpred': 0.25, 'MpredFpred': 0.25,
-                'FpredFpred': 0.25, 'FpredMpred': 0.25,
-                'Mpredsibs': 0.25, 'Fpredsibs': 0.25,
-                'hsibs': 0.25}
-
-
 class Family:
+    ''' given a famDF containing columns of ID, sex ('M', 'F'), fatherID, and motherID
+        represents a family as a directed graph '''
+
     def __init__(s, famDF):
         s.df = famDF
         s.dx_dict = famDF['cor_alc_dep_dx'].dropna().to_dict()
-        # s.sires_dams()
-        s.build_graph4()
-        s.define_predecessors3()
-        s.convert_IDpreddict3()
-        s.calc_ratio2()
-
-    def sires_dams(s):
-        sire_dams = defaultdict(list)
-        for i, sire, dam in s.df[['ID', 'fID', 'mID']].values:
-            try:
-                int(sire)
-                int(dam)
-                sire_dams[(sire, dam)].append(i)
-            except ValueError:
-                pass
-
-        s.sire_dams = sire_dams
+        s.build_graph()
+        s.define_rels()
+        s.convert_IDrelsdict()
+        s.calc_ratio()
 
     def build_graph(s):
-
-        G = nx.DiGraph()
-
-        for ID, affectedness in s.df[['ID', 'cor_alc_dep_dx']].values:
-            G.add_node(ID, a=affectedness)
-
-        for sd, sib_lst in s.sire_dams.items():
-            sire, dam = sd
-            G.add_edges_from([(sire, sib) for sib in sib_lst])
-            G.add_edges_from([(dam, sib) for sib in sib_lst])
-            for sib1, sib2 in combinations(sib_lst, 2):
-                G.add_edge(sib1, sib2)
-                G.add_edge(sib2, sib1)
-
-        s.G = G
-
-    def build_graph2(s):
-
-        G = nx.DiGraph()
-
-        for ID, affectedness in s.df[['ID', 'cor_alc_dep_dx']].values:
-            G.add_node(ID, a=affectedness)
-
-        for sd, sib_lst in s.sire_dams.items():
-            sire, dam = sd
-            G.add_edges_from([(sire, sib) for sib in sib_lst])
-            G.add_edges_from([(dam, sib) for sib in sib_lst])
-
-        s.G = G
-
-    def build_graph3(s):
-
-        G = nx.DiGraph()
-
-        for ID, sex, affectedness in s.df[['ID', 'sex', 'cor_alc_dep_dx']].values:
-            G.add_node(ID, sex=sex, a=affectedness)
-
-        for sd, sib_lst in s.sire_dams.items():
-            sire, dam = sd
-            G.add_edges_from([(sire, sib) for sib in sib_lst])
-            G.add_edges_from([(dam, sib) for sib in sib_lst])
-
-        s.G = G
-
-    def build_graph4(s):
+        ''' builds the graph. individuals are nodes, and edges are directed from parents to children. '''
 
         G = nx.DiGraph()
 
@@ -254,53 +243,7 @@ class Family:
 
         s.G = G
 
-    def define_predecessors(s):
-
-        ID_preds_dict = defaultdict(dict)
-
-        for node in s.G.nodes():
-            for pred in s.G.predecessors(node):
-                careful_add(ID_preds_dict[node], pred, 0.5)
-
-        for node in s.G.nodes():
-            for pred in s.G.predecessors(node):
-                for pred_pred in s.G.predecessors(pred):
-                    careful_add(ID_preds_dict[node], pred_pred, 0.25)
-            try:
-                del ID_preds_dict[node][node]  # make sure the self does not count as predecessor
-            except KeyError:
-                pass
-
-        s.ID_preds_dict = ID_preds_dict
-
-    def define_predecessors2(s):
-
-        ID_preds_dict = defaultdict(dict)
-
-        for node in s.G.nodes():
-            # predecessors (parents)
-            for pred in s.G.predecessors(node):
-                careful_add(ID_preds_dict[node], pred, 0.5)
-
-        for node in s.G.nodes():
-            for pred in s.G.predecessors(node):
-                # predecessors of predecessors (grandparents)
-                for pred_pred in s.G.predecessors(pred):
-                    careful_add(ID_preds_dict[node], pred_pred, 0.25)
-                    # successors of predecessors of predecessors (aunts and uncles)
-                    for pred_pred_succ in s.G.successors(pred_pred):
-                        careful_add(ID_preds_dict[node], pred_pred_succ, 0.25)
-                # successors of predecessors (siblings)
-                for pred_succ in s.G.successors(pred):
-                    careful_add(ID_preds_dict[node], pred_succ, 0.5)
-            try:
-                del ID_preds_dict[node][node]  # make sure the self does not count as predecessor
-            except KeyError:
-                pass
-
-        s.ID_preds_dict = ID_preds_dict
-
-    def define_predecessors3(s):
+    def define_rels(s):
 
         ID_preds_dict = defaultdict(lambda: defaultdict(set))
 
@@ -336,7 +279,7 @@ class Family:
 
         s.ID_preds_dict = ID_preds_dict
 
-    def convert_IDpreddict3(s):
+    def convert_IDrelsdict(s):
 
         ID_preds_dict_conv = s.ID_preds_dict.copy()
 
@@ -368,7 +311,7 @@ class Family:
 
         s.ID_preds_dict_conv = ID_preds_dict_conv
 
-    def calc_ratio2(s):
+    def calc_ratio(s):
 
         fhdratio_dict = dict()
         fhdsum_dict = dict()
@@ -416,34 +359,6 @@ class Family:
         s.fhdsum_dict = fhdsum_dict
         s.count_dict = count_dict
 
-    def calc_ratio(s):
-
-        fhdratio_dict = dict()
-        fhdsum_dict = dict()
-        count_dict = dict()
-
-        for ID, pred_dict in s.ID_preds_dict.items():
-            fhd_num = 0
-            fhd_denom = 0
-            rel_count = 0
-            for pred, weight in pred_dict.items():
-                try:
-                    fhd_num += weight * s.dx_dict[pred]
-                    fhd_denom += weight
-                    rel_count += 1
-                except KeyError:
-                    pass
-            count_dict[ID] = rel_count
-            try:
-                fhdratio_dict[ID] = fhd_num / fhd_denom
-                fhdsum_dict[ID] = fhd_num
-            except ZeroDivisionError:
-                pass
-
-        s.fhdratio_dict = fhdratio_dict
-        s.fhdsum_dict = fhdsum_dict
-        s.count_dict = count_dict
-
 
 class Individual:
     ''' represents one person, can calculate density of some affectedness
@@ -475,7 +390,7 @@ class Individual:
 
         score_num = score_denom = 0
         for rel_type, rel_IDs in s.rel_dict.items():
-            weight = score_map[rel_type]
+            weight = indscore_map[rel_type]
             tmp_score = tmp_count = 0
             for rel_ID in rel_IDs:
                 try:
@@ -509,7 +424,7 @@ class Individual:
 
         score_num = score_denom = 0
         for rel_type, rel_IDs in s.rel_dict.items():
-            weight = score_map[rel_type]
+            weight = indscore_map[rel_type]
             tmp_score = tmp_count = 0
             for rel_ID in rel_IDs:
                 try:
@@ -540,7 +455,7 @@ class Individual:
         ''' score FHD as a sum '''
         score_num = known_count = 0
         for rel_type, rel_IDs in s.rel_dict.items():
-            weight = score_map[rel_type]
+            weight = indscore_map[rel_type]
             tmp_score = tmp_count = 0
             for rel_ID in rel_IDs:
                 try:
@@ -573,7 +488,7 @@ class Individual:
 
         score_num = known_count = 0
         for rel_type, rel_IDs in s.rel_dict.items():
-            weight = score_map[rel_type]
+            weight = indscore_map[rel_type]
             tmp_score = tmp_count = 0
             for rel_ID in rel_IDs:
                 try:
