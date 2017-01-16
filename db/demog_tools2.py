@@ -1,7 +1,11 @@
 ''' tools for demographic info, mainly calculating family history density '''
 
-import numpy as np
 from collections import defaultdict
+from itertools import combinations
+
+import networkx as nx
+
+import numpy as np
 
 default_field_eponyms = {'ID', 'famID', 'mID', 'fID', 'sex', 'twin'}
 # default_dx_sxc = {'cor_alc_dep_dx_fam': 'fam_dx4',
@@ -74,9 +78,9 @@ def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
     
     return df
 
-def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
-                        degrees=[1, 2], descend=False, rename_cols=None):
-    ''' main function to apply to a DF '''
+
+def prepare_dfs(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
+
     if rename_cols:
         fd = def_fields.copy()
         fd.update(rename_cols)
@@ -85,13 +89,21 @@ def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
 
     sDF = prepare_for_fhd(in_sDF)
     fDF = prepare_for_fhd(in_fDF, [aff_col], do_conv_159)
+
+    return sDF, fDF
+
+
+def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
+                        degrees=[1, 2], descend=False, cat_norm=True, rename_cols=None):
+    ''' main function to apply to a DF '''
+    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
     
     # drop missing data of affectedness column from fDF
     # don't do this because they tell us about family structure even if they lack affectedness info
     # fDF = fDF.dropna(subset=[aff_col])
 
     sDF['fhd_dx4_ratio'], sDF['fhd_dx4_sum'], sDF['n_rels'] = \
-            zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF, aff_col]))
+            zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF, aff_col, degrees, descend, cat_norm]))
 
     return sDF
     
@@ -108,7 +120,275 @@ def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
     print('.', end='')
     I.count(aff)
     return I.ratio_score(aff, 1, cat_norm), I.sum_score(aff, 1, cat_norm), I.n_rels
-           
+
+
+def careful_add(d, k, v):
+    if k not in d.keys():
+        d[k] = v
+
+
+famscore_map = {'Mpred':0.5, 'Fpred':0.5, 'sibs':0.5,
+             'MpredMpred': 0.25, 'MpredFpred': 0.25,
+             'FpredFpred': 0.25, 'FpredMpred': 0.25,
+             'Mpredsibs': 0.25, 'Fpredsibs': 0.25,
+             'hsibs': 0.25}
+
+class Family:
+
+    def __init__(s, famDF):
+        s.df = famDF
+        s.dx_dict = famDF['cor_alc_dep_dx'].dropna().to_dict()
+        s.sires_dams()
+        s.build_graph3()
+        s.define_predecessors3()
+        s.convert_IDpreddict3()
+        s.calc_ratio2()
+
+    def sires_dams(s):
+        sire_dams = defaultdict(list)
+        for i, sire, dam in s.df[['ID', 'fID', 'mID']].values:
+            try:
+                int(sire)
+                int(dam)
+                sire_dams[(sire, dam)].append(i)
+            except ValueError:
+                pass
+
+        s.sire_dams = sire_dams
+
+    def build_graph(s):
+
+        G = nx.DiGraph()
+
+        for ID, affectedness in s.df[['ID', 'cor_alc_dep_dx']].values:
+            G.add_node(ID, a=affectedness)
+
+        for sd, sib_lst in s.sire_dams.items():
+            sire, dam = sd
+            G.add_edges_from([(sire, sib) for sib in sib_lst])
+            G.add_edges_from([(dam, sib) for sib in sib_lst])
+            for sib1, sib2 in combinations(sib_lst, 2):
+                G.add_edge(sib1, sib2)
+                G.add_edge(sib2, sib1)
+
+        s.G = G
+
+    def build_graph2(s):
+
+        G = nx.DiGraph()
+
+        for ID, affectedness in s.df[['ID', 'cor_alc_dep_dx']].values:
+            G.add_node(ID, a=affectedness)
+
+        for sd, sib_lst in s.sire_dams.items():
+            sire, dam = sd
+            G.add_edges_from([(sire, sib) for sib in sib_lst])
+            G.add_edges_from([(dam, sib) for sib in sib_lst])
+
+        s.G = G
+
+    def build_graph3(s):
+
+        G = nx.DiGraph()
+
+        for ID, sex, affectedness in s.df[['ID', 'sex', 'cor_alc_dep_dx']].values:
+            G.add_node(ID, sex=sex, a=affectedness)
+
+        for sd, sib_lst in s.sire_dams.items():
+            sire, dam = sd
+            G.add_edges_from([(sire, sib) for sib in sib_lst])
+            G.add_edges_from([(dam, sib) for sib in sib_lst])
+
+        s.G = G
+
+    def define_predecessors(s):
+
+        ID_preds_dict = defaultdict(dict)
+
+        for node in s.G.nodes():
+            for pred in s.G.predecessors(node):
+                careful_add(ID_preds_dict[node], pred, 0.5)
+
+        for node in s.G.nodes():
+            for pred in s.G.predecessors(node):
+                for pred_pred in s.G.predecessors(pred):
+                    careful_add(ID_preds_dict[node], pred_pred, 0.25)
+            try:
+                del ID_preds_dict[node][node] # make sure the self does not count as predecessor
+            except KeyError:
+                pass
+
+        s.ID_preds_dict = ID_preds_dict
+
+
+    def define_predecessors2(s):
+
+        ID_preds_dict = defaultdict(dict)
+
+        for node in s.G.nodes():
+            # predecessors (parents)
+            for pred in s.G.predecessors(node):
+                careful_add(ID_preds_dict[node], pred, 0.5)
+
+        for node in s.G.nodes():
+            for pred in s.G.predecessors(node):
+                # predecessors of predecessors (grandparents)
+                for pred_pred in s.G.predecessors(pred):
+                    careful_add(ID_preds_dict[node], pred_pred, 0.25)
+                    # successors of predecessors of predecessors (aunts and uncles)
+                    for pred_pred_succ in s.G.successors(pred_pred):
+                        careful_add(ID_preds_dict[node], pred_pred_succ, 0.25)
+                # successors of predecessors (siblings)
+                for pred_succ in s.G.successors(pred):
+                    careful_add(ID_preds_dict[node], pred_succ, 0.5)
+            try:
+                del ID_preds_dict[node][node] # make sure the self does not count as predecessor
+            except KeyError:
+                pass
+
+        s.ID_preds_dict = ID_preds_dict
+
+    def define_predecessors3(s):
+
+        ID_preds_dict = defaultdict(lambda: defaultdict(set))
+
+        for node in s.G.nodes():
+
+            # predecessors (parents)
+            for pred in s.G.predecessors(node):
+                try:
+                    pred_sex = s.G.node[pred]['sex']
+                except KeyError:
+                    pred_sex = '?'
+                pred_lbl = pred_sex + 'pred'
+                ID_preds_dict[node][pred_lbl].add(pred)
+
+                # predecessors of predecessors (grandparents)
+                for pred_pred in s.G.predecessors(pred):
+                    try:
+                        predpred_sex = s.G.node[pred_pred]['sex']
+                    except KeyError:
+                        predpred_sex = '?'
+                    predpred_lbl = pred_lbl + predpred_sex + 'pred'
+                    ID_preds_dict[node][predpred_lbl].add(pred_pred)
+
+                    # successors of predecessors of predecessors (aunts and uncles)
+                    for pred_pred_succ in s.G.successors(pred_pred):
+                        predpredsucc_lbl = predpred_lbl + 'succ'
+                        ID_preds_dict[node][predpredsucc_lbl].add(pred_pred_succ)
+
+                # successors of predecessors (siblings)
+                for pred_succ in s.G.successors(pred):
+                    predsucc_lbl = pred_lbl + 'succ'
+                    ID_preds_dict[node][predsucc_lbl].add(pred_succ)
+
+        s.ID_preds_dict = ID_preds_dict
+
+
+    def convert_IDpreddict3(s):
+
+        ID_preds_dict_conv = s.ID_preds_dict.copy()
+
+        for ID, cat_dict in s.ID_preds_dict.items():
+            
+            ID_preds_dict_conv[ID]['sibs'] = cat_dict['Fpredsucc'] & cat_dict['Mpredsucc']
+            try:
+                ID_preds_dict_conv[ID]['sibs'].remove(ID)
+            except KeyError:
+                pass
+            ID_preds_dict_conv[ID]['hsibs'] = cat_dict['Fpredsucc'] ^ cat_dict['Mpredsucc']
+            ID_preds_dict_conv[ID]['Fpredsibs'] = cat_dict['FpredFpredsucc'] & cat_dict['FpredMpredsucc']
+            try:
+                ID_preds_dict_conv[ID]['Fpredsibs'].remove(next(iter(ID_preds_dict_conv[ID]['Fpred'])))
+            except:
+                pass
+            ID_preds_dict_conv[ID]['Mpredsibs'] = cat_dict['MpredFpredsucc'] & cat_dict['MpredMpredsucc']
+            try:
+                ID_preds_dict_conv[ID]['Mpredsibs'].remove(next(iter(ID_preds_dict_conv[ID]['Mpred'])))
+            except:
+                pass
+            
+            del ID_preds_dict_conv[ID]['Fpredsucc']
+            del ID_preds_dict_conv[ID]['Mpredsucc']
+            del ID_preds_dict_conv[ID]['FpredFpredsucc']
+            del ID_preds_dict_conv[ID]['FpredMpredsucc']
+            del ID_preds_dict_conv[ID]['MpredFpredsucc']
+            del ID_preds_dict_conv[ID]['MpredMpredsucc']
+
+        s.ID_preds_dict_conv = ID_preds_dict_conv
+
+
+    def calc_ratio2(s):
+
+        fhdratio_dict = dict()
+        fhdsum_dict = dict()
+        count_dict = dict()
+
+        for ID, cat_dict in s.ID_preds_dict_conv.items():
+            fhd_num = 0
+            fhd_denom = 0
+            rel_count = 0
+
+            for cat, pred_set in cat_dict.items():
+                try:
+                    weight = famscore_map[cat]
+                except KeyError:
+                    continue
+                tmp_fhd_num = 0
+                tmp_count = 0
+                for pred in pred_set:
+                    try:
+                        tmp_fhd_num += s.dx_dict[pred]
+                        tmp_count += 1
+                    except KeyError:
+                        pass
+                try:
+                    fhd_num += (tmp_fhd_num / tmp_count) * weight
+                    fhd_denom += weight
+                    rel_count += tmp_count
+                except ZeroDivisionError:
+                    pass
+
+            count_dict[ID] = rel_count
+            try:
+                fhdratio_dict[ID] = fhd_num / fhd_denom
+                fhdsum_dict[ID] = fhd_num
+            except ZeroDivisionError:
+                pass
+
+        s.fhdratio_dict = fhdratio_dict
+        s.fhdsum_dict = fhdsum_dict
+        s.count_dict = count_dict
+
+
+    def calc_ratio(s):
+
+        fhdratio_dict = dict()
+        fhdsum_dict = dict()
+        count_dict = dict()
+
+        for ID, pred_dict in s.ID_preds_dict.items():
+            fhd_num = 0
+            fhd_denom = 0
+            rel_count = 0
+            for pred, weight in pred_dict.items():
+                try:
+                    fhd_num += weight * s.dx_dict[pred]
+                    fhd_denom += weight
+                    rel_count += 1
+                except KeyError:
+                    pass
+            count_dict[ID] = rel_count
+            try:
+                fhdratio_dict[ID] = fhd_num / fhd_denom
+                fhdsum_dict[ID] = fhd_num
+            except ZeroDivisionError:
+                pass
+
+        s.fhdratio_dict = fhdratio_dict
+        s.fhdsum_dict = fhdsum_dict
+        s.count_dict = count_dict
+
 
 class Individual:
     ''' represents one person, can calculate density of some affectedness
@@ -128,7 +408,7 @@ class Individual:
 
     def add_rel(s, ID, relation):
         ''' add a relative to the dict of relatives '''
-        if ID is not s.ID and ID not in s.rel_set and isinstance(ID, str):
+        if ID != s.ID and ID not in s.rel_set and isinstance(ID, str):
             s.rel_set.update({ID})
             s.rel_dict[relation].append(ID)
 
