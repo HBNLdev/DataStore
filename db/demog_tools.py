@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 import networkx as nx
+import graphviz as gv
 
 default_field_eponyms = {'ID', 'famID', 'mID', 'fID', 'sex', 'twin'}
 # default_dx_sxc = {'cor_alc_dep_dx_fam': 'fam_dx4',
@@ -221,11 +222,16 @@ def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
     return I.ratio_score(aff, 1, cat_norm), I.sum_score(aff, 1, cat_norm), I.n_rels
 
 
+
+sex_shape = {'M': 'square', 'F': 'circle', '?': 'polygon'}
+dx_fillcolor = {0: '#FFFFFF', 1: '#000000'}
+dx_wordcolor = {0: '#000000', 1: '#FFFFFF'}
+
 class Family:
     ''' given a famDF containing columns of ID, sex ('M', 'F'), fatherID, and motherID
         represents a family as a directed graph '''
 
-    def __init__(s, famDF):
+    def __init__(s, famDF, calc_degrees=(1, 2)):
         s.df = famDF
         s.dx_dict = famDF['cor_alc_dep_dx'].dropna().to_dict()
         s.G = s.build_graph()
@@ -243,6 +249,35 @@ class Family:
             G.add_edge(mID, ID)
 
         return G
+
+    def build_graph_gv(s):
+        ''' builds the graph in graphviz (for plotting) '''
+
+        D = gv.Digraph(format='svg')
+
+        for ID, fID, mID, sex in s.df[['ID', 'fID', 'mID', 'sex']].values:
+            try:
+                fill_color = dx_fillcolor[s.dx_dict[ID]]
+                word_color = dx_wordcolor[s.dx_dict[ID]]
+                style = 'filled'
+            except KeyError:
+                fill_color = '#808080'
+                word_color = '#000000'
+                style = 'filled,dashed'
+            # D.node(ID, label=ID, shape=sex_shape[sex], fontcolor=word_color,
+            D.node(ID, label='', shape=sex_shape[sex], fontcolor=word_color,
+                         fillcolor=fill_color, style=style)
+            try:
+                # D.node(fID, label=fID, shape='square')
+                # D.node(mID, label=mID, shape='square')
+                D.node(fID, label='', shape='square')
+                D.node(mID, label='', shape='square')
+                D.edge(fID, ID)
+                D.edge(mID, ID)
+            except TypeError:
+                pass
+
+        return D
 
     def define_rels(s):
         ''' builds a dict of dicts of sets in which:
