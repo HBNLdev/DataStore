@@ -1,6 +1,7 @@
 ''' tools for demographic info, mainly calculating family history density '''
 
 from collections import defaultdict
+from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -185,6 +186,30 @@ def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, renam
     return sDF
 
 
+def calc_fhd_fast2(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, rename_cols=None):
+    '''
+
+    second version of calc_fhd_fast that uses a different algorithm
+
+    '''
+
+    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, conv_159, rename_cols)
+
+    all_counts, all_sums, all_ratios = fam_fhd2(fDF)
+
+    count_series = pd.Series(all_counts, name='n_rels')
+    sum_series = pd.Series(all_sums, name='fhd_dx4_sum')
+    ratio_series = pd.Series(all_ratios, name='fhd_dx4_ratio')
+
+    sDF['fhd_dx4_ratio'] = ratio_series
+    sDF['fhd_dx4_sum'] = sum_series
+    sDF['n_rels'] = count_series
+
+    sDF.ix[sDF['n_rels'].isnull(), 'n_rels'] = 0
+
+    return sDF
+
+
 def fam_fhd(fDF, calc_degrees={1, 2}):
     ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
         affectedness is known, the FHD sum scores, and the FHD ratio scores '''
@@ -207,6 +232,28 @@ def fam_fhd(fDF, calc_degrees={1, 2}):
     return all_counts, all_sums, all_ratios
 
 
+def fam_fhd2(fDF, calc_degrees={1, 2}):
+    ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
+        affectedness is known, the FHD sum scores, and the FHD ratio scores '''
+
+    all_counts = dict()
+    all_sums = dict()
+    all_ratios = dict()
+
+    fams = fDF['famID'].unique()
+
+    for fam in fams:
+        famDF = fDF[fDF['famID'] == fam]
+        famO = Family(famDF, calc_degrees=calc_degrees)
+        famO.G2 = famO.build_graph2()
+        famO.calc_famfhd2()
+        all_counts.update(famO.count_dict)
+        all_sums.update(famO.fhdsum_dict)
+        all_ratios.update(famO.fhdratio_dict)
+
+    return all_counts, all_sums, all_ratios
+
+
 def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
     ''' row-wise apply function for calc_fhd '''
     famDF = df[df['famID'] == row['famID']]
@@ -222,7 +269,6 @@ def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
     return I.ratio_score(aff, 1, cat_norm), I.sum_score(aff, 1, cat_norm), I.n_rels
 
 
-
 sex_shape = {'M': 'square', 'F': 'circle', '?': 'polygon'}
 dx_fillcolor = {0: '#FFFFFF', 1: '#000000'}
 dx_wordcolor = {0: '#000000', 1: '#FFFFFF'}
@@ -235,6 +281,7 @@ class Family:
         s.df = famDF
         s.dx_dict = famDF['cor_alc_dep_dx'].dropna().to_dict()
         s.G = s.build_graph()
+        # s.G2 = s.build_graph2()
 
     def build_graph(s):
         ''' builds the graph. individuals are nodes, and edges are directed from parents to children. '''
@@ -243,12 +290,43 @@ class Family:
 
         for ID, IDsex, fID, mID in s.df[['ID', 'sex', 'fID', 'mID']].values:
             G.add_node(ID, sex=IDsex)
-            G.add_node(fID, sex='M')
-            G.add_node(mID, sex='F')
+            # G.add_node(fID, sex='M')
+            # G.add_node(mID, sex='F')
             G.add_edge(fID, ID)
             G.add_edge(mID, ID)
 
         return G
+
+    def calc_sires_dams(s):
+        sire_dams = defaultdict(list)
+        for i, sire, dam in s.df[['ID', 'fID', 'mID']].values:
+            try:
+                int(sire)
+                int(dam)
+                sire_dams[(sire, dam)].append(i)
+            except ValueError:
+                pass
+
+        s.sire_dams = sire_dams
+
+    def build_graph2(s):
+
+        s.calc_sires_dams()
+
+        G = nx.Graph()
+
+        for ID, affectedness in s.df[['ID', 'cor_alc_dep_dx']].values:
+            G.add_node(ID, a=affectedness)
+
+        for sd, sib_lst in s.sire_dams.items():
+            sire, dam = sd
+            G.add_edges_from([(sire, sib) for sib in sib_lst])
+            G.add_edges_from([(dam, sib) for sib in sib_lst])
+            for sib1, sib2 in combinations(sib_lst, 2):
+                G.add_edge(sib1, sib2)
+
+        return G
+
 
     def build_graph_gv(s):
         ''' builds the graph in graphviz (for plotting) '''
@@ -264,17 +342,18 @@ class Family:
                 fill_color = '#808080'
                 word_color = '#000000'
                 style = 'filled,dashed'
-            # D.node(ID, label=ID, shape=sex_shape[sex], fontcolor=word_color,
-            D.node(ID, label='', shape=sex_shape[sex], fontcolor=word_color,
+            D.node(ID, label=ID, shape=sex_shape[sex], fontcolor=word_color,
                          fillcolor=fill_color, style=style)
+            # D.node(ID, label='', shape=sex_shape[sex], fontcolor=word_color,
+                         # fillcolor=fill_color, style=style)
             try:
                 # D.node(fID, label=fID, shape='square')
-                # D.node(mID, label=mID, shape='square')
-                D.node(fID, label='', shape='square')
-                D.node(mID, label='', shape='square')
+                # D.node(mID, label=mID, shape='circle')
+                # D.node(fID, label='', shape='square')
+                # D.node(mID, label='', shape='square')
                 D.edge(fID, ID)
                 D.edge(mID, ID)
-            except TypeError:
+            except AttributeError:
                 pass
 
         return D
@@ -391,6 +470,46 @@ class Family:
                     rel_count += tmp_count
                 except ZeroDivisionError:
                     pass
+
+            count_dict[ID] = rel_count
+            try:
+                fhdratio_dict[ID] = fhd_num / fhd_denom
+                fhdsum_dict[ID] = fhd_num
+            except ZeroDivisionError:
+                pass
+
+        s.fhdratio_dict = fhdratio_dict
+        s.fhdsum_dict = fhdsum_dict
+        s.count_dict = count_dict
+
+    def calc_famfhd2(s):
+
+        ''' using converted rels dict, calculate FHD creating 3 dicts which contain the results '''
+
+        fhdratio_dict = dict()
+        fhdsum_dict = dict()
+        count_dict = dict()
+
+        for ID in s.G2.nodes():
+
+            fhd_num = 0
+            fhd_denom = 0
+            rel_count = 0
+
+            for rel, dx in s.dx_dict.items():
+
+                try:
+                    distance = nx.shortest_path_length(s.G2, source=ID, target=rel)
+                except nx.NetworkXNoPath:
+                    continue
+                weight = 1 / (2 ** distance)
+                val = weight * dx
+                # print(rel, distance, dx, weight, val)
+                
+                if distance > 0:
+                    fhd_num += val
+                    fhd_denom += weight
+                    rel_count += 1
 
             count_dict[ID] = rel_count
             try:
