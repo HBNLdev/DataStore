@@ -5,9 +5,9 @@ processing_module = sys.modules[__name__]
 import pandas as pd
 
 from .organization import MongoBacked, MongoConn, flatten_dict
-from .quest_import import quest_sparser_sub
-from .master_info import (subjects_sparser_sub, subjects_sparser_add,
-                            session_sadd)
+# from .quest_import import quest_sparser_sub
+# from .master_info import (subjects_sparser_sub, subjects_sparser_add,
+#                             session_sadd)
 def characterize( input ):
     ''' general function to describe input
     '''

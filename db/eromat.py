@@ -963,7 +963,9 @@ def PR_load_session_file(path, cols=standard_cols ):
     df = pd.read_csv( path, converters={'ID':str})
     df.set_index(['ID','session'], inplace=True)
     
-    comp_df = df[ cols ]
+
+    cols_use = df.columns.intersection(cols)
+    comp_df = df[ cols_use ]
     
     return comp_df
 PR_load_session_file.store_name = 'db/eromat.load_session_file'
