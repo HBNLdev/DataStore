@@ -80,6 +80,7 @@ def handle_dupes(join_df_sdate, new_datecol, fup_col, session_datecol):
 
 
 def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
+                            diff_thresh=True, days_thresh=730,
                             min_age=-np.inf, max_age=np.inf):
     ''' given: 1) a compilation df that has had new info columns joined to it,
         2) the date column name from that new info,
@@ -93,6 +94,7 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
     uID_tup_dict = dict()
     iter_df = comp_dfj.copy()
     iter_df['date_diff'] = (iter_df[new_datecol] - iter_df['date']).abs()
+
     IDs = list(set(iter_df.index.get_level_values('ID')))
     needed_cols = [new_datecol, fup_col, 'date', 'age']
     for ID in IDs:
@@ -125,12 +127,18 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
     new_df_joincols = iter_df.loc[new_index, joined_cols]
     new_df_nonjoincols = iter_df.drop(joined_cols, axis=1)
     new_df_nonjoincols.index = new_index
+
     new_df = pd.concat([new_df_nonjoincols, new_df_joincols], axis=1)
     new_df.index = iter_df.index
     # new_df.rename({'date_diff':})
     new_colorder = [col for col in new_df.columns if col != 'date_diff'] + \
                    ['date_diff']
     new_df = new_df[new_colorder]
+
+    if diff_thresh:
+        thresh_timedelta = pd.Timedelta(days=days_thresh)
+        new_df.ix[new_df['date_diff'] >= thresh_timedelta, joined_cols] = np.nan
+
     new_df.rename(columns={'date_diff': fup_col[:3] + '_date_diff'},
                   inplace=True)
 

@@ -86,20 +86,16 @@ def contents_eq(df1_in, df2_in, join_how='inner', lsuffix='_larry', rsuffix='_ri
         print('differing columns will be appended to the diff dataframe')
     print('~~~')
 
-    df1_tmp = df1_in.fillna('NA')
-    df2_tmp = df2_in.fillna('NA')
-    lsl = len(lsuffix)
-    rsl = len(rsuffix)
+    df1_tmp, df2_tmp = df1_in.fillna('NA'), df2_in.fillna('NA')    
     dfj = df1_tmp.join(df2_tmp, how=join_how, lsuffix=lsuffix, rsuffix=rsuffix)
 
+    lsl, rsl = len(lsuffix), len(rsuffix)
     nonmatch_cols = [col for col in dfj.columns if
                      col[-lsl:] != lsuffix and col[-rsl:] != rsuffix]
-
     df1_cols = [col for col in dfj.columns if col[-lsl:] == lsuffix]
     df2_cols = [col for col in dfj.columns if col[-rsl:] == rsuffix]
 
-    df1 = dfj[df1_cols + nonmatch_cols]
-    df2 = dfj[df2_cols + nonmatch_cols]
+    df1, df2 = dfj[df1_cols + nonmatch_cols], dfj[df2_cols + nonmatch_cols]
 
     if df1.shape != df2.shape:
         print('something went wrong')
@@ -109,34 +105,26 @@ def contents_eq(df1_in, df2_in, join_how='inner', lsuffix='_larry', rsuffix='_ri
     df2.rename(columns={col: col[:-rsl] for col in df2.columns if col[-rsl:] == rsuffix}, inplace=True)
 
     ne_bool = df1 != df2
-
     total_diffs = ne_bool.sum().sum()
     print('there were a total of', total_diffs, 'differences')
 
-    alldiff_cols = ne_bool.all(0)
-    alldiff_rows = ne_bool.all(1)
+    alldiff_rows, alldiff_cols = ne_bool.all(1), ne_bool.all(0)
+    anydiff_rows, anydiff_cols = ne_bool.any(1), ne_bool.any(0)
 
-    n_alldiffcols = alldiff_cols.sum()
+    n_anydiffrows = anydiff_rows.sum()
+    n_anydiffcols = anydiff_cols.sum()
     n_alldiffrows = alldiff_rows.sum()
+    n_alldiffcols = alldiff_cols.sum()
 
     if n_alldiffcols > 0 or n_alldiffrows > 0:
         print(n_alldiffcols, 'columns and', n_alldiffrows, 'rows were totally different')
         print('the completely differing rows were', df1.index[alldiff_cols])
         print('the completely differing columns were', df1.columns[alldiff_rows])
 
-    anydiff_cols = ne_bool.any(0)
-    anydiff_rows = ne_bool.any(1)
-
-    n_anydiffcols = anydiff_cols.sum()
-    n_anydiffrows = anydiff_rows.sum()
-
     if n_anydiffcols > 0 or n_anydiffrows > 0:
         print(n_anydiffcols, 'columns and', n_anydiffrows, 'rows had differing vals')
         print('the differing rows were', df1.index[anydiff_rows])
         print('the differing columns were', df1.columns[anydiff_cols])
-
-    # return lists of differing rows / columns?
-    # return df1.index[anydiff_rows].tolist(), df1.columns[anydiff_cols].tolist()
 
     # return a dataframe showing the differences
     out_cols = nonmatch_cols.copy()
