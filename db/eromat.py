@@ -451,6 +451,70 @@ class EROStack:
         mean_df = pd.DataFrame(mean_array_reshaped, index=s.data_df.index, columns=column_mi)
         return mean_df
 
+
+    def tf_mean_lowmem_multi_winchantups(s, windows_channels):
+        ''' given a list of tf windows, which are 4-tuples of (t1, t2, f1, f2),
+            calculate means in those windows for all channels and subjects '''
+        winchan_inds = []
+        winchan_lbl_tups = []
+        channels = set()
+        for winchans in windows_channels:
+            win = winchans[:4]
+            win_chans = winchans[4]
+            winds = dict()
+            for freq_len, freq_array in s.freqlen_dict.items():
+                winds[freq_len] = (convert_scale(s.params['Times'], win[0]),
+                                   convert_scale(s.params['Times'], win[1]),
+                                   convert_scale(freq_array, win[2]),
+                                   convert_scale(freq_array, win[3]))
+            time_lbl = 'to'.join([str(t) for t in win[0:2]]) + 'ms'
+            freq_lbl = 'to'.join([str(f) for f in win[2:4]]) + 'Hz'
+            win_lbl = '_'.join([time_lbl, freq_lbl])
+            print(winds)
+            winchan_inds.append((winds, win_chans))
+            for chan in win_chans:
+                winchan_lbl_tups.append((win_lbl, chan))
+                channels.add(chan)
+
+        cinds = dict()
+        minds = dict()
+        for chan_len, chan_lst in s.chanlen_dict.items():
+            minds[chan_len] = False
+            tmp_cinds = dict()
+            for c in channels:
+                try:
+                    tmp_cinds[c] = chan_lst.index(c)
+                except ValueError:
+                    print(c, 'not present for', chan_len, '--> filling with nans')
+                    minds[chan_len] = True
+            cinds[chan_len] = tmp_cinds
+
+        n_files = len(s.data_df['path'].values)
+        n_winchans = len(winchan_lbl_tups)
+        mean_array = np.empty((n_files, n_winchans))
+        mean_array.fill(np.nan)  # fill with nan
+
+        fpi = 0
+        for fp, fl, cl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values, s.data_df['chan_len'].values)):
+            data_vec = fp['data']
+            wci = 0
+            for winds, win_chans in winchan_inds:
+                data_vec_win = data_vec[:, winds[fl][0]:winds[fl][1] + 1,
+                                           winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                for chan in win_chans:
+                    try:
+                        chan_ind = cinds[cl][chan]
+                        mean_array[fpi, wci] = data_vec_win[chan_ind]
+                    except KeyError:
+                        pass
+                    wci += 1
+            fpi += 1
+
+        column_mi = pd.MultiIndex.from_tuples(winchan_lbl_tups, names=['TFROI', 'channel'])
+
+        mean_df = pd.DataFrame(mean_array, index=s.data_df.index, columns=column_mi)
+        return mean_df
+
     def sub_mean_lowmem(s):
         ''' calculate a grand (cross-subject) mean.
             creates a numpy array of shape (chans, freqs, times) '''
