@@ -124,15 +124,9 @@ class SourceInfo(MongoBacked):
 
 class Neuropsych(MongoBacked):
     
-    ''' results of neuropsychological tests (TOLT, CBST) '''
+    ''' results of neuropsychological tests '''
 
     collection = 'neuropsych'
-
-    def __init__(s, testname, info={}):
-        I = s.def_info.copy()
-        I.update({'testname': testname})
-        I.update(info)
-        s.data = I
 
 
 class RawEEGData(MongoBacked):

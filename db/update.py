@@ -1,16 +1,12 @@
 '''update collections'''
 
-from datetime import timedelta
 from tqdm import tqdm
 
 import numpy as np
 import pandas as pd
 
-from .master_info import load_master, master_path
-from .file_handling import identify_files, MT_File
-from .organization import Mdb, Subject, SourceInfo, Session, ERPPeak
+from .organization import Mdb
 from .compilation import buildframe_fromdocs
-
 
 def subjects_from_followups():
 
@@ -66,97 +62,63 @@ def sessions_from_followups():
                                                date_field: row['date']}})    
 
 
-def subjects():
+def match_fups_sessions_flex(coll, nonID_col, nonID_val, date_col='date'):
+    print('matching', coll, 'IDs to sessions and followups for',
+        nonID_col, nonID_val, 'using', date_col)
 
-    master, mi_mtime = load_master()
-    source_rec = Mdb['subjects'].find({'_source': {'$exists': True}})
-
-    # compare source file names and date modified
-
-    if master_path == source_rec[0]['_source'][0] and \
-            abs(mi_mtime - source_rec[0]['_source'][1])<timedelta(0.00001):
-        print('up to date')
-        return  # same path and older/same mdate, no update required
-
-    else:  # new masterfile, do update
-
-        old_ids = set(rec['ID'] for rec in Mdb['subjects'].find(
-            {'ID': {'$exists': True}}))
-        new_ids = set(master['ID'].tolist())  # sets
-        add_ids = new_ids - old_ids
-        print('the following IDs are being added:')
-        print(add_ids)
-
-        addID_df = master[master['ID'].isin(add_ids)]
-        for rec in addID_df.to_dict(orient='records'):
-            sO = Subject(rec)
-            sO.storeNaTsafe()
-            # can do sessions here too
-
-        sourceO = SourceInfo('subjects', [master_path, mi_mtime])
-        sourceO.update()
-
-
-def sessions():
-
-    master, mi_mtime = load_master()
-    source_rec = Mdb['sessions'].find({'_source': {'$exists': True}})
-
-    if master_path == source_rec[0]['_source'][0] and \
-            abs(mi_mtime - source_rec[0]['_source'][1])<timedelta(0.00001):
-        print('up to date')
+    match_collection = Mdb[coll]
+    match_query = {nonID_col: nonID_val}
+    match_proj = {'_id': 1, 'ID': 1, date_col: 1,}
+    match_docs = match_collection.find(match_query, match_proj)
+    match_df = buildframe_fromdocs(match_docs, inds=['ID'])
+    if match_df.empty:
+        print('no matchionnaire docs of this kind found')
         return
+    if date_col not in match_df.columns:
+        print('no date info available for this matchionnaire-fup combination')
+        return
+    match_df.rename(columns={date_col: 'match_date', '_id': 'match__id'}, inplace=True)
+    IDs = match_df.index.tolist()
 
-    else:
+    session_proj = {'_id': 1, 'ID': 1, 'session': 1, 'date': 1, 'followup': 1}
+    session_docs = Mdb['sessions'].find({'ID': {'$in': IDs}}, session_proj)
+    session_df = buildframe_fromdocs(session_docs, inds=['ID'])
+    if session_df.empty:
+        print('no session docs of this kind found')
+        return
+    session_df.rename(columns={'date': 'session_date', '_id': 'session__id'}, inplace=True)
 
-        old_uids = set((r['ID'], r['session']) for r in Mdb['sessions'].find(
-            {'ID': {'$exists': True}, 'session': {'$exists': True}}))
+    resolve_df = session_df.join(match_df)
+    resolve_df['date_diff'] = (resolve_df['session_date'] - resolve_df['match_date']).abs()
+    resolve_df.set_index('session', append=True, inplace=True)
+    resolve_df.set_index('followup', append=True, inplace=True)
 
-        df_lst = []
-        for char in 'abcdefghijk':
-            sessionDF = master[master[char + '-run'].notnull()]
-            for col in ['raw', 'date', 'age']:
-                sessionDF[col] = sessionDF[char + '-' + col]
-            sessionDF['session'] = char
-            df_lst.append(sessionDF)
-        allsessionDF = pd.concat(df_lst)
-
-        newuidDF = allsessionDF[['ID', 'session']]
-        new_uids = set(tuple(row) for row in newuidDF.values)
-        add_uids = new_uids - old_uids
-        print(add_uids)
-
-        allsessionDF.set_index('session', append=True, inplace=True)
-        adduidDF = allsessionDF[allsessionDF.index.isin(add_uids)]
-        for rec in adduidDF.to_dict(orient='records'):
-            so = Session(rec)
-            so.storeNaTsafe()
-
-        sourceO = SourceInfo('sessions', (master_path, mi_mtime))
-        sourceO.update()
-
-
-def erp():
-    mt_files, datemods = identify_files('/processed_data/mt-files/','*.mt')
-    bad_files=['/processed_data/mt-files/ant/uconn/mc/an1a0072007.df.mt',
-        ]
-
-    source_rec = Mdb['ERP'].find({'_source': {'$exists': True}})[0]
-    
-    old_files = set(t[0] for t in source_rec['_source'])
-    new_files = set(mt_files)
-    add_files = new_files - old_files
-
-    for fp in add_files:
-        if fp in bad_files:
+    ID_session_map = dict()
+    ID_followup_map = dict()
+    for ID in IDs:
+        ID_df = resolve_df.ix[resolve_df.index.get_level_values('ID') == ID, :]
+        if ID_df.empty:
             continue
-        mtO = MT_File(fp)
-        mtO.parse_fileDB()
-        erpO = ERPPeak( mtO.data )
-        erpO.store()
+        try:
+            best_index = ID_df['date_diff'].argmin()
+            best_session = best_index[1]
+            best_followup = best_index[2]
+        except TypeError:  # trying to subscript a nan
+            best_session = None
+            best_followup = None
+        ID_session_map[ID] = best_session
+        ID_followup_map[ID] = best_followup
 
-    # sourceO = SourceInfo('ERP', list(add_uids))
-    # sourceO.update()
+    ID_session_series = pd.Series(ID_session_map, name='nearest_session')
+    ID_session_series.index.name = 'ID'
 
-def neuropsych_xml():
-    pass
+    ID_followup_series = pd.Series(ID_followup_map, name='nearest_followup')
+    ID_followup_series.index.name = 'ID'
+
+    match_df_forupdate = match_df.join(ID_session_series)
+    match_df_forupdate = match_df_forupdate.join(ID_followup_series)
+
+    for ind, qrow in tqdm(match_df_forupdate.iterrows()):
+        match_collection.update_one({'_id': qrow['match__id']},
+                                    {'$set': {'session': qrow['nearest_session'],
+                                              'followup': qrow['nearest_followup']}})

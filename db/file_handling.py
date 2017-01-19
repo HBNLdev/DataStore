@@ -408,6 +408,61 @@ def parse_cnth1_path(filepath):
     return output
 
 
+def parse_avgh1_path(filepath):
+
+    full_dir, full_filename = os.path.split(filepath)
+
+    dir_pieces = full_dir.split(os.path.sep)
+    rec_type = dir_pieces[6]
+    param_str = dir_pieces[4]
+    n_chans = rec_type[-2:]
+    
+    filename, ext = os.path.splitext(full_filename)
+
+    pieces = filename.split('_')
+    experiment = pieces[0]
+    version = pieces[1]
+    session_piece = pieces[2]
+    session_letter = session_piece[0]
+    run_number = session_piece[1]
+
+    subject_piece = pieces[3]
+    system = 'neuroscan'  # preliminary
+    fam_number = subject_piece[1:5]
+    subject = subject_piece[5:8]
+
+    if fam_number in ['0000', '0001'] and subject_piece[0] in 'acghp':
+        site = subject_piece[0] + '-subjects'
+        if fam_number == '0000':  # no family
+            family = 0
+        if fam_number == '0001':
+            family = 0
+    else:
+        family = fam_number
+        site = site_hash[subject_piece[0].lower()]
+        if not subject_piece[0].isdigit():
+            system = 'masscomp'
+            subject_piece = site_hash_rev[site_hash[
+                subject_piece[0].lower()]] + subject_piece[1:]
+
+    output = {'filepath': filepath,
+              'system': system,
+              'experiment': experiment,
+              'session': session_letter,
+              'run': run_number,
+              'site': site,
+              'family': family,
+              'subject': subject,
+              'ID': subject_piece,
+              'uID': subject_piece + '_' + session_letter,
+              'version': version,
+              'param_str': param_str,
+              'n_chans': n_chans,
+              'rec_type': rec_type}
+
+    return output
+
+
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
     file_list = []
     date_list = []
@@ -1315,20 +1370,31 @@ class ERO_Summary_CSV(ERO_CSV):
 ##############################
 
 class Neuropsych_XML:
-    ''' For XML files found in /raw_data/neuropsych '''
+    ''' given filepath to .xml file in /raw_data/neuropsych/, represent it '''
 
     # labels for fields output by david's awk script
+
+            # subject info columns
     cols = ['id', 'dob', 'gender', 'hand', 'testdate', 'sessioncode',
-            'motivTOT', 'motivCBST', 'motivTOLT', 'age', '3r_mim', '3r_mom',
-            '3r_em', '3r_%ao', '3r_apt', '3r_atoti', '3r_ttrti', '3r_atrti',
-            '4r_mim', '4r_mom', '4r_em', '4r_%ao', '4r_apt', '4r_atoti',
-            '4r_ttrti', '4r_atrti', '5r_mim', '5r_mom', '5r_em', '5r_%ao',
-            '5r_apt', '5r_atoti', '5r_ttrti', '5r_atrti', 'tt_mim', 'tt_mom',
-            'tt_em', 'tt_%ao', 'tt_apt', 'tt_atoti', 'tt_ttrti', 'tt_atrti',
-            'tc_f', 'span_f', 'tat_f', 'tcat_f', 'tc_b', 'span_b', 'tat_b',
-            'tcat_b']
+            'motivTOT', 'motivCBST', 'motivTOLT', 'age',
+            # TOLT columns
+            '3b_mim', '3b_mom', '3b_em', '3b_ao', '3b_apt', '3b_atoti', '3b_ttrti', '3b_atrti',
+            '4b_mim', '4b_mom', '4b_em', '4b_ao', '4b_apt', '4b_atoti', '4b_ttrti', '4b_atrti',
+            '5b_mim', '5b_mom', '5b_em', '5b_ao', '5b_apt', '5b_atoti', '5b_ttrti', '5b_atrti',
+            'tt_mim', 'tt_mom', 'tt_em', 'tt_ao', 'tt_apt', 'tt_atoti', 'tt_ttrti', 'tt_atrti',
+            '3b_otr', '4b_otr', '5b_otr', 'tt_otr', # added 1/18/2017 - number of optimal trials
+            # CBST columns
+            'tc_f', 'span_f', 'tcat_f', 'tat_f',
+            'tc_b', 'span_b', 'tcat_b', 'tat_b']
+
+    # this function needs to be in /usr/bin of the invoking system
+    func_name = '/opt/bin/do_np_processC'
+    session_letters = 'abcdefghijkl'
+    npsession_npfollowup = {letter:number for letter, number in
+                            zip(session_letters, range(len(session_letters)))}
 
     def __init__(s, filepath):
+
         s.filepath = filepath
         s.path = os.path.dirname(s.filepath)
         s.path_parts = filepath.split(os.path.sep)
@@ -1341,30 +1407,27 @@ class Neuropsych_XML:
 
         s.data = {'ID': s.subject_id,
                   'site': s.site,
-                  'session': s.session,
+                  'np_session': s.session,
+                  'np_followup': s.npsession_npfollowup[s.session],
+                  'filepath': s.filepath,
                   }
         s.read_file()
 
     def read_file(s):
-        # this function needs to be in /usr/bin of the invoking system
-        func_name = '/opt/bin/do_np_processB'
-        raw_line = subprocess.check_output([func_name, s.filepath])
+        ''' use program s.func_name to extract results and put in s.data '''
+        
+        raw_line = subprocess.check_output([s.func_name, s.filepath])
         data_dict = s.parse_csvline(raw_line)
         data_dict.pop('id', None)
         data_dict.pop('sessioncode', None)
         s.data.update(data_dict)
 
     def parse_csvline(s, raw_line):
+        ''' given a string which is a comma-delimited list of results (the raw output of s.func_name)
+            parse into a list and parse its items '''
+
         # [:-1] excludes the \n at line end
         lst = raw_line[:-1].decode('utf-8').split(',')
-
-        # handle missing data, '.' will indicate a missing val
-        if 'No TOLT file' in lst[10] and 'No CBST file' in lst[10]:
-            lst = lst[:10] + 41 * ['.']
-        elif 'No TOLT file' in lst[10]:
-            lst = lst[:10] + 32 * ['.'] + lst[11:]
-        elif 'No CBST file' in lst[42]:
-            lst = lst[:42] + 9 * ['.']
 
         # convert to dict in anticipation of storing as record
         d = dict(zip(s.cols, lst))
@@ -1374,7 +1437,9 @@ class Neuropsych_XML:
         return d
 
     def parse_csvitem(s, k, v):
-        if v is '.':
+        ''' given a string item from the results, parse it appropriately '''
+
+        if v == ' ' or v == '  ':
             return None  # these will get safely coerced to NaN by pandas df
         else:
             v = v.lstrip()  # remove leading whitespace
@@ -1382,11 +1447,36 @@ class Neuropsych_XML:
                 v = datetime.strptime(v, '%m/%d/%Y')  # dates
             elif k in ['id', 'gender', 'hand', 'sessioncode']:
                 pass  # leave these as strings
-            elif '%' in k:
+            elif '_ao' in k:
                 v = float(v[:-1]) / 100  # percentages converted to proportions
             else:
                 v = float(v)  # all other data becomes float
             return v
+
+    def assure_quality(s):
+        ''' after results have been extracted, perform quality assurance checks on them '''
+
+        # check if TOLT or CBST data is missing - if so, set motivation to none
+        if s.data['5b_mim'] is None:
+            s.data['motivTOLT'] = None
+        if s.data['tat_f'] is None:
+            s.data['motivCBST'] = None
+        # then re-calculate mean
+        motivs = [motiv for motiv in (s.data['motivTOLT'], s.data['motivCBST']) if motiv]
+        if motivs:
+            s.data['motivTOT'] = np.mean(motivs)
+        else:
+            s.data['motivTOT'] = None
+
+        # set CBST fields of 0 to be None
+        # if any forward field is 0, set all forward to None
+        # if any backward field is 0, set all backward to None
+        if s.data['span_f'] == 0:
+            for field in ['tc_f', 'span_f', 'tcat_f', 'tat_f']:
+                s.data[field] = None
+        if s.data['span_b'] == 0:
+            for field in ['tc_b', 'span_b', 'tcat_b', 'tat_b']:
+                s.data[field] = None
 
 
 class Neuropsych_Summary:

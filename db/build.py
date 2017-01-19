@@ -25,6 +25,7 @@ from .file_handling import (identify_files,
                             Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
                             ERO_CSV)
 from .followups import preparefupdfs_forbuild
+from .update import match_fups_sessions_flex
 
 zork_path = '/processed_data/zork/zork-phase4-72/'
 
@@ -156,11 +157,15 @@ def neuropsych_xmls():
     xml_files, datemods = identify_files('/raw_data/neuropsych/', '*.xml')
     for fp in tqdm(xml_files):
         xmlO = Neuropsych_XML(fp)
-        nsO = Neuropsych('all', xmlO.data)
+        xmlO.assure_quality()
+        # xmlO.data['date'] = xmlO.data['testdate']
+        nsO = Neuropsych(xmlO.data)
         nsO.store()
-    sourceO = SourceInfo(Neuropsych.collection,
-                            list(zip(xml_files, datemods)), 'all')
-    sourceO.store()
+
+    max_fups = max(Mdb['neuropsych'].distinct('np_followup'))
+    for fup in range(max_fups+1):
+        match_fups_sessions_flex('neuropsych', nonID_col='np_followup', nonID_val=fup, date_col='testdate')
+
 
 def questionnaires_ph123():
     ''' import all questionnaire info from phases 1 through 3
