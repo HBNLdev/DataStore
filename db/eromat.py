@@ -88,6 +88,8 @@ def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked'], n_ch
     prc_ver = proc_type[1]
     parent_dir = version_info[prc_ver]['storage path']
 
+    df_out = df_out[ df_out['cnt_n_chans'].notnull() ]
+
     for exp, cases in exp_cases.items():
         for case in cases:
             for ptype in power_types:
@@ -107,7 +109,11 @@ def gen_path2(rec, parent_dir, proc_type, exp, case, power_type_short):
         param_str = build_paramstr(proc_type, raw_chans, exp)
     except KeyError:
         return np.nan  # also consider returning a default value here
-    n_chans = chan_mapping[raw_chans]
+    if 'center9' in proc_type:
+        n_chans = '20'
+    else:
+        n_chans = chan_mapping[raw_chans]
+
 
     path_start = os.path.join(parent_dir, param_str, n_chans, exp)
     fname = '_'.join([ID, session, exp, case, power_type_short])
@@ -1008,6 +1014,41 @@ class EROpheno_label_set:
             out_cols = cols
 
         return out_cols
+
+
+# Compilation functions for use with processing module
+standard_cols = ['uID', 'nearest session to fMRI', 'Sl. No.', 'NYU fMRI ID',
+             'fMRI test date', 'followup', 'POP', 'alc_dep_dx',
+             'alc_dep_ons', 'PH', 'fhd_dx4_ratio', 'fhd_dx4_sum',
+             'n_rels', 'date', 'sex', 'handedness', 'current_age',
+             'session_age', 'alc_dep_dx_f', 'alc_dep_dx_m', 'fID', 'mID',
+             'famID', 'famtype', 'DNA', 'SmS', 'genoID', 'rel2pro',
+             'ruID', 'self-reported', 'core-race', 'site', 'system',
+             'twin', 'genotyped', 'methylation']
+
+def PR_load_session_file(path, cols=standard_cols ):   
+    df = pd.read_csv( path, converters={'ID':str})
+    df.set_index(['ID','session'], inplace=True)
+    
+
+    cols_use = df.columns.intersection(cols)
+    comp_df = df[ cols_use ]
+    
+    return comp_df
+PR_load_session_file.store_name = 'db/eromat.load_session_file'
+
+def PR_stack_from_mat_lst(df,proc_type):
+    path_cols = [ c for c in df.columns if proc_type in c ]
+    mat_list = []
+    for pc in path_cols:
+        mat_list.extend( list( df[pc].dropna().values ) )
+    stack = EROStack( mat_list )
+    return stack
+PR_stack_from_mat_lst.store_name = 'db/eromat.stack_from_mat_lst'
+
+def PR_get_tf_means(erostack,tf_windows,electrodes):
+    return erostack.tf_mean_lowmem_multiwin_chans(tf_windows,electrodes)
+PR_get_tf_means.store_name = 'db/eromat.get_tf_means'
 
 
 '''

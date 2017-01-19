@@ -27,6 +27,45 @@ from .file_handling import (identify_files,
 from .followups import preparefupdfs_forbuild
 from .update import match_fups_sessions_flex
 
+
+buildAssociations = { 
+            'Core':'core',
+            'EEGBehavior':'eeg_behavior',
+            'EEGData':'raw_eegdata',
+            'EROcsv':'ero_pheno_join_bulk',
+            'EROcsvresults':['shared','EROcsv','ero_pheno_join_bulk'],
+            'ERPData':'erp_data',
+            'ERPPeak':'erp_peaks',
+            'Externalizing':'externalizing',
+            'FHAM':'fham',
+            'Internalizing':'internalizing',
+            'Neuropsych':['multiple','neuropsych_TOLT','neuropsych_CBST'],
+            'Questionnaire':'questionnaires_ph4',#questionnaires_ph123
+            'RawEEGData':'raw_eegdata',
+            'SSAGA':'questionnaires_ssaga',
+            'STransformInverseMats':'mat_st_inv_walk',
+            'Session':'sessions',
+            'Subject':'subjects'
+            }
+
+
+def builderEngine(which='all'):
+    funcs = []
+    for category,builder in buildAssociations.items():
+        if which == 'all' or category in which:
+            if type( builder ) == list:
+                if builder[0] == 'multiple':
+                    builder_list = builder[1:]
+                elif builder[0] == 'shared':
+                    builder_list = []
+            else: builder_list = [builder]
+            for bf_name in builder_list:
+                build_func = eval( bf_name )
+
+                funcs.append(build_func)
+    return funcs
+
+
 zork_path = '/processed_data/zork/zork-phase4-72/'
 
 # utility functions

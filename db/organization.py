@@ -6,6 +6,7 @@ import datetime
 import pymongo
 import pandas as pd
 
+
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 
 # utility functions
@@ -107,6 +108,7 @@ class MongoBacked:
 
 # expose Mdb for use at module level
 Mdb = MongoBacked.Mdb
+
 
 class SourceInfo(MongoBacked):
 

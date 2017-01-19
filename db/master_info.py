@@ -4,6 +4,7 @@
 master_path = '/processed_data/master-file/old/EEG-master-file-21.csv'
 
 import os
+from numbers import Number
 from datetime import datetime
 
 import pandas as pd
@@ -243,3 +244,125 @@ def protect_dates(filepath):
 
     inf.close()
     outf.close()
+
+def famID(stck):
+    
+    try:
+        assert len(stck) == 5
+        assert stck[0] in '1234567'
+        return True
+    except AssertionError:
+        return False
+
+
+column_guides = {
+    'ID': ['start in',['1234567achp']] ,
+    'famID': famID,
+    'mID': ['start in',['1234567']],
+    'fID': ['start in',['1234567']],
+    'DNA': ['in','x'],
+    'rel2pro': ['in',['bil','fath','gof','hsib','m1c','m1c1r','ma','mate','mgf','mgm',
+                    'mgn','mhs','mu','moth','niece','neph','off','olaw','p1c','p1c1r',
+                    'pa','pgf','pgm','pgn','phs','pu','self','sib','sil','slaw']],
+    'famtype': ['in',['PILOT', 'I', 'IV', 'CONTROL', 'I-S-III', 'I-S-IV', 'II', 'L-II',
+       'III', 'IV-H', 'I-S-II', 'A-I', 'KIDS', 'I-S-IV-H', 'A-II', 'IRPG',
+       'IRPG-CTRL','L-IV', 'CTRL-K', 'CL-IV', 'A-IV-H', 'A-III',
+       'CL-SPEC', 'SPEC', 'CHAL-CON'] ],
+    'POP': ['in',['Pilot', 'COGA', 'COGA-Ctl', 'Relia', 'IRPG', 'IRPG-Ctl','Alc-chal', 
+            'A', 'C', 'H', 'P']],
+    'sex': ['in',['m','f','(m)','(f)']],
+    'handedness':['in',['b','l','r','w']] ,
+    'DOB': ['date'],
+    'twin': ['in',[0,1,2]],
+    'EEG': ['in',['x','e','-']],
+    'system': ['in',['es','es-ns','mc','mc-es','mc-ns','ns']],
+    'Wave12': ['in',['P','x']],
+    'Wave12-fam': ['in',[1,2]],
+    'fMRI': ['in',['1a','1b']],
+    'Wave3': ['in',['x','rm']],
+    'Phase4-session': ['in',['a','b','c','d']],
+    'Phase4-testdate': ['date'],
+    'Phase4-age': 'numeric',
+    '4500': ['in',['x','x-','rm']],
+    'ccGWAS': 'numeric',
+    'AAfamGWAS': ['in',['x','f']],
+    'ExomeSeq': ['in',['x']],
+    'EAfamGWAS':['x','xx','f'] ,
+    'EEfamGWAS-fam': [famID],
+    'self-reported': ['in',['u8', 'h6', 'n4', 'n3', 'u2', 'h2', 'n2', 'h4', 'u6','u1',
+                    'n1', 'h8', 'n9', 'n8', 'u4', 'u3', 'u9', 'h9', 'h1', 'h3']],
+    'wave12-race': ['in',['Mixed-EA', 'Mixed-?', 'Mixed-other', 'White-EA', 'Black-AA',
+                    'Mixed-AA', 'PacIs']],
+    '4500-race': ['in',['EA_0', 'OTHER_0', 'EA_1', 'AA_0', 'AA_1', 'AA_.', 'OTHER_1',
+                    'EA_.', 'OTHER_.']],
+    'ccGWAS-race': ['in',['AA','EA']],
+    'core-race': ['in',['n6', 'n9', 'h6', 'n4', 'n2', 'h4', 'h9', 'n8', 'u6', 'h2' ]],
+    'COGA11k-fam': famID,
+    'COGA11k-race': ['in',['AA','EA','other']],
+    'COGA11k-fam-race': ['in',['black','white','other']],
+    'ruID': [ 'start in',['AA', 'PG'] ],
+    'genoID': ['skip'],
+    'SmS': ['in',['x']],
+    'alc_dep_dx': ['in',[0,1]],
+    'alc_dep_ons': 'numeric',
+    'CA/CO': ['in',['CA', '0', '1', 'CO', 'CO(CA)', '(CA)']],
+    # 'a-run': ,
+    # 'a-raw': ,
+    # 'a-date': ,
+    # 'a-age': ,
+    # 'b-run': ,
+    # 'b-raw': ,
+    # 'b-date': ,
+    # 'b-age': ,
+    # 'c-run': ,
+    # 'c-raw': ,
+    # 'c-date': ,
+    # 'c-age': ,
+    # 'd-run': ,
+    # 'd-raw': ,
+    # 'd-date': ,
+    # 'd-age': ,
+    # 'e-run': ,
+    # 'e-raw': ,
+    # 'e-date': ,
+    # 'e-age': ,
+    # 'f-run': ,
+    # 'f-raw': ,
+    # 'f-date': ,
+    # 'f-age': ,
+    # 'g-run': ,
+    # 'g-raw': ,
+    # 'g-date': ,
+    # 'g-age': ,
+    # 'h-run': ,
+    # 'h-raw': ,
+    # 'h-date': ,
+    # 'h-age': ,
+    # 'i-run': ,
+    # 'i-raw': ,
+    # 'i-date': ,
+    # 'i-age': ,
+    # 'j-run': ,
+    # 'j-raw': ,
+    # 'j-date': ,
+    # 'j-age': ,
+    # 'k-run': ,
+    # 'k-raw': ,
+    # 'k-date': ,
+    # 'k-age': ,
+    # 'no-exp': ,
+    # 'remarks'
+
+}
+
+def check_column_contents(filepath):
+    M, store_date = load_master(filepath)
+
+    for col in M.columns:
+        vals = M[col].tolist()
+        if col in column_guides:
+            guide = column_guides[col]
+            if guide == 'numeric':
+                tests = [ isinstance(v,numbers.Number) for v in vals ]
+            elif callable(guide):
+                tests = [ guide(v) for v in vals ]
