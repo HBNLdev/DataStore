@@ -201,10 +201,6 @@ def neuropsych_xmls():
         nsO = Neuropsych(xmlO.data)
         nsO.store()
 
-    max_fups = max(Mdb['neuropsych'].distinct('np_followup'))
-    for fup in range(max_fups+1):
-        match_fups_sessions_flex('neuropsych', nonID_col='np_followup', nonID_val=fup, date_col='testdate')
-
 
 def questionnaires_ph123():
     ''' import all questionnaire info from phases 1 through 3

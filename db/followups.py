@@ -30,8 +30,7 @@ def preparefupdfs_forbuild():
 
     allphase_master_means, pcols = get_allphasemastermeans_pcols()
 
-    ID_session2fup = create_IDs2f(allphase_master_means)
-    ID_fup2session = invert_innerdicts(ID_session2fup)
+    ID_fup2session = create_IDf2s(allphase_master_means)
     ID_fup2session_df = IDmap2df(ID_fup2session, inner_keys='followup')
 
     phase_dfs = make_fupdfs(allphase_master_means, pcols, ID_fup2session_df)
@@ -69,15 +68,15 @@ def IDmap2df(IDmap, inner_keys):
 
     return IDmap_df
 
-def create_IDs2f(allphase_master_means):
+def create_IDf2s(allphase_master_means):
     ''' given the allphase_master_means df, create a dict of dicts. the outer keys are IDs.
         the inner keys are session letters. the inner values are followup designations '''
 
     sdate_df = get_sessiondatedf(allphase_master_means)
     sdate_df_fupmeans = add_datediffcols(sdate_df, allphase_master_means)
-    ID_session2fup = build_IDsessionfup_map(sdate_df_fupmeans)
+    ID_fup2session = build_IDfupsession_map(sdate_df_fupmeans)
 
-    return ID_session2fup
+    return ID_fup2session
 
 
 def get_allphasemastermeans_pcols():
@@ -112,23 +111,28 @@ def build_allmasterdf():
     return allphase_master
 
 
-def build_IDsessionfup_map(sdate_df_fupmeans):
+def build_IDfupsession_map(sdate_df_fupmeans):
     ''' given an ID/session-indexed sessions dataframe with followup-session date difference info,
         map session letters to followups for each ID, returning a dict of dicts '''
 
     datediff_cols = [col for col in sdate_df_fupmeans.columns if 'diff' in col]
 
-    ID_session2fup = defaultdict(dict)
+    ID_fup2session = defaultdict(dict)
 
     ID_index = sdate_df_fupmeans.index.get_level_values('ID')
     for ID in ID_index:
         ID_df = sdate_df_fupmeans.ix[ID_index == ID, datediff_cols].dropna(axis=1, how='all').dropna(axis=0, how='all')
-        for diff_col in ID_df.columns:
-            best_session = ID_df[diff_col].argmin()[1]
-            the_fup = extractfup_fromcolname(diff_col)
-            ID_session2fup[ID][best_session] = the_fup
+        for uID, row in ID_df.iterrows():
+            the_session = uID[1]
+            best_followupcol = row.argmin()
+            best_fup = extractfup_fromcolname(best_followupcol)
+            ID_fup2session[ID][best_fup] = the_session
+        # for diff_col in ID_df.columns:
+        #     best_session = ID_df[diff_col].argmin()[1]
+        #     the_fup = extractfup_fromcolname(diff_col)
+        #     ID_session2fup[ID][best_session] = the_fup
 
-    return ID_session2fup
+    return ID_fup2session
 
 def add_datediffcols(sdate_df, allphase_master_means):
     ''' given a df with a session date column and a master dataframe with all mean phase dates,

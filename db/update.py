@@ -61,64 +61,68 @@ def sessions_from_followups():
                                      {'$set': {fup_field: row['followup'],
                                                date_field: row['date']}})    
 
+def neuropsych_from_sfups():
 
-def match_fups_sessions_flex(coll, nonID_col, nonID_val, date_col='date'):
-    print('matching', coll, 'IDs to sessions and followups for',
-        nonID_col, nonID_val, 'using', date_col)
+    max_fups = max(Mdb['neuropsych'].distinct('np_followup'))
+    for fup in range(max_fups + 1):
+        # match sessions
+        match_fups_sessions_flex('neuropsych', assessment_col='np_followup', assessment_val=fup,
+                                 sfup_coll='sessions', date_col='testdate')
+        # match followups
+        match_fups_sessions_flex('neuropsych', assessment_col='np_followup', assessment_val=fup,
+                                 sfup_coll='followups', date_col='testdate')
 
-    match_collection = Mdb[coll]
-    match_query = {nonID_col: nonID_val}
+
+def match_fups_sessions_flex(match_coll, assessment_col, assessment_val,
+                             sfup_coll='sessions', date_col='date'):
+    print('matching', match_coll, 'assessments to', sfup_coll, 'for',
+          assessment_col, assessment_val, 'using', date_col)
+
+    match_collection = Mdb[match_coll]
+    match_query = {assessment_col: assessment_val}
     match_proj = {'_id': 1, 'ID': 1, date_col: 1,}
     match_docs = match_collection.find(match_query, match_proj)
     match_df = buildframe_fromdocs(match_docs, inds=['ID'])
     if match_df.empty:
-        print('no matchionnaire docs of this kind found')
+        print('no assessment docs of this kind found')
         return
     if date_col not in match_df.columns:
-        print('no date info available for this matchionnaire-fup combination')
+        print('no date info available for these assessment docs')
         return
     match_df.rename(columns={date_col: 'match_date', '_id': 'match__id'}, inplace=True)
     IDs = match_df.index.tolist()
 
-    session_proj = {'_id': 1, 'ID': 1, 'session': 1, 'date': 1, 'followup': 1}
-    session_docs = Mdb['sessions'].find({'ID': {'$in': IDs}}, session_proj)
-    session_df = buildframe_fromdocs(session_docs, inds=['ID'])
-    if session_df.empty:
+    sfup_proj = {'_id': 1, 'ID': 1, 'session': 1, 'date': 1, 'followup': 1}
+    sfup_docs = Mdb[sfup_coll].find({'ID': {'$in': IDs}}, sfup_proj)
+    sfup_df = buildframe_fromdocs(sfup_docs, inds=['ID'])
+    if sfup_df.empty:
         print('no session docs of this kind found')
         return
-    session_df.rename(columns={'date': 'session_date', '_id': 'session__id'}, inplace=True)
+    sfup_df.rename(columns={'date': 'sfup_date', '_id': 'session__id'}, inplace=True)
 
-    resolve_df = session_df.join(match_df)
-    resolve_df['date_diff'] = (resolve_df['session_date'] - resolve_df['match_date']).abs()
-    resolve_df.set_index('session', append=True, inplace=True)
-    resolve_df.set_index('followup', append=True, inplace=True)
+    resolve_df = sfup_df.join(match_df)
+    resolve_df['date_diff'] = (resolve_df['sfup_date'] - resolve_df['match_date']).abs()
+    sfup_index = sfup_coll[:-1]  # i.e. session for sessions, followup for followup
+    resolve_df.set_index(sfup_index, append=True, inplace=True)
 
-    ID_session_map = dict()
-    ID_followup_map = dict()
+    ID_sfup_map = dict()
     for ID in IDs:
         ID_df = resolve_df.ix[resolve_df.index.get_level_values('ID') == ID, :]
         if ID_df.empty:
             continue
         try:
             best_index = ID_df['date_diff'].argmin()
-            best_session = best_index[1]
-            best_followup = best_index[2]
+            best_sfup = best_index[1]
         except TypeError:  # trying to subscript a nan
-            best_session = None
-            best_followup = None
-        ID_session_map[ID] = best_session
-        ID_followup_map[ID] = best_followup
+            best_sfup = None
+        ID_sfup_map[ID] = best_sfup
 
-    ID_session_series = pd.Series(ID_session_map, name='nearest_session')
-    ID_session_series.index.name = 'ID'
+    ID_sfup_series = pd.Series(ID_sfup_map, name='nearest_sfup')
+    ID_sfup_series.index.name = 'ID'
 
-    ID_followup_series = pd.Series(ID_followup_map, name='nearest_followup')
-    ID_followup_series.index.name = 'ID'
-
-    match_df_forupdate = match_df.join(ID_session_series)
-    match_df_forupdate = match_df_forupdate.join(ID_followup_series)
+    match_df_forupdate = match_df.join(ID_sfup_series)
 
     for ind, qrow in tqdm(match_df_forupdate.iterrows()):
         match_collection.update_one({'_id': qrow['match__id']},
-                                    {'$set': {'session': qrow['nearest_session'],
-                                              'followup': qrow['nearest_followup']}})
+                                    {'$set': {sfup_index: qrow['nearest_sfup']}
+                                     })

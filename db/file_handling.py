@@ -1378,11 +1378,11 @@ class Neuropsych_XML:
     cols = ['id', 'dob', 'gender', 'hand', 'testdate', 'sessioncode',
             'motivTOT', 'motivCBST', 'motivTOLT', 'age',
             # TOLT columns
-            '3b_mim', '3b_mom', '3b_em', '3b_ao', '3b_apt', '3b_atoti', '3b_ttrti', '3b_atrti',
-            '4b_mim', '4b_mom', '4b_em', '4b_ao', '4b_apt', '4b_atoti', '4b_ttrti', '4b_atrti',
-            '5b_mim', '5b_mom', '5b_em', '5b_ao', '5b_apt', '5b_atoti', '5b_ttrti', '5b_atrti',
-            'tt_mim', 'tt_mom', 'tt_em', 'tt_ao', 'tt_apt', 'tt_atoti', 'tt_ttrti', 'tt_atrti',
-            '3b_otr', '4b_otr', '5b_otr', 'tt_otr', # added 1/18/2017 - number of optimal trials
+            'mim_3b', 'mom_3b', 'em_3b', 'ao_3b', 'apt_3b', 'atoti_3b', 'ttrti_3b', 'atrti_3b',
+            'mim_4b', 'mom_4b', 'em_4b', 'ao_4b', 'apt_4b', 'atoti_4b', 'ttrti_4b', 'atrti_4b',
+            'mim_5b', 'mom_5b', 'em_5b', 'ao_5b', 'apt_5b', 'atoti_5b', 'ttrti_5b', 'atrti_5b',
+            'mim_tt', 'mom_tt', 'em_tt', 'ao_tt', 'apt_tt', 'atoti_tt', 'ttrti_tt', 'atrti_tt',
+            'otr_3b', 'otr_4b', 'otr_5b', 'otr_tt', # added 1/18/2017 - number of optimal trials
             # CBST columns
             'tc_f', 'span_f', 'tcat_f', 'tat_f',
             'tc_b', 'span_b', 'tcat_b', 'tat_b']
@@ -1447,7 +1447,7 @@ class Neuropsych_XML:
                 v = datetime.strptime(v, '%m/%d/%Y')  # dates
             elif k in ['id', 'gender', 'hand', 'sessioncode']:
                 pass  # leave these as strings
-            elif '_ao' in k:
+            elif 'ao_' in k:
                 v = float(v[:-1]) / 100  # percentages converted to proportions
             else:
                 v = float(v)  # all other data becomes float
@@ -1457,7 +1457,7 @@ class Neuropsych_XML:
         ''' after results have been extracted, perform quality assurance checks on them '''
 
         # check if TOLT or CBST data is missing - if so, set motivation to none
-        if s.data['5b_mim'] is None:
+        if s.data['mim_5b'] is None:
             s.data['motivTOLT'] = None
         if s.data['tat_f'] is None:
             s.data['motivCBST'] = None

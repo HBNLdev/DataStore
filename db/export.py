@@ -30,7 +30,7 @@ def code_hand(v):
     else:
         return np.nan
 
-def neuropsych():
+def neuropsych(do_export=True):
 
     docs = Mdb['neuropsych'].find()
     npsych_df = buildframe_fromdocs(docs, inds=['ID', 'np_followup'])
@@ -41,19 +41,35 @@ def neuropsych():
     if npsych_df_IDdate.index.has_duplicates:
         print('warning: there are duplicated ID/testdate combinations')
 
+    # coding gender and handedness
     npsych_df['gender'] = npsych_df['gender'].apply(code_gender)
     npsych_df['hand'] = npsych_df['hand'].apply(code_hand)
 
+    # setting non-phase-4 followup values to be missing
+    nonp4_bool = npsych_df['followup'].isin(['p1', 'p2', 'p3'])
+    print(nonp4_bool.sum(), 'non-phase4 followup values found, setting to missing')
+    npsych_df.ix[nonp4_bool, 'followup'] = np.nan
+
+    # defining and re-ordering the columns to export
     export_cols = Neuropsych_XML.cols.copy()
     export_cols.remove('id')
     export_cols.remove('sessioncode')
-    export_cols = ['followup', 'session',] + export_cols + ['np_session', 'site', 'filepath',]
-    npsych_df_export = npsych_df[export_cols]
+    export_cols = ['session', 'followup'] + export_cols + ['np_session', 'site', 'filepath',]
+    for n_ring in ['3b', '4b', '5b', 'tt']:
+        last_pos = export_cols.index('atrti_' + n_ring)
+        otr_pos = export_cols.index('otr_' + n_ring)
+        export_cols.insert(last_pos+1, export_cols.pop(otr_pos))
 
-    npsych_df_export.rename(columns={'followup': 'COGA_followup',
-                                     'session': 'EEG_session'}, inplace=True)
+    npsych_df_export = npsych_df[export_cols]
+    npsych_df_export.rename(columns={'session': 'EEG_session',
+                                     'followup': 'COGA_followup',
+                                     }, inplace=True)
     npsych_df_export.sort_index(inplace=True)
 
-    today = datetime.now().strftime('%m-%d-%Y')
-    output_str = '_'.join([npsych_basepath, today])
-    npsych_df_export.to_csv(output_str+'.csv')
+    if do_export:
+        today = datetime.now().strftime('%m-%d-%Y')
+        output_str = '_'.join([npsych_basepath, today])
+        npsych_df_export.to_csv(output_str+'.csv')
+        print('saved to', output_str+'.csv')
+
+    return npsych_df_export
