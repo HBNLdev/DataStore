@@ -3,6 +3,7 @@ ssaga_cols = ['AL4e1',
 'AL4e3',
 'AL5',
 'AL6',
+'AL6a',
 'AL8a',
 'AL8b',
 'AL8AgeOns',
@@ -11,7 +12,27 @@ ssaga_cols = ['AL4e1',
 'AL9bAgeOns',
 'AL16b',
 'AL16AgeOns',
-'AL17b',]
+'AL17b',
+'AL43A',]
+
+# ALA_AO17
+# ALA_AR17
+# ALA_AO22
+# ALA_O22
+# ALA_AO25
+# ALA_AR25
+# ALA_AO35
+# ALB_AO9
+# ALB_AR9
+# ALB_AO45
+# ALB_AR45
+# ALC_AO8
+# ALC_AO16
+# ALC_AR16
+# ALE4A
+# ALE4B
+# ALE_AO37
+# ALE_AR37
 
 dx_ssaga_cols = ['ALD4DPSX',
 'ALD4DPDX',

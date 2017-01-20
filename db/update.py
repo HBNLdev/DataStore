@@ -1,4 +1,4 @@
-'''update collections'''
+''' performing updates on documents '''
 
 from tqdm import tqdm
 
