@@ -173,7 +173,13 @@ def erp_peaks():
     # or 3 hours? depending on network traffic
     mt_files, datemods = identify_files('/processed_data/mt-files/', '*.mt')
     add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
-                'ant_phase4_peaks_2016']
+                'ant_phase4_peaks_2016',
+                'vp3_phase4__peaks_2015','vp3_phase4__peaks_2016','non_coga_vp3',
+                'aod_phase4__peaks_2015','aod_phase4__peaks_2016',
+                'aod_bis_18-25controls',
+                'cpt_h1_peaks_may_2016',
+                'nki_ppick', 'phase4_redo',
+                ]
     for subdir in add_dirs:
         mt_files2, datemods2 = identify_files(
             '/active_projects/HBNL/'+subdir+'/', '*.mt')
