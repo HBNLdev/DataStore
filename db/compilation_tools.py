@@ -10,7 +10,7 @@ from .file_handling import site_hash
 
 # dataframe filter functions
 
-def latest_sessions(in_df):
+def latest_session(in_df):
     ''' given a datframe with an (ID, session) index, return a version in which
         only the latest sessions is kept for each '''
     out_df = in_df.copy()
@@ -21,6 +21,19 @@ def latest_sessions(in_df):
     return out_df
 
 # single value or column apply functions
+
+def mark_overthresh(v, thresh):
+    if v > thresh:
+        return 'x'
+    else:
+        return np.nan
+
+def neg_toNaN(v):
+    ''' convert negative numbers to nans '''
+    if v < 0:
+        return np.nan
+    else:
+        return v
 
 def conv_nan(v):
     ''' convert nans into the string 'unknown' '''
@@ -63,6 +76,13 @@ def num_chans(h1_path):
 # row-apply functions that usually operate on
 # a subject/session-collection-based dataframe
 # so certain columns are expected to exist
+
+def ID_in_x(rec, ck_set):
+    ID = rec.name[0]
+    if ID in ck_set:
+        return 'x'
+    else:
+        return np.nan
 
 def calc_PH(row):
     ''' calculate parental history (POP should be a column) '''
@@ -192,3 +212,37 @@ def raw_folder_achp(rec):
             return fullpath
         except:
             return np.nan
+
+
+def get_restingcnts(df):
+    ''' given dataframe indexed by ID/session, find paths of resting CNTs '''
+
+    df_out = df.copy()
+
+    for cnt_exp in ['eec', 'eeo']:
+        df_out[cnt_exp+'_cnt_path'] = df_out.apply(find_exppath, axis=1, args=[cnt_exp, 'cnt'])
+
+    return df_out
+
+# dealing with columns
+
+def drop_frivcols(df):
+    ''' given df, drop typically frivolous columns '''
+
+    friv_cols = [col for col in df if '_id' in col or 'insert_time' in col \
+            or '_technique' in col or '_subject' in col \
+            or '_questname' in col or '_ADM' in col or '_IND_ID' in col]
+    dcols = ['4500', '4500-race', 'AAfamGWAS', 'CA/CO', 'COGA11k-fam', 'COGA11k-fam-race',
+           'COGA11k-race', 'EAfamGWAS', 'EEfamGWAS-fam', 'ExomeSeq',
+           'Wave12', 'Wave12-fam', 'Wave3', '_ID', 'ccGWAS', 'ccGWAS-race',
+           'wave12-race', 'no-exp', 'remarks'] + friv_cols
+    return df.drop(dcols, axis=1)
+
+def reorder_columns(df, beginning_order):
+    ''' given a dataframe and a list of columns that you would like to be
+        at the beginning of the columns (in order), reorder them '''
+
+    cols = df.columns.tolist()
+    for col in reversed(beginning_order):
+        cols.insert(0, cols.pop(cols.index(col)))
+    return df[cols]

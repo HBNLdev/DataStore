@@ -46,7 +46,6 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
 
 subcoll_fnames = {'questionnaires': 'questname',
                   'ssaga': 'questname',
-                  'neuropsych': 'testname',
                   }
 
 sparse_submaps = {'questionnaires': quest_sparser_sub,
@@ -308,3 +307,31 @@ def fix_indexcol(s):
         return 'x'
     else:
         return s
+
+
+def get_cnth1s(df):
+    ''' given a dataframe indexed by ID and sessions, use the cnth1s collection to retrieve
+        the paths to cnth1s for all sessions present '''
+
+    coll = 'cnth1s'
+    exps = ['vp3', 'cpt', 'ern', 'err', 'ant', 'aod', 'ans', 'stp', 'gng']
+
+    df_out = df.copy()
+    for exp in exps:
+        query = {'experiment':exp}
+        matching_docs = Mdb[coll].find(query)
+        eegDF = buildframe_fromdocs(matching_docs)
+        eegDF[exp+'_cnth1_path'] = eegDF['filepath']
+        df_out = df_out.join(eegDF[exp+'_cnth1_path'])
+
+    return df_out
+
+def get_famdf(df):
+    ''' given df with famID column, get the corresponding family dataframe
+        using the allrels collection '''
+
+    famIDs = list(set(df['famID'].values.tolist()))
+    docs = Mdb['allrels'].find({'famID': {'$in': famIDs}})
+    fam_df_allrels = buildframe_fromdocs(docs)
+
+    return fam_df_allrels
