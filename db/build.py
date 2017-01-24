@@ -25,7 +25,6 @@ from .file_handling import (identify_files,
                             Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
                             ERO_CSV)
 from .followups import preparefupdfs_forbuild
-from .update import match_fups_sessions_flex
 
 
 buildAssociations = { 
@@ -174,11 +173,12 @@ def erp_peaks():
     mt_files, datemods = identify_files('/processed_data/mt-files/', '*.mt')
     add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
                 'ant_phase4_peaks_2016',
-                'vp3_phase4__peaks_2015','vp3_phase4__peaks_2016','non_coga_vp3',
+                'vp3_phase4__peaks_2015','vp3_phase4__peaks_2016',
                 'aod_phase4__peaks_2015','aod_phase4__peaks_2016',
-                'aod_bis_18-25controls',
                 'cpt_h1_peaks_may_2016',
-                'nki_ppick', 'phase4_redo',
+                # 'non_coga_vp3',
+                # 'aod_bis_18-25controls',
+                # 'nki_ppick', 'phase4_redo',
                 ]
     for subdir in add_dirs:
         mt_files2, datemods2 = identify_files(
@@ -188,14 +188,12 @@ def erp_peaks():
     bad_files = ['/processed_data/mt-files/ant/uconn/mc/an1a0072007.df.mt',
                  ]
     for fp in tqdm(mt_files):
-        if fp in bad_files:
+        if '/waves/' in fp or fp in bad_files:
             continue
         mtO = MT_File(fp)
         mtO.parse_fileDB()
         erpO = ERPPeak(mtO.data)
         erpO.store()
-    sourceO = SourceInfo(ERPPeak.collection, list(zip(mt_files, datemods)))
-    sourceO.store()
 
 def neuropsych_xmls():
     # 10 minutes
