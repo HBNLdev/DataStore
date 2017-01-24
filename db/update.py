@@ -73,6 +73,15 @@ def neuropsych_from_sfups():
                                  sfup_coll='followups', date_col='testdate')
 
 
+def clear_field(coll, field):
+    ''' clear collection coll of field (delete the key-value pair from all docs) '''
+
+    query = {field: {'$exists': True}}
+    updater = {'$unset': {field: ''}}
+
+    Mdb[coll].update_many(query, updater)
+
+
 def match_fups_sessions_flex(match_coll, assessment_col, assessment_val,
                              sfup_coll='sessions', date_col='date'):
     print('matching', match_coll, 'assessments to', sfup_coll, 'for',
@@ -106,6 +115,7 @@ def match_fups_sessions_flex(match_coll, assessment_col, assessment_val,
     resolve_df.set_index(sfup_index, append=True, inplace=True)
 
     ID_sfup_map = dict()
+    ID_datediff_map = dict()
     for ID in IDs:
         ID_df = resolve_df.ix[resolve_df.index.get_level_values('ID') == ID, :]
         if ID_df.empty:
@@ -113,16 +123,27 @@ def match_fups_sessions_flex(match_coll, assessment_col, assessment_val,
         try:
             best_index = ID_df['date_diff'].argmin()
             best_sfup = best_index[1]
+            best_datediff = ID_df.loc[best_index, 'date_diff']
         except TypeError:  # trying to subscript a nan
             best_sfup = None
+            best_datediff = None
         ID_sfup_map[ID] = best_sfup
+        ID_datediff_map[ID] = best_datediff
 
     ID_sfup_series = pd.Series(ID_sfup_map, name='nearest_sfup')
     ID_sfup_series.index.name = 'ID'
+    ID_datediff_series = pd.Series(ID_datediff_map, name='date_diff')
+    ID_datediff_series.index.name = 'ID'
 
     match_df_forupdate = match_df.join(ID_sfup_series)
+    match_df_forupdate = match_df_forupdate.join(ID_datediff_series)
 
     for ind, qrow in tqdm(match_df_forupdate.iterrows()):
+        try:
+            datediff_days = qrow['date_diff'].days
+        except AttributeError:
+            datediff_days = None
         match_collection.update_one({'_id': qrow['match__id']},
-                                    {'$set': {sfup_index: qrow['nearest_sfup']}
+                                    {'$set': {sfup_index: qrow['nearest_sfup'],
+                                              sfup_index+'_datediff': datediff_days}
                                      })

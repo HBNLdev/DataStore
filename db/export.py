@@ -30,16 +30,34 @@ def code_hand(v):
     else:
         return np.nan
 
+
+def get_bestsession(df):
+
+    in_inds = df.index.names
+
+    df_uID = df.reset_index().set_index(['ID', 'session'])
+    df_uID['session_best'] = df_uID.index.get_level_values('session')
+
+    df_uID_sort = df_uID.sort_values('session_datediff').sort_index()
+    df_uID_sort.ix[df_uID_sort.index.duplicated(keep='first'), 'session_best'] = np.nan
+
+    return df_uID_sort.reset_index().set_index(in_inds)
+
+
 def neuropsych(do_export=True):
 
     docs = Mdb['neuropsych'].find()
     npsych_df = buildframe_fromdocs(docs, inds=['ID', 'np_followup'])
+    npsych_df = get_bestsession(npsych_df)
     npsych_df_IDdate = npsych_df.reset_index().set_index(['ID', 'testdate'])
+    npsych_df_IDbs = npsych_df.dropna(subset=['session_best']).reset_index().set_index(['ID', 'session_best'])
 
     if npsych_df.index.has_duplicates:
         print('warning: there are duplicated ID/np_followup combinations')
     if npsych_df_IDdate.index.has_duplicates:
         print('warning: there are duplicated ID/testdate combinations')
+    if npsych_df_IDbs.index.has_duplicates:
+        print('warning: there are duplicated ID/bestsession combinations')
 
     # coding gender and handedness
     npsych_df['gender'] = npsych_df['gender'].apply(code_gender)
@@ -54,14 +72,16 @@ def neuropsych(do_export=True):
     export_cols = Neuropsych_XML.cols.copy()
     export_cols.remove('id')
     export_cols.remove('sessioncode')
-    export_cols = ['session', 'followup'] + export_cols + ['np_session', 'site', 'filepath',]
+    export_cols = ['session_best', 'session', 'session_datediff', 'followup'] + \
+                         export_cols + ['np_session', 'site', 'filepath',]
     for n_ring in ['3b', '4b', '5b', 'tt']:
         last_pos = export_cols.index('atrti_' + n_ring)
         otr_pos = export_cols.index('otr_' + n_ring)
         export_cols.insert(last_pos+1, export_cols.pop(otr_pos))
 
     npsych_df_export = npsych_df[export_cols]
-    npsych_df_export.rename(columns={'session': 'EEG_session',
+    npsych_df_export.rename(columns={'session_best': 'EEG_session_best',
+                                     'session': 'EEG_session',
                                      'followup': 'COGA_followup',
                                      }, inplace=True)
     npsych_df_export.sort_index(inplace=True)
