@@ -51,6 +51,13 @@ chans = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ',
          'P6', 'C1', 'C2', 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ',
          'P2', 'P1', 'CPZ']
 
+chans_19 = ['O1', 'F4', 'F8', 'P3', 'C4', 'P7', 'T8', 'T7', 'P8', 'C3',
+            'P4', 'F7', 'F3', 'O2', 'FP1', 'FZ', 'FP2', 'CZ', 'PZ',]
+
+chans_31 = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ', 'F4', 'F3', 'FC6',
+            'FC5', 'FC2', 'FC1', 'T8', 'T7', 'CZ', 'C3', 'C4', 'CP5', 'CP6',
+            'CP1', 'CP2', 'P3', 'P4', 'PZ', 'P8', 'P7', 'PO2', 'PO1', 'O2', 'O1']
+
 def prepare_erodf(ero_df):
     ''' given an ero_df prepared by EROStack.tf_mean_lowmem_multiwin_chans,
         that is row-index by ID, session, powertype, experiment, and condition,
