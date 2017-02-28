@@ -24,3 +24,10 @@ def join_allcols(rec, sep='_'):
     ''' dataframe apply function that simply joins the whole rows contents (should be strings),
         using sep as the separator '''
     return sep.join(rec)
+
+def multi_filter(flist,ins=[],outs=[]):
+    for i in ins:
+        flist = [ f for f in flist if i in f]
+    for o in outs:
+        flist = [ f for f in flist if o not in f]
+    return flist
