@@ -43,8 +43,11 @@ def handle_dupes(join_df_sdate, new_datecol, fup_col, session_datecol):
         ID, session = row.name
         ID_df = df.loc[ID].reset_index()
         row_ind = ID_df[datediff_col].argmin()
-        correct_fup = ID_df.loc[row_ind, target_col]
-        return correct_fup
+        try:
+            correct_fup = ID_df.loc[row_ind, target_col]
+            return correct_fup
+        except TypeError:
+            return np.nan
 
     # find duplicate indices
     dupe_inds = join_df_sdate[join_df_sdate.index.duplicated()]. \
