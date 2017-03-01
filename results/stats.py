@@ -25,13 +25,17 @@ def regress_linear(xvals, yvals):
         yvals = yvals.reshape(-1, 1)
 
     both_notnan = ~np.isnan(xvals) & ~np.isnan(yvals)
-    xvals = xvals[both_notnan]
-    yvals = yvals[both_notnan]
+    xvals = xvals[both_notnan].reshape(-1, 1)
+    yvals = yvals[both_notnan].reshape(-1, 1)
 
     regr = linear_model.LinearRegression()
+    print(xvals.shape, yvals.shape)
     regr.fit(xvals, yvals)
 
-    pred_x = np.array([xvals.min(), xvals.max()])
+    min_x = xvals.min()
+    max_x = xvals.max()
+    print(min_x, max_x)
+    pred_x = np.array([min_x, max_x]).reshape(-1, 1)
     pred_y = regr.predict(pred_x)
 
     return pred_x, pred_y, regr.coef_[0][0], regr.score(xvals, yvals)

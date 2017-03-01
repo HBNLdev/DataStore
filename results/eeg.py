@@ -496,7 +496,15 @@ class ResultsFromMATLAB(Results):
 
         dsets = [h5py.File(fn, 'r')['wave_evknorm']
                  for fn in s.demog_df['path'].values]
-        arrays = [dset.value.view(np.complex) for dset in dsets]
+                 
+        # test whether these are single or double precision complex arrays
+        dset_dtype = dsets[0].dtype[0]
+        if dset_dtype == np.float64:
+            view_dtype = np.complex128
+        elif dset_dtype == np.float32:
+            view_dtype = np.complex64
+
+        arrays = [dset.value.view(view_dtype) for dset in dsets]
         stack = np.stack(arrays, axis=-1)  # concatenate along last axis
         print(stack.shape)
         stack = stack.transpose([4, 0, 2, 1, 3])  # subject dimension to front
@@ -551,7 +559,15 @@ class ResultsFromMATLAB(Results):
 
         dsets = [h5py.File(fn, 'r')['coh']
                  for fn in s.demog_df['path'].values]
-        arrays = [dset.value.view(np.complex) for dset in dsets]
+
+        # test whether these are single or double precision complex arrays
+        dset_dtype = dsets[0].dtype[0]
+        if dset_dtype == np.float64:
+            view_dtype = np.complex128
+        elif dset_dtype == np.float32:
+            view_dtype = np.complex64
+
+        arrays = [dset.value.view(view_dtype) for dset in dsets]
         stack = np.stack(arrays, axis=-1)  # concatenate along last axis
         print(stack.shape)
         stack = stack.transpose([4, 1, 0, 2, 3])  # subject dimension to front
