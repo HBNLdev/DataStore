@@ -507,6 +507,28 @@ def import_questfolder_ph123(qname, kmap, path):
             ro.storeNaTsafe()
 
 
+harm_info_csv = '/processed_data/zork/harmonization/harmonization-combined-format.csv'
+
+
+def create_ssagaharm_renamer(ssaga_type, phase):
+
+    if ssaga_type == 'pssaga':
+        ssaga_type = 'cssaga'
+
+    if phase == 'p3':
+        phase = 'p2'
+
+    from_col = phase + '_' + ssaga_type
+    to_col = 'p4_' + ssaga_type
+
+    harm_df = pd.read_csv(harm_info_csv)
+    harm_df_na = harm_df[[from_col, to_col]].dropna(how='any')
+
+    renamer = {a: b for a, b in zip(harm_df_na[from_col].values, harm_df_na[to_col].values) if a != b}
+
+    return renamer
+
+
 def import_questfolder_ssaga_ph123(qname, kmap, path):
     ''' import all questionnaire data in one folder,
         joining multiple files of the same type '''
@@ -528,6 +550,8 @@ def import_questfolder_ssaga_ph123(qname, kmap, path):
 
         fname = os.path.split(f)[1]
         fpx = fname.split('.')[0]
+        followup = i['followup'][fpx]
+
         print(f)
         # read csv in as dataframe
         df = df_fromcsv(os.path.join(i['path'], f),
@@ -556,12 +580,18 @@ def import_questfolder_ssaga_ph123(qname, kmap, path):
         # df.set_index('ID', inplace=True)
         df.drop(i['id_lbl'], axis=1, inplace=True)
 
-        followup = i['followup'][fpx]
+
+
         if fname[:3] == 'dx_':
             for drec in df.to_dict(orient='records'):
                 ro = SSAGA('dx_' + qname, followup, info=drec)
                 ro.storeNaTsafe()
         else:
+
+            # convert to harmonize SSAGA item names
+            harm_renamer = create_ssagaharm_renamer(qname, followup)
+            df = df.rename(columns=harm_renamer)
+
             for drec in df.to_dict(orient='records'):
                 ro = SSAGA(qname, followup, info=drec)
                 ro.storeNaTsafe()

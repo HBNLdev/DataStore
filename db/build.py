@@ -207,10 +207,6 @@ def neuropsych_xmls():
 
 
 def questionnaires_ph123():
-    ''' import all questionnaire info from phases 1 through 3
-        unused because difficult but should fix it later '''
-    # takes  ~20 seconds per questionnaire
-    # phase 1, 2, and 3 non-SSAGA
     kmap = map_ph123
     path = '/processed_data/zork/zork-phase123/session/'
     followups = ['p2', 'p3']
@@ -221,13 +217,9 @@ def questionnaires_ph123():
             match_fups_sessions_generic(Questionnaire.collection, fup, qname)
 
 def questionnaires_ph123_ssaga():
-    ''' import all questionnaire info from phases 1 through 3
-        unused because difficult but should fix it later '''
-    # takes  ~20 seconds per questionnaire
-    # phase 1, 2, and 3 non-SSAGA
     kmap = map_ph123_ssaga
     path = '/processed_data/zork/zork-phase123/session/'
-    followups = ['p2', 'p3']
+    followups = ['p1', 'p2', 'p3']
     for qname in kmap.keys():
         print(qname)
         import_questfolder_ssaga_ph123(qname, kmap, path)
