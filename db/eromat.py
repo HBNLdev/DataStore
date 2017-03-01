@@ -262,20 +262,28 @@ class EROStack:
     def __init__(s, path_lst, touch_db=False):
         s.init_df(path_lst, touch_db=touch_db)
         s.get_params()
-        s.open_pointers()
         s.survey_vecs()
 
     def init_df(s, path_lst, touch_db=False):
         ''' given, a list of paths, intializes the dataframe that represents each existent EROmat.
             pulls info out of the path of each. '''
+        
         row_lst = []
+        pointer_lst = []
+
         missing_count = 0
         for fp in path_lst:
             if os.path.exists(fp):
                 em = EROMat(fp)
+                
                 if touch_db:
                     em.prepare_row()
-                row_lst.append(em.info)
+
+                try:
+                    pointer_lst.append(h5py.File(fp, 'r'))
+                    row_lst.append(em.info)
+                except OSError:
+                    missing_count += 1
             else:
                 missing_count += 1
 
@@ -287,15 +295,13 @@ class EROStack:
         s.data_df = pd.DataFrame.from_records(row_lst)
         s.data_df.set_index(['ID', 'session', 'powertype', 'experiment', 'condition'], inplace=True)
         s.data_df.sort_index(inplace=True)
+        s.pointer_lst = pointer_lst
 
     def get_params(s):
         # em = EROMat(s.data_df.ix[0, 'path'])
         em = EROMat(s.data_df['path'][0])
         em.get_params()
         s.params = em.params
-
-    def open_pointers(s):
-        s.pointer_lst = [h5py.File(fp, 'r') for fp in s.data_df['path'].values]
 
     def survey_vecs(s):
 
@@ -514,6 +520,75 @@ class EROStack:
             for winds, win_chans in winchan_inds:
                 data_vec_win = data_vec[:, winds[fl][0]:winds[fl][1] + 1,
                                            winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                for chan in win_chans:
+                    try:
+                        chan_ind = cinds[cl][chan]
+                        mean_array[fpi, wci] = data_vec_win[chan_ind]
+                    except KeyError:
+                        pass
+                    wci += 1
+            fpi += 1
+
+        column_mi = pd.MultiIndex.from_tuples(winchan_lbl_tups, names=['TFROI', 'channel'])
+
+        mean_df = pd.DataFrame(mean_array, index=s.data_df.index, columns=column_mi)
+        return mean_df
+
+    def tf_mean_lowmem_multi_winchantups_bl(s, windows_channels, bl_window=[-187.5, -100]):
+        ''' given a list of tf windows, which are 4-tuples of (t1, t2, f1, f2),
+            calculate means in those windows for all channels and subjects '''
+    
+        bl_time1 = convert_scale(s.params['Times'], bl_window[0])
+        bl_time2 = convert_scale(s.params['Times'], bl_window[1])
+
+        winchan_inds = []
+        winchan_lbl_tups = []
+        channels = set()
+        for winchans in windows_channels:
+            win = winchans[:4]
+            win_chans = winchans[4]
+            winds = dict()
+            for freq_len, freq_array in s.freqlen_dict.items():
+                winds[freq_len] = (convert_scale(s.params['Times'], win[0]),
+                                   convert_scale(s.params['Times'], win[1]),
+                                   convert_scale(freq_array, win[2]),
+                                   convert_scale(freq_array, win[3]))
+            time_lbl = 'to'.join([str(t) for t in win[0:2]]) + 'ms'
+            freq_lbl = 'to'.join([str(f) for f in win[2:4]]) + 'Hz'
+            win_lbl = '_'.join([time_lbl, freq_lbl])
+            print(winds)
+            winchan_inds.append((winds, win_chans))
+            for chan in win_chans:
+                winchan_lbl_tups.append((win_lbl, chan))
+                channels.add(chan)
+
+        cinds = dict()
+        minds = dict()
+        for chan_len, chan_lst in s.chanlen_dict.items():
+            minds[chan_len] = False
+            tmp_cinds = dict()
+            for c in channels:
+                try:
+                    tmp_cinds[c] = chan_lst.index(c)
+                except ValueError:
+                    print(c, 'not present for', chan_len, '--> filling with nans')
+                    minds[chan_len] = True
+            cinds[chan_len] = tmp_cinds
+
+        n_files = len(s.data_df['path'].values)
+        n_winchans = len(winchan_lbl_tups)
+        mean_array = np.empty((n_files, n_winchans))
+        mean_array.fill(np.nan)  # fill with nan
+
+        fpi = 0
+        for fp, fl, cl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values, s.data_df['chan_len'].values)):
+            data_vec = fp['data']
+            to_div = data_vec[:, bl_time1:bl_time2+1, :].mean(axis=1, keepdims=True)
+            data_vec_bl = 10 * np.log10(data_vec / to_div)
+            wci = 0
+            for winds, win_chans in winchan_inds:
+                data_vec_win = data_vec_bl[:, winds[fl][0]:winds[fl][1] + 1,
+                                              winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
                 for chan in win_chans:
                     try:
                         chan_ind = cinds[cl][chan]
