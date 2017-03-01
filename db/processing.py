@@ -1,6 +1,6 @@
 '''tools and classes to manage HBNL processing
 '''
-import sys, inspect
+import sys, inspect, os
 processing_module = sys.modules[__name__]
 import pandas as pd
 
@@ -13,6 +13,7 @@ def characterize( input ):
     '''
     return { 'type': type(input),
             'size': sys.getsizeof(input)}
+
 
 class ProcessBacked( MongoBacked ):
 
@@ -201,6 +202,38 @@ class workingPipe( ProcessBacked ):
                   'pipe': s.pipe.store_id,
                   'step execution': s.execution_status
                   }
+
+
+base_path =  '/processed_data/csv-analysis-files'
+def write_ERO_pheno_csvs(Wpipe,study,date):
+    pr_type = Wpipe.pipe.steps[0].description['named inputs']['proc_type']
+    ero_df = Wpipe.step_io_data[-1]
+    for exp in ero_df.index.get_level_values('experiment').unique():
+        paths_frame = Wpipe.step_io_data[1]
+        exp_col = [ c for c in paths_frame.columns if exp in c ][0]
+        exp_params_lst =[ pth.split(os.path.sep)[3] for pth in paths_frame[exp_col] if type(pth) == str ]
+        exp_params =  set( exp_params_lst )
+        if len(exp_params) > 1:
+            firstLast_params = [ (ps.split('-')[0],ps.split('-')[1:]) for ps in exp_params ]
+            first_letter = set( [ p[0][0] for p in firstLast_params ] )
+            if len(first_letter) == 1 and first_letter.pop()=='e' and \
+                            len(set([tuple(p[1]) for p in firstLast_params]))==1:
+                params = '-'.join(firstLast_params[0][1])
+
+        else:
+            params = exp_params.pop()
+        for pwr in ero_df.index.get_level_values('powertype').unique():
+            for cond in ero_df.index.get_level_values('condition').unique():
+                for tf in ero_df.columns.get_level_values('TFROI').unique():
+                    write_frame = ero_df.loc[pd.IndexSlice[:,:,pwr,exp,cond],tf]
+                    if len(write_frame) > 0:
+                        write_frame.index = write_frame.index.droplevel(2).droplevel(2).droplevel(2)
+                        write_dir = os.path.sep.join([base_path,pr_type,exp])
+                        if not os.path.exists(write_dir):
+                            os.makedirs(write_dir,exist_ok=True)
+                        write_path = write_dir+os.path.sep + exp+'-'+cond+'_'+tf+'_'+pwr+'-pwr_'+params+ \
+                                '.'+study+'.'+pr_type+'.'+date+'.csv'
+                        write_frame.to_csv(write_path,na_rep='.',float_format='%.5f')
 
 
 '''

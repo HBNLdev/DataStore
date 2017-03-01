@@ -186,7 +186,7 @@ def tf(r, measure='power',
         data, d_dims, d_dimlvls = get_data(r, measure)
         units, lims, cmap = get_plotparams(r, measure, lims, cmap_override)
     else:
-        print('data not recognized')
+        print('measure not recognized')
         return
 
     f_dim, f_vals, f_lbls = handle_by(r, figure_by, d_dims, d_dimlvls)
@@ -226,7 +226,11 @@ def tf(r, measure='power',
                 rect = compound_take(data, dimval_tups)
                 print('done compound take')
             while len(rect.shape) > 2:
-                rect = rect.mean(axis=0)
+                if np.count_nonzero(np.isnan(rect)) == 0:
+                    rect = rect.mean(axis=0)
+                else:
+                    print('Trying nasafe for ', fval, spval)
+                    rect = np.nanmean(rect,axis=0)
                 print(rect.shape)
             ''' contour '''
             c = axarr[spi].contourf(rect, 8, cmap=cmap)
