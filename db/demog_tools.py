@@ -374,7 +374,10 @@ class Family:
                     pred_sex = s.G.node[pred]['sex']
                 except KeyError:
                     pred_sex = '?'
-                pred_lbl = pred_sex + 'pred'
+                try:
+                    pred_lbl = pred_sex + 'pred'
+                except TypeError:
+                    pred_lbl = '?pred'
                 ID_rels_dict[node][pred_lbl].add(pred)
 
                 # predecessors of predecessors (grandparents)

@@ -25,7 +25,7 @@ from .file_handling import (identify_files,
                             Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
                             ERO_CSV)
 from .followups import preparefupdfs_forbuild
-
+from .compilation import buildframe_fromdocs
 
 buildAssociations = { 
             'Core':'core',
@@ -207,10 +207,6 @@ def neuropsych_xmls():
 
 
 def questionnaires_ph123():
-    ''' import all questionnaire info from phases 1 through 3
-        unused because difficult but should fix it later '''
-    # takes  ~20 seconds per questionnaire
-    # phase 1, 2, and 3 non-SSAGA
     kmap = map_ph123
     path = '/processed_data/zork/zork-phase123/session/'
     followups = ['p2', 'p3']
@@ -221,13 +217,9 @@ def questionnaires_ph123():
             match_fups_sessions_generic(Questionnaire.collection, fup, qname)
 
 def questionnaires_ph123_ssaga():
-    ''' import all questionnaire info from phases 1 through 3
-        unused because difficult but should fix it later '''
-    # takes  ~20 seconds per questionnaire
-    # phase 1, 2, and 3 non-SSAGA
     kmap = map_ph123_ssaga
     path = '/processed_data/zork/zork-phase123/session/'
-    followups = ['p2', 'p3']
+    followups = ['p1', 'p2', 'p3']
     for qname in kmap.keys():
         print(qname)
         import_questfolder_ssaga_ph123(qname, kmap, path)
@@ -301,6 +293,87 @@ def internalizing():
         ro.store()
     sourceO = SourceInfo(Internalizing.collection, (path, datemod))
     sourceO.store()
+
+def convert_internalizing_columns(cols):
+    
+    col_tups = []
+    
+    for col in cols:
+        pieces = col.split('_')
+        info = '_'.join(pieces[:-2])
+        fup = '_'.join(pieces[-2:])
+        
+        col_tups.append((info, fup))
+    
+    return pd.MultiIndex.from_tuples(col_tups, names=('', 'followup'))
+
+def convert_intfup(fup):
+    
+    if fup[:2] == 's2':
+        fup_rn = 'p2'
+    else:
+        fup_rn = int(fup[-1])
+        
+    return fup_rn
+
+def convert_questname(v):
+    
+    if v[0] == 'c':
+        return 'cssaga'
+    elif v[1] == 's':
+        return 'ssaga'
+
+def groupby_followup(df):
+    df['followup'] = df.index.get_level_values('followup')
+    g = df.groupby(level=df.index.names[0]) # ID
+    df.drop('followup', axis=1, inplace=True)
+    return g
+
+def internalizing2():
+    ''' build only after ssaga has been built and updated '''
+
+    folder = '/processed_data/zork/zork-phase4-69/subject/internalizing/'
+    file = 'INT_Scale_All-Total-Scores_n11281.csv'
+    int_path = folder + file
+
+    int_df = pd.read_csv(int_path, na_values=' ')
+    int_df['ID'] = int_df['ID'].apply(int).apply(str)
+    int_df.set_index('ID', inplace=True)
+    
+    # convert columns into multiindex
+    int_df2 = int_df.copy() 
+    int_df2.columns = convert_internalizing_columns(int_df2.columns)
+
+    # stack followups and rename columns to be in DB convention
+    int_df3 = int_df2.stack(-1).dropna(how='all').reset_index().\
+                rename(columns={'intvyr': 'date', 'intvsource': 'questname'})
+
+    # convert followups and questnames to be in DB convention
+    int_df4 = int_df3.copy()
+    int_df4['followup'] = int_df4['followup'].apply(convert_intfup)
+    int_df4['questname'] = int_df4['questname'].apply(convert_questname)
+    int_df4.set_index(['ID', 'questname', 'followup'], inplace=True)
+    int_df4.sort_index(inplace=True)
+
+    # calculate maximum score across fups for each individual
+    g = groupby_followup(int_df4)
+    score_cols = [col for col in int_df4.columns if 'score' in col]
+    int_df5 = int_df4.reset_index().set_index('ID')
+    for col in score_cols:
+        int_df5[col+'_fupmax'] = g[col].max()
+    int_df5.set_index(['questname', 'followup'], append=True, inplace=True)
+
+    # retrieve date and session association from ssaga collection
+    IDs = list(set(int_df5.index.get_level_values('ID')))
+    ssaga_query = {'questname': {'$in': ['ssaga', 'cssaga']}, 'ID': {'$in': IDs}}
+    ssaga_proj = {'ID': 1, 'session': 1, 'followup': 1, 'questname': 1, 'date': 1, '_id': 0}
+    docs = Mdb['ssaga'].find(ssaga_query, ssaga_proj)
+    ssaga_df = buildframe_fromdocs(docs, inds=['ID', 'questname', 'followup'])
+    comb_df = int_df5.join(ssaga_df, lsuffix='_int')
+
+    for drec in tqdm(comb_df.reset_index().to_dict(orient='records')):
+        ro = Internalizing(drec)
+        ro.store()
 
 def externalizing():
     # fast

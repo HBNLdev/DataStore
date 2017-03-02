@@ -815,6 +815,7 @@ def scatter(r, measure, variate=None, figure_by=None, subplot_by=None, set_by=No
         except:
             axarr = [axarr]
         for spi, spval in enumerate(sp_vals):
+            text_y = 0.25
             for si, sval in enumerate(s_vals):
                 h_lst = []
                 vals = [fval, spval, sval]
@@ -836,12 +837,13 @@ def scatter(r, measure, variate=None, figure_by=None, subplot_by=None, set_by=No
                 x_pred, y_pred, coef, r2 = regress_linear(xvals, yvals)
                 axarr[spi].plot(x_pred, y_pred, color=colors[si], linewidth=3,
                                    alpha=alpha)
-                regr_text = 'b: {:.2f}, r^2: {:.2f}'.format(coef, r2)
-                axarr[spi].text(0.05, 0.05, regr_text, color=colors[si],
+                regr_text = '{} | b: {:.2f}, r^2: {:.2f}'.format(s_lbls[si], coef, r2)
+                axarr[spi].text(0.05, text_y, regr_text, color=colors[si],
                     transform=axarr[spi].transAxes, fontsize=14, fontweight='bold', va='bottom')
+                text_y -= .1
                 h_lst.append(h)
             axarr[spi].set_title(ld['sp_lbls'][spi], fontweight=stitlefont_wt)
-            # axarr[spi].legend(loc='upper left')
+            axarr[spi].legend(loc='upper left')
             # xticks describe variate
             # axarr[spi].set_xticks(np.arange(n_sets) + width)
             # axarr[spi].set_xticklabels(ld['s_lbls'])

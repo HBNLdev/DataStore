@@ -20,6 +20,20 @@ def latest_session(in_df):
     out_df.set_index('session', append=True, inplace=True)
     return out_df
 
+def mark_latest(in_df):
+    ''' given a datframe with an (ID, session) index, add a column that contains x's
+        for rows that are the latest session '''
+    
+    out_df = in_df.copy()
+    out_df['session'] = out_df.index.get_level_values('session')
+    g = out_df.groupby(level=out_df.index.names[0]) # ID
+    uIDs = g.last().set_index('session', append=True).index.values
+    out_df['latest_session'] = np.nan
+    out_df.loc[uIDs, 'latest_session'] = 'x'
+    out_df.drop('session', axis=1, inplace=True)
+    
+    return out_df
+
 # single value or column apply functions
 
 def mark_overthresh(v, thresh):

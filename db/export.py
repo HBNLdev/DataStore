@@ -13,6 +13,8 @@ from .file_handling import Neuropsych_XML
 npsych_basepath = '/processed_data/neuropsych/neuropsych_all'
 
 def code_gender(v):
+    ''' given neuropsych-style gender labels, return the agreed upon coding '''
+
     if v == 'Female':
         return 0
     elif v == 'Male':
@@ -21,6 +23,8 @@ def code_gender(v):
         return np.nan
 
 def code_hand(v):
+    ''' given neuropsych-style handedness labels, return the agreed upon coding '''
+
     if v == 'Right':
         return 1
     elif v == 'Left':
@@ -31,17 +35,30 @@ def code_hand(v):
         return np.nan
 
 
-def get_bestsession(df):
+def get_bestsession(df, datediff_col='session_datediff'):
+    ''' given a dataframe with columns of ID, session, and session_datediff,
+        add a column called session_best, which is a copy of session, except
+        for duplicated ID/session combinations,
+        only the one with the smallest date difference is kept '''
 
     in_inds = df.index.names
 
     df_uID = df.reset_index().set_index(['ID', 'session'])
     df_uID['session_best'] = df_uID.index.get_level_values('session')
 
-    df_uID_sort = df_uID.sort_values('session_datediff').sort_index()
+    df_uID_sort = df_uID.sort_values(datediff_col).sort_index()
     df_uID_sort.ix[df_uID_sort.index.duplicated(keep='first'), 'session_best'] = np.nan
 
     return df_uID_sort.reset_index().set_index(in_inds)
+
+
+def keep_bestsession(df, datediff_col='session_datediff'):
+    
+    df['session'] = df.index.get_level_values('session')
+    out_df = df.ix[df['session']==df['session_best']]
+    out_df.drop(['session', 'session_best'], axis=1, inplace=True)
+    
+    return out_df
 
 
 def neuropsych(do_export=True):
