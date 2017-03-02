@@ -5,10 +5,11 @@ from matplotlib import pyplot as plt
 
 from collections import Counter
 
-def session_counts(df,counter=''):
-    df.reset_index()
-    df.set_index(['ID','session'])
+def session_counts(df):
+    df = df.reset_index()
+    df = df.set_index(['ID','session'])
     ses_counts = df.groupby(level=0).count()
+    return ses_counts
 
 def histogram(df,property,bins='auto',type='plot',continuous=False,ax=None):
     vc = df[property].value_counts()
