@@ -170,14 +170,14 @@ def careful_join(comp_df, collection, subcoll=None, do_fill=False,
     # handle the dx subcolls
     if subcoll:
         if 'dx_' in subcoll:
-            subcoll_safe = subcoll[3:]
+            subcoll_safe_prefix = subcoll[3:6]
         else:
-            subcoll_safe = subcoll
+            subcoll_safe_prefix = subcoll[:3]
     else:
-        subcoll_safe = None
+        subcoll_safe_prefix = collection[:3]
 
-    new_datecol = subcoll_safe[:3] + '_date'
-    fup_col = subcoll_safe[:3] + '_followup'
+    new_datecol = subcoll_safe_prefix + '_date'
+    fup_col = subcoll_safe_prefix + '_followup'
 
     # prepare data to join, rename the date column, and
     # drop rows which have the same ID and followup number
@@ -225,7 +225,7 @@ def careful_join(comp_df, collection, subcoll=None, do_fill=False,
 
     # fill sessions in a "nearest in time" manner within IDs
     # assess info coverage before and after
-    joined_cols = [col for col in comp_dfj.columns if subcoll_safe[:3] + '_' in col]
+    joined_cols = [col for col in comp_dfj.columns if subcoll_safe_prefix + '_' in col]
     if do_fill:
         prefill_cvg = comp_dfj[joined_cols].count() / comp_dfj.shape[0]
         comp_dfj_out = time_proximal_fill_fast(comp_dfj, new_datecol, fup_col,
@@ -256,7 +256,6 @@ def careful_join_ssaga(comp_df, raw=False, do_fill=False, min_age=-np.inf, max_a
         carefully join the SSAGA and CSSAGA info '''
 
     coll = 'ssaga'
-    subcoll_safe = 'ssaga'
     prefix = 'ssa_'
 
     if raw:
@@ -272,8 +271,8 @@ def careful_join_ssaga(comp_df, raw=False, do_fill=False, min_age=-np.inf, max_a
         fups = followups
 
     # parse the target name to get knowledge about it
-    new_datecol = subcoll_safe[:3] + '_date'
-    fup_col = subcoll_safe[:3] + '_followup'
+    new_datecol = 'ssa_date'
+    fup_col = 'ssa_followup'
 
     id_field = 'ID'
     add_proj = {}
@@ -339,7 +338,7 @@ def careful_join_ssaga(comp_df, raw=False, do_fill=False, min_age=-np.inf, max_a
 
     # fill sessions in a "nearest in time" manner within IDs
     # assess info coverage before and after
-    joined_cols = [col for col in comp_dfj.columns if subcoll_safe[:3] + '_' in col]
+    joined_cols = [col for col in comp_dfj.columns if prefix in col]
     if do_fill:
         prefill_cvg = comp_dfj[joined_cols].count() / comp_dfj.shape[0]
         comp_dfj_out = time_proximal_fill_fast(comp_dfj, new_datecol, fup_col,
