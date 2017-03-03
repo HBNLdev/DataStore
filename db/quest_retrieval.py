@@ -2,14 +2,14 @@
 
 import os
 import shutil
-import requests
 import zipfile
-from time import sleep
 from glob import glob
+from time import sleep
 
 import pandas as pd
+import requests
 
-from db.quest_import import sasdir_tocsv, map_ph4, map_ph4_ssaga, map_subject, ach_url
+from .quest_import import sasdir_tocsv, map_ph4, map_ph4_ssaga, map_subject, ach_url
 
 # combine maps for future usage
 all_kmap = map_ph4.copy()
@@ -24,6 +24,17 @@ ach_url_parts = ach_url.split(os.path.sep)
 ach_currentname = os.path.splitext(ach_url_parts[-1])[0]
 ach_currentname_spaces = ach_currentname.replace('%20', ' ')
 ach_currentname_nospaces = ach_currentname.replace('%20', '')
+
+
+def recursive_unzip(path):
+    ''' given a path, recursively unzip all files within '''
+
+    # unzip files in their directories
+    for roots, dirs, files in os.walk(path):
+        for name in files:
+            if name.endswith('.zip'):
+                zipfile.ZipFile(os.path.join(roots, name)).extractall(os.path.join(roots))
+                print('Unzipping ' + '||' + name + '||')
 
 
 def zork_retrieval(user_name, password, distro_num, target_base_dir='/processed_data/zork'):
@@ -50,7 +61,7 @@ def zork_retrieval(user_name, password, distro_num, target_base_dir='/processed_
     aeq_dir = os.path.join(target_base_dir, distro_subdir, 'session', 'aeq') + '/'
     aeq_patch_dict = prepare_patchdict(aeq_dir, ['aeqa4', 'aeq4'], ['aeqascore4', 'aeqscore4'])
     patch(aeq_patch_dict)
-    
+
     sensation_dir = os.path.join(target_base_dir, distro_subdir, 'session', 'sensation') + '/'
     sensation_patch_dict = prepare_patchdict(sensation_dir, ['ssv4'], ['ssvscore4'])
     patch(sensation_patch_dict)
@@ -80,14 +91,15 @@ def zork_download(target_base_dir, distro_subdir, user_name, password):
         except:
             print('download failed:', url)
             return False
-        sleep(3) # pause for a few seconds to give the server a break
+        sleep(3)  # pause for a few seconds to give the server a break
         # error check -- if url doesnt exist then print missing zip???
         zip_name = url.split('/')[-1]
         with open(os.path.join(target_base_dir, distro_subdir, zip_name), 'wb') as zip_pointer:
             zip_pointer.write(download.content)
             print('Downloading ' + '||' + zip_name + '||')
-    
+
     return True
+
 
 def zork_move(target_base_dir, distro_subdir):
     ''' creates directories and moves zork zips around '''
@@ -120,17 +132,6 @@ def zork_move(target_base_dir, distro_subdir):
                     shutil.move(os.path.join(path, 'subject', file), os.path.join(path, 'subject', quest, file))
 
 
-def recursive_unzip(path):
-    ''' given a path, recursively unzip all files within '''
-
-    # unzip files in their directories
-    for roots, dirs, files in os.walk(path):
-        for name in files:
-            if name.endswith('.zip'):
-                zipfile.ZipFile(os.path.join(roots, name)).extractall(os.path.join(roots))
-                print('Unzipping ' + '||' + name + '||')
-
-
 def zork_convert(path):
     ''' convert all .sas7bdat files within path to csvs and handle some exceptions unique to zork stuff '''
 
@@ -160,25 +161,25 @@ def zork_convert(path):
 
 
 def prepare_patchdict(target_dir, date_file_pfixes, score_file_pfixes, file_ext='.sas7bdat.csv', max_fups=5):
-    
     fp_infolder = glob(target_dir + '*' + file_ext)
-#     print(fp_infolder)
-    
+    #     print(fp_infolder)
+
     tojoin_dict = {}
-    
+
     for fpfix_date, fpfix_score in zip(date_file_pfixes, score_file_pfixes):
-        for fup in range(max_fups+1):
+        for fup in range(max_fups + 1):
             if fup == 0:
                 f_suff = file_ext
             else:
                 f_suff = '_f' + str(fup) + file_ext
             fp_date = target_dir + fpfix_date + f_suff
             fp_score = target_dir + fpfix_score + f_suff
-#             print(fp_date, fp_score)
+            #             print(fp_date, fp_score)
             if fp_date in fp_infolder and fp_score in fp_infolder:
                 tojoin_dict[fp_date] = fp_score
-    
+
     return tojoin_dict
+
 
 def patch(patch_dict, date_cols=['ADM_Y', 'ADM_M', 'ADM_D']):
     ''' given a patching dictionary in which keys are CSVs containing date_cols, and

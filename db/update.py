@@ -1,18 +1,17 @@
 ''' performing updates on documents '''
 
-from tqdm import tqdm
-
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
-from .organization import Mdb
 from .compilation import buildframe_fromdocs
+from .organization import Mdb
+
 
 def subjects_from_followups():
-
     fup_query = {'session': {'$ne': np.nan}}
     fup_fields = ['ID', 'session', 'followup', 'date']
-    fup_proj = {f:1 for f in fup_fields}
+    fup_proj = {f: 1 for f in fup_fields}
     fup_proj['_id'] = 0
     fup_docs = Mdb['followups'].find(fup_query, fup_proj)
     fup_df = buildframe_fromdocs(fup_docs, inds=['ID'])
@@ -20,7 +19,7 @@ def subjects_from_followups():
 
     subject_query = {'ID': {'$in': fup_IDs}}
     subject_fields = ['ID']
-    subject_proj = {f:1 for f in subject_fields}
+    subject_proj = {f: 1 for f in subject_fields}
     subject_docs = Mdb['subjects'].find(subject_query, subject_proj)
     subject_df = buildframe_fromdocs(subject_docs, inds=['ID'])
 
@@ -31,15 +30,14 @@ def subjects_from_followups():
         fup_field = session + '-fup'
         date_field = session + '-fdate'
         Mdb['subjects'].update_one({'_id': row['_id']},
-                                     {'$set': {fup_field: row['followup'],
-                                               date_field: row['date']}})
+                                   {'$set': {fup_field: row['followup'],
+                                             date_field: row['date']}})
 
 
 def sessions_from_followups():
-
     fup_query = {'session': {'$ne': np.nan}}
     fup_fields = ['ID', 'session', 'followup', 'date']
-    fup_proj = {f:1 for f in fup_fields}
+    fup_proj = {f: 1 for f in fup_fields}
     fup_proj['_id'] = 0
     fup_docs = Mdb['followups'].find(fup_query, fup_proj)
     fupsession_df = buildframe_fromdocs(fup_docs, inds=['ID', 'session'])
@@ -47,9 +45,9 @@ def sessions_from_followups():
 
     session_query = {'ID': {'$in': fup_IDs}}
     session_fields = ['ID', 'session']
-    session_proj = {f:1 for f in session_fields}
+    session_proj = {f: 1 for f in session_fields}
     session_docs = Mdb['sessions'].find(session_query, session_proj)
-    session_df = buildframe_fromdocs(session_docs, inds=['ID', 'session'])  
+    session_df = buildframe_fromdocs(session_docs, inds=['ID', 'session'])
 
     combsession_df = session_df.join(fupsession_df)
     combsession_df.dropna(subset=['date'], inplace=True)
@@ -58,11 +56,11 @@ def sessions_from_followups():
         fup_field = 'followup'
         date_field = 'followup-date'
         Mdb['sessions'].update_one({'_id': row['_id']},
-                                     {'$set': {fup_field: row['followup'],
-                                               date_field: row['date']}})    
+                                   {'$set': {fup_field: row['followup'],
+                                             date_field: row['date']}})
+
 
 def neuropsych_from_sfups():
-
     max_fups = max(Mdb['neuropsych'].distinct('np_followup'))
     for fup in range(max_fups + 1):
         # match sessions
@@ -71,7 +69,6 @@ def neuropsych_from_sfups():
         # match followups
         match_fups_sessions_flex('neuropsych', assessment_col='np_followup', assessment_val=fup,
                                  sfup_coll='followups', date_col='testdate')
-
 
 
 def clear_field(coll, field):
@@ -90,7 +87,7 @@ def match_fups_sessions_flex(match_coll, assessment_col, assessment_val,
 
     match_collection = Mdb[match_coll]
     match_query = {assessment_col: assessment_val}
-    match_proj = {'_id': 1, 'ID': 1, date_col: 1,}
+    match_proj = {'_id': 1, 'ID': 1, date_col: 1, }
     match_docs = match_collection.find(match_query, match_proj)
     match_df = buildframe_fromdocs(match_docs, inds=['ID'])
     if match_df.empty:
@@ -146,9 +143,8 @@ def match_fups_sessions_flex(match_coll, assessment_col, assessment_val,
             datediff_days = None
         match_collection.update_one({'_id': qrow['match__id']},
                                     {'$set': {sfup_index: qrow['nearest_sfup'],
-                                              sfup_index+'_datediff': datediff_days}
+                                              sfup_index + '_datediff': datediff_days}
                                      })
-
 
 # graveyard
 
@@ -169,7 +165,7 @@ def match_fups_sessions_flex(match_coll, assessment_col, assessment_val,
 #     ssaga_df = buildframe_fromdocs(ssaga_docs, inds=['ID', 'questname', 'followup'])
 
 #     comb_df = int_df4.join(ssaga_df, lsuffix='_int')
-    
+
 #     for ID, row in tqdm(comb_df.iterrows()):
 #         Mdb['internalizing'].update_one({'_id': row['_id']},
 #             {'$set': {'session': row['session'],

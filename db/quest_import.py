@@ -11,7 +11,9 @@ from sas7bdat import SAS7BDAT
 from tqdm import tqdm
 
 from .compilation import buildframe_fromdocs
-from .organization import Mdb, Questionnaire, SSAGA, SourceInfo
+from .organization import Mdb, Questionnaire, SSAGA
+from .utils.dates import parse_date, parse_date_apply_pd
+from .utils.compilation import df_fromcsv
 
 # note we defaultly use this dateformat because pandas sniffs to this format
 def_info = {'date_lbl': ['ADM_Y', 'ADM_M', 'ADM_D'],
@@ -195,7 +197,8 @@ def sasdir_tocsv(target_dir):
 
 
 def quest_pathfollowup(path, file_pfixes, file_ext, max_fups):
-    ''' build dict of followups to filepaths '''
+    ''' given path to parent directoy, a list of file prefixes, a file extension, and max number of followups,
+        build a dict which maps valid filepaths to the corresponding followup number '''
 
     fn_dict = {}
     fn_infolder = glob(path + '*' + file_ext)
@@ -214,7 +217,8 @@ def quest_pathfollowup(path, file_pfixes, file_ext, max_fups):
 
 
 def quest_pathfollowup_ssaga(path, file_pfixes, file_ext, max_fups):
-    ''' build dict of followups to filepaths '''
+    ''' given path to parent directoy, a list of file prefixes, a file extension, and max number of followups,
+        build a dict which maps a followup number to a list of corresponding valid filepaths '''
 
     fn_dict = defaultdict(list)
     fn_infolder = glob(path + '*' + file_ext)
@@ -231,76 +235,6 @@ def quest_pathfollowup_ssaga(path, file_pfixes, file_ext, max_fups):
                 fn_dict[followup].append(fpathstr)
 
     return fn_dict
-
-
-def parse_date(dstr, dateform):
-    ''' parse date column '''
-
-    dstr = str(dstr)
-
-    if dstr != 'nan':
-        return datetime.strptime(dstr, dateform)
-    else:
-        return None
-
-
-def parse_date2_apply(dstr, dateform):
-    dstr = str(dstr)
-
-    if dstr != 'nan':
-        try:
-            return datetime.strptime(dstr, dateform)
-        except ValueError:
-            return None
-    else:
-        return None
-
-
-def parse_date_apply_pd(dstr, dateform):
-    dstr = str(dstr)
-
-    if dstr != 'nan':
-        try:
-            return datetime.strptime(dstr, dateform)
-        except ValueError:
-            try:
-                return datetime.strptime(dstr, '%Y-%m-%d')
-            except ValueError:
-                return None
-    else:
-        return None
-
-
-def df_fromcsv(fullpath, id_lbl='ind_id', na_val=''):
-    ''' convert csv into dataframe, converting ID column to standard '''
-
-    # read csv in as dataframe
-    try:
-        df = pd.read_csv(fullpath, na_values=na_val)
-    except pd.parser.EmptyDataError:
-        print('csv file was empty, continuing')
-        return pd.DataFrame()
-
-    # convert id to str and save as new column
-    df[id_lbl] = df[id_lbl].apply(int).apply(str)
-    df['ID'] = df[id_lbl]
-    df.set_index('ID', drop=False, inplace=True)
-
-    return df
-
-
-def df_fromsas(fullpath, id_lbl='ind_id'):
-    ''' convert .sas7bdat to dataframe.
-        unused because fails on incorrectly formatted files. '''
-
-    # read csv in as dataframe
-    df = pd.read_sas(fullpath, format='sas7bdat')
-
-    # convert id to str and save as new column
-    df[id_lbl] = df[id_lbl].apply(int).apply(str)
-    df['ID'] = df[id_lbl]
-
-    return df
 
 
 def build_inputdict(name, knowledge_dict):
@@ -373,10 +307,6 @@ def import_questfolder_ph4(qname, kmap, path):
         for drec in df.to_dict(orient='records'):
             ro = Questionnaire(qname, followup_num, info=drec)
             ro.storeNaTsafe()
-        datemod = datetime.fromtimestamp(os.path.getmtime(i['path']))
-        sourceO = SourceInfo('questionnaires',
-                             (i['path'], datemod), qname)
-        sourceO.store()
 
 
 def import_questfolder_ssaga_ph4(qname, kmap, path):
@@ -451,10 +381,6 @@ def import_questfolder_ssaga_ph4(qname, kmap, path):
             ro = SSAGA('dx_' + qname, followup_num, info=drec)
             ro.storeNaTsafe()
 
-        datemod = datetime.fromtimestamp(os.path.getmtime(i['path']))
-        sourceO = SourceInfo('ssaga', (i['path'], datemod), qname)
-        sourceO.store()
-
 
 def import_questfolder_ph123(qname, kmap, path):
     ''' import all questionnaire data in one folder,
@@ -511,7 +437,6 @@ harm_info_csv = '/processed_data/zork/harmonization/harmonization-combined-forma
 
 
 def create_ssagaharm_renamer(ssaga_type, phase):
-
     if ssaga_type == 'pssaga':
         ssaga_type = 'cssaga'
 
@@ -580,8 +505,6 @@ def import_questfolder_ssaga_ph123(qname, kmap, path):
         # df.set_index('ID', inplace=True)
         df.drop(i['id_lbl'], axis=1, inplace=True)
 
-
-
         if fname[:3] == 'dx_':
             for drec in df.to_dict(orient='records'):
                 ro = SSAGA('dx_' + qname, followup, info=drec)
@@ -595,10 +518,6 @@ def import_questfolder_ssaga_ph123(qname, kmap, path):
             for drec in df.to_dict(orient='records'):
                 ro = SSAGA(qname, followup, info=drec)
                 ro.storeNaTsafe()
-
-                # datemod = datetime.fromtimestamp(os.path.getmtime(i['path']))
-                # sourceO = SourceInfo('ssaga', (i['path'], datemod), qname)
-                # sourceO.store()
 
 
 def match_fups2sessions(qname, knowledge_dict, path, q_collection):

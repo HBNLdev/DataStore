@@ -4,31 +4,10 @@ import numpy as np
 import pandas as pd
 
 from .compilation import prepare_joindata, get_colldocs, prepare_indices
-from .organization import flatten_dict
-from .quest_import import map_ph4, map_ph4_ssaga, build_inputdict
+from .utils.records import flatten_dict
 
 map_allothers = {'neuropsych': {'date_lbl': 'testdate'},
                  'EEGbehavior': {'date_lbl': 'date'}}
-
-
-# utility functions
-
-
-def get_kdict(collection, subcoll):
-    ''' given a collection and subcollection, return the knowledge dict '''
-
-    if collection is 'questionnaires':
-        kmap = map_ph4
-    elif collection is 'ssaga':
-        kmap = map_ph4_ssaga
-    elif collection in map_allothers:
-        kmap = map_allothers
-    else:
-        print('collection not supported')
-        kmap = None
-        return
-    i = build_inputdict(subcoll, kmap)
-    return i
 
 
 def handle_dupes(join_df_sdate, new_datecol, fup_col, session_datecol):
@@ -239,14 +218,6 @@ def careful_join(comp_df, collection, subcoll=None, do_fill=False,
 
     comp_dfj_out[joined_cols].dropna(axis=0, how='all')
     return comp_dfj_out
-
-
-def index_diagnostics(df):
-    shape = df.shape
-    dupes = df.index.has_duplicates
-    unique = df.index.is_unique
-    mono = df.index.is_monotonic
-    print('shape:', shape, '| dupes:', dupes, '| unique:', unique, '| monotonic:', mono)
 
 
 def careful_join_ssaga(comp_df, raw=False, do_fill=False, min_age=-np.inf, max_age=np.inf,

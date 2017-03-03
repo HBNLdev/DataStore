@@ -8,506 +8,27 @@ from collections import OrderedDict
 from datetime import datetime
 
 import h5py
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from .organization import unflatten_dict, Mdb
-from .utils import next_file_with_base, join_allcols
-
-site_hash = {'a': 'uconn',
-             'b': 'indiana',
-             'c': 'iowa',
-             'd': 'suny',
-             'e': 'washu',
-             'f': 'ucsd',
-             'h': 'unknown',
-             '1': 'uconn',
-             '2': 'indiana',
-             '3': 'iowa',
-             '4': 'suny',
-             '5': 'washu',
-             '6': 'ucsd',
-             '7': 'howard',
-             '8': 'unknown'
-             }
-site_hash_rev = {
-    v: k for k, v in site_hash.items() if k in [str(n) for n in range(1, 9)]}
-
-rd_subdir_tosite = {'alc': 'a-subject',
-                    'control': 'c-subjects',
-                    'high_risk': 'h-subjects'}
-
-system_shorthands = {'mc': 'masscomp',
-                     'ns': 'neuroscan'}
-
-current_experiments = ['eeo', 'eec', 'vp3', 'cpt', 'ern',
-                       'ant', 'aod', 'ans', 'stp', 'gng']
-
-experiment_shorthands = {'aa': 'ap3',
-                         'ab': 'abk',
-                         'an': 'ant',
-                         'ao': 'aod',
-                         'as': 'asa',
-                         'av': 'avm',
-                         'ax': 'axv',
-                         'bl': 'blk',
-                         'bt': 'btk',
-                         'cl': 'clr',
-                         'cn': 'cnv',
-                         'co': 'cob',
-                         'cp': 'cpt',
-                         'cs': 'csb',
-                         'ea': 'eas',
-                         'ec': 'eec',
-                         'eo': 'eeo',
-                         'es': 'esa',
-                         'et': 'etg',
-                         'fa': 'fac',
-                         'fb': 'fbc',
-                         'fc': 'fcc',
-                         'fd': 'fdc',
-                         'fe': 'fec',
-                         'fg': 'fgc',
-                         'fh': 'fhc',
-                         'fn': 'fne',
-                         'fo': 'foa',
-                         'fr': 'fre',
-                         'ft': 'ftl',
-                         'il': 'iln',
-                         'im': 'imn',
-                         'is': 'ish',
-                         'it': 'iti',
-                         'ke': 'key',
-                         'mf': 'mmf',
-                         'ml': 'mlg',
-                         'mm': 'mmn',
-                         'mn': 'mng',
-                         'mo': 'mob',
-                         'ms': 'mms',
-                         'mt': 'mtg',
-                         'ob': 'obj',
-                         'om': 'oma',
-                         'os': 'osa',
-                         'ow': 'owa',
-                         'ox': 'oxg',
-                         'rf': 'rfa',
-                         'rn': 'rno',
-                         'ro': 'rot',
-                         'rp': 'rep',
-                         'sh': 'shp',
-                         'sp': 'spc',
-                         'st': 'str',
-                         'ti': 'tim',
-                         'tm': 'trm',
-                         'tv': 'trv',
-                         'va': 'va3',
-                         'vp': 'vp3'}
+from .organization import Mdb
+from .utils.compilation import join_allcols, extract_session_fromuID, join_ufields, column_split
+from .utils.filenames import parse_filename, system_shorthands
+from .utils.records import unflatten_dict
 
 
-def parse_filename(filename, include_full_ID=False):
-    if os.path.sep in filename:
-        filename = os.path.split(filename)[1]
+def next_file_with_base(directory, base, ext):
+    ''' given directory, base filename, and extension,
+        return the next file of its type '''
 
-    # neuroscan type
-    if '_' in filename:
-        pieces = filename.split('_')
-        experiment = pieces[0]
-        version = pieces[1]
-        session_piece = pieces[2]
-        session_letter = session_piece[0]
-        run_number = session_piece[1]
-
-        subject_piece = pieces[3]
-        system = 'neuroscan'  # preliminary
-        fam_number = subject_piece[1:5]
-        subject = subject_piece[5:8]
-        if fam_number in ['0000', '0001'] and subject_piece[0] in 'achp':
-            site = subject_piece[0] + '-subjects'
-            if fam_number == '0000':  # no family
-                family = 0
-            # need to check master file here to see if h and p subjects are
-            # masscomp or neuroscan
-            if fam_number == '0001':
-                # need to look here for three recordings on family 0001
-                family = 0
-
-        else:
-            family = fam_number
-            site = site_hash[subject_piece[0].lower()]
-            if not subject_piece[0].isdigit():
-                system = 'masscomp'
-                subject_piece = site_hash_rev[site_hash[
-                    subject_piece[0].lower()]] + subject_piece[1:]
-
-    # masscomp
+    files = [f for f in os.listdir(directory) if base in f and '.' + ext in f]
+    if files:
+        numbers = [int(os.path.splitext(f)[0].split('_')[-1]) for f in files]
+        next_num = max(numbers) + 1
     else:
-        system = 'masscomp'
-        experiment_short = filename[:2]
-        experiment = experiment_shorthands[experiment_short]
-        site_letter = filename[3].lower()
-        if filename[4:8] in ['0000', '5000']:  # no family
-            site = site_letter + '-subjects'
-            family = 0
-        else:
-            family = filename[4:8]
-            site = site_hash[site_letter.lower()]
-
-        run_number = '1'  # determine first or second run
-        if filename[4] == '5':
-            run_number = '2'
-
-        if site_letter.lower() == site_letter:
-            session_letter = 'a'
-        else:
-            session_letter = 'b'
-
-        subject = filename[8:11]
-        subject_piece = site_hash_rev[site_hash[site_letter]] + filename[4:11]
-        version = filename[2]
-
-    output = {'system': system,
-              'experiment': experiment,
-              'session': session_letter,
-              'run': run_number,
-              'site': site,
-              'family': family,
-              'subject': subject,
-              'id': subject_piece,
-              'version': version}
-
-    if include_full_ID:
-        try:
-            output['ID'] = site_hash_rev[site] + family + subject
-        except:
-            output['ID'] = filename
-
-    return output
-
-
-def parse_filename_tester():
-    cases = [('vp3_6_e1_10162024_avg.mt', 'neuroscan', 'vp3', 'uconn', 162, 24, 'e', 1),
-             ('vp2e0157027.mt', 'masscomp', 'vp3', 'washu', 157, 27, 'a', 1),
-             ('aod_5_a1_c0000857_avg.h1', 'neuroscan',
-              'aod', 'c-subjects', 0, 857, 'a', 1),
-             ('vp2c5000027.mt', 'masscomp',
-              'vp3', 'c-subjects', 0, 27, 'a', 2),
-             ('aod_5_a2_c0000857_avg.h1', 'neuroscan',
-              'aod', 'c-subjects', 0, 857, 'a', 2)
-             ]
-    for case in cases:
-        info = parse_filename(case[0])
-        if ((info['system'] != case[1]) or (info['experiment'] != case[2]) or
-                (info['site'] != case[3]) or (int(info['family']) != case[4]) or (int(info['subject']) != case[5]) or
-                (info['session'] != case[6]) or (int(info['run']) != case[7])):
-            print(info, ' mismatch for case: ', case)
-
-
-def parse_mt_name(file_or_path):
-    if os.path.sep in file_or_path:
-        name = os.path.split(file_or_path)[1]
-    else:
-        name = file_or_path
-    base_ext = name.split('.')
-    
-    parts = parse_filename(base_ext[0])
-    parts['case'] = base_ext[2]
-    
-    return parts
-
-
-def parse_STinv_path(path):
-    path, filename = os.path.split(path)
-
-    info = {}
-
-    path_parts = path.split(os.path.sep)
-    info['prc_ver'] = path_parts[2][-2]
-    info['param_string'] = path_parts[-2]
-    info['n_chans'] = path_parts[-5][-2:]
-
-    base_ext = filename.split('.')
-    fn_parts = parse_filename(base_ext[0])
-    fn_parts['ID'] = fn_parts['id']
-    fn_parts['case'] = base_ext[2]
-    info.update(fn_parts)
-
-    return info
-
-
-def parse_rd_path(filepath):
-    path_parts = filepath.split(os.path.sep)
-    full_filename = path_parts[-1]
-    filename, ext = os.path.splitext(full_filename)
-
-    system = 'masscomp'
-    subdir = path_parts[3]
-    if subdir == 'coga':
-        site = path_parts[-3]
-    elif subdir in rd_subdir_tosite.keys():
-        site = rd_subdir_tosite[subdir]
-    else:
-        site = 'unknown'
-
-    experiment_short = filename[:2]
-    try:
-        experiment = experiment_shorthands[experiment_short]
-    except KeyError:
-        experiment = 'unknown'
-
-    if filename[4:8] in ['0000', '5000']:  # no family
-        family = None
-    else:
-        family = filename[4:8]
-
-    run_number = '1'  # determine first or second run
-    if filename[4] == '5':
-        run_number = '2'
-
-    subject_piece = path_parts[-2]
-    site_letter = filename[3].lower()
-    if site_letter.lower() == site_letter:
-        session_letter = 'a'
-    else:
-        session_letter = 'b'
-
-    subject = filename[8:11]
-    version = filename[2]
-
-    output = {'system': system,
-              'experiment': experiment,
-              'session': session_letter,
-              'run': run_number,
-              'site': site,
-              'family': family,
-              'subject': subject,
-              'ID': subject_piece,
-              'version': version,
-              'path': filepath}
-
-    return output
-
-
-def parse_cnt_path(filepath):
-    full_filename = os.path.split(filepath)[1]
-    filename, ext = os.path.splitext(full_filename)
-
-    pieces = filename.split('_')
-    experiment = pieces[0]
-    version = pieces[1]
-    session_piece = pieces[2]
-    session_letter = session_piece[0]
-    run_number = session_piece[1]
-
-    subject_piece = pieces[3]
-    system = 'neuroscan'  # preliminary
-    fam_number = subject_piece[1:5]
-    subject = subject_piece[5:8]
-
-    if fam_number in ['0000', '0001'] and subject_piece[0] in 'acghp':
-        site = subject_piece[0] + '-subjects'
-        if fam_number == '0000':  # no family
-            family = 0
-        if fam_number == '0001':
-            family = 0
-    else:
-        family = fam_number
-        site = site_hash[subject_piece[0].lower()]
-        if not subject_piece[0].isdigit():
-            system = 'masscomp'
-            subject_piece = site_hash_rev[site_hash[
-                subject_piece[0].lower()]] + subject_piece[1:]
-
-    try:
-        bitrate_or_note = pieces[4]
-    except:
-        bitrate_or_note = None
-
-    try:
-        note = pieces[5]
-    except:
-        note = None
-
-    try:
-        int(bitrate_or_note)
-        bitrate = bitrate_or_note
-    except:
-        note = bitrate_or_note
-        bitrate = None
-
-    output = {'path': filepath,
-              'system': system,
-              'experiment': experiment,
-              'session': session_letter,
-              'run': run_number,
-              'site': site,
-              'family': family,
-              'subject': subject,
-              'ID': subject_piece,
-              'version': version,
-              'bitrate': bitrate,
-              'note': note}
-
-    return output
-
-
-def parse_cnth1_path(filepath):
-    full_dir, full_filename = os.path.split(filepath)
-
-    dir_pieces = full_dir.split(os.path.sep)
-    rec_type = dir_pieces[6]
-    n_chans = rec_type[-2:]
-    
-    filename, ext = os.path.splitext(full_filename)
-
-    pieces = filename.split('_')
-    experiment = pieces[0]
-    version = pieces[1]
-    session_piece = pieces[2]
-    session_letter = session_piece[0]
-    run_number = session_piece[1]
-
-    subject_piece = pieces[3]
-    system = 'neuroscan'  # preliminary
-    fam_number = subject_piece[1:5]
-    subject = subject_piece[5:8]
-
-    if fam_number in ['0000', '0001'] and subject_piece[0] in 'acghp':
-        site = subject_piece[0] + '-subjects'
-        if fam_number == '0000':  # no family
-            family = 0
-        if fam_number == '0001':
-            family = 0
-    else:
-        family = fam_number
-        site = site_hash[subject_piece[0].lower()]
-        if not subject_piece[0].isdigit():
-            system = 'masscomp'
-            subject_piece = site_hash_rev[site_hash[
-                subject_piece[0].lower()]] + subject_piece[1:]
-
-    try:
-        bitrate = pieces[4]
-    except:
-        bitrate = None
-
-    output = {'filepath': filepath,
-              'system': system,
-              'experiment': experiment,
-              'session': session_letter,
-              'run': run_number,
-              'site': site,
-              'family': family,
-              'subject': subject,
-              'ID': subject_piece,
-              'uID': subject_piece + '_' + session_letter,
-              'version': version,
-              'bitrate': bitrate,
-              'n_chans': n_chans,
-              'rec_type': rec_type}
-
-    return output
-
-
-def parse_avgh1_path(filepath):
-
-    full_dir, full_filename = os.path.split(filepath)
-
-    dir_pieces = full_dir.split(os.path.sep)
-    rec_type = dir_pieces[6]
-    param_str = dir_pieces[4]
-    n_chans = rec_type[-2:]
-    
-    filename, ext = os.path.splitext(full_filename)
-
-    pieces = filename.split('_')
-    experiment = pieces[0]
-    version = pieces[1]
-    session_piece = pieces[2]
-    session_letter = session_piece[0]
-    run_number = session_piece[1]
-
-    subject_piece = pieces[3]
-    system = 'neuroscan'  # preliminary
-    fam_number = subject_piece[1:5]
-    subject = subject_piece[5:8]
-
-    if fam_number in ['0000', '0001'] and subject_piece[0] in 'acghp':
-        site = subject_piece[0] + '-subjects'
-        if fam_number == '0000':  # no family
-            family = 0
-        if fam_number == '0001':
-            family = 0
-    else:
-        family = fam_number
-        site = site_hash[subject_piece[0].lower()]
-        if not subject_piece[0].isdigit():
-            system = 'masscomp'
-            subject_piece = site_hash_rev[site_hash[
-                subject_piece[0].lower()]] + subject_piece[1:]
-
-    output = {'filepath': filepath,
-              'system': system,
-              'experiment': experiment,
-              'session': session_letter,
-              'run': run_number,
-              'site': site,
-              'family': family,
-              'subject': subject,
-              'ID': subject_piece,
-              'uID': subject_piece + '_' + session_letter,
-              'version': version,
-              'param_str': param_str,
-              'n_chans': n_chans,
-              'rec_type': rec_type}
-
-    return output
-
-
-def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
-    file_list = []
-    date_list = []
-
-    for dName, sdName, fList in os.walk(starting_directory):
-
-        for filename in fList:
-            path = dName
-            if 'reject' not in path:
-                fullpath = os.path.join(path, filename)
-                if os.path.exists(fullpath):
-                    if shutil.fnmatch.fnmatch(filename, filter_pattern):
-                        if file_parameters:
-                            file_info = parse_filename(filename)
-
-                            param_ck = [file_parameters[k] == file_info[k]
-                                        for k in file_parameters]
-                        else:
-                            param_ck = [True]
-                        if time_range:
-                            time_ck = False
-                            stats = os.stat(fullpath)
-                            if time_range[0] < stats.st_ctime < time_range[1]:
-                                time_ck = True
-                        else:
-                            time_ck = True
-                        if filter_list:
-                            filter_ck = any(
-                                [s in filename for s in filter_list])
-                        else:
-                            filter_ck = True
-                        if all(param_ck) and time_ck and filter_ck:
-                            file_list.append(fullpath)
-                            date_mod = datetime.fromtimestamp(
-                                os.path.getmtime(fullpath))
-                            date_list.append(date_mod)
-
-    return file_list, date_list
-
-
-def join_ufields(row, exp=None):
-    if exp:
-        return '_'.join([row['ID'], row['session'], exp])
-    else:
-        return '_'.join([row['ID'], row['session']])
+        next_num = 1
+    next_file = base + '_' + str(next_num) + '.' + ext
+    return next_file
 
 
 ##############################
@@ -517,30 +38,7 @@ def join_ufields(row, exp=None):
 ##############################
 
 
-def parse_maybe_numeric(st):
-    proc = st.replace('-', '')
-    dec = False
-    if '.' in st:
-        dec = True
-        proc = st.replace('.', '')
-    if proc.isnumeric():
-        if dec:
-            return float(st)
-        else:
-            return int(st)
-    return st
-
-
-def extract_session_fromuID(v):
-    return v.split('_')[0][0]
-
-
-def column_split(v, ind=0, sep='_'):
-    return v.split('_')[ind]
-
-
 class RestingDAT:
-
     ''' represents David's files containing estimates of resting state power for various frequency bands
         and bipolar derived channels '''
 
@@ -548,7 +46,7 @@ class RestingDAT:
     channels = ['FP1-F3', 'FP2-F4', 'FP1-F7', 'FP2-F8', 'F7-F3', 'F8-F4', 'F7-T7', 'F8-T8', 'F3-C3', 'F4-C4',
                 'FZ-CZ', 'CZ-PZ', 'T7-C3', 'T8-C4', 'T7-P7', 'T8-P8', 'C3-P3', 'C4-P4', 'P7-P3', 'P8-P4', 'P7-O1',
                 'P8-O2', 'P3-O1', 'P4-O2', 'PZ-O1', 'PZ-O2', 'O1-O2', 'CZ-C3', 'CZ-C4', 'PZ-P3', 'PZ-P4', 'F7-C3',
-                'F8-C4', 'FP1-FP2', 'F3-FZ', 'FZ-F4',]
+                'F8-C4', 'FP1-FP2', 'F3-FZ', 'FZ-F4', ]
 
     columns = ['uID', 'age']
     for band in bands:
@@ -580,7 +78,6 @@ class RestingDAT:
 
 
 class CNTH1_File:
-
     def __init__(s, filepath):
         s.filepath = filepath
         s.filename = os.path.split(filepath)[1]
@@ -617,6 +114,20 @@ class CNTH1_File:
         s.trial_info = hD
 
 
+def parse_maybe_numeric(st):
+    proc = st.replace('-', '')
+    dec = False
+    if '.' in st:
+        dec = True
+        proc = st.replace('.', '')
+    if proc.isnumeric():
+        if dec:
+            return float(st)
+        else:
+            return int(st)
+    return st
+
+
 def extract_case_tuple(path):
     ''' given a path to an .avg.h1 file, extract a case tuple for comparison '''
     f = h5py.File(path, 'r')
@@ -630,13 +141,12 @@ def extract_case_tuple(path):
     case_tup = tuple(case_lst)
     return case_tup
 
-
 class AVGH1_File(CNTH1_File):
     ''' represents *.avg.h1 files, mostly for the behavioral info inside '''
 
     min_resptime = 100
     trial_columns = ['Trial', 'Case Index', 'Response Code', 'Stimulus', 'Correct', 'Omitted', 'Artifact Present',
-                      'Accepted', 'Max Amp in Threshold Window', 'Threshold', 'Reaction Time (ms)', 'Time (s)']
+                     'Accepted', 'Max Amp in Threshold Window', 'Threshold', 'Reaction Time (ms)', 'Time (s)']
 
     def __init__(s, filepath):
         s.filepath = filepath
@@ -644,7 +154,7 @@ class AVGH1_File(CNTH1_File):
         path_parts = filepath.split(os.path.sep)
         system_letters = path_parts[-2][:2]
         s.file_info['system'] = system_shorthands[system_letters]
-        s.data = {'uID': s.file_info['id']+'_'+s.file_info['session']}
+        s.data = {'uID': s.file_info['id'] + '_' + s.file_info['session']}
 
     def fix_ant(s):
         case_tup = extract_case_tuple(s.filepath)
@@ -660,19 +170,19 @@ class AVGH1_File(CNTH1_File):
     def parse_behav_forDB(s, general_info=False):
         ''' wrapper for main function that also prepares for DB insert '''
         # s.data = {}
-        
+
         # experiment specific stuff
-        if s.file_info['system']=='masscomp':
+        if s.file_info['system'] == 'masscomp':
 
             s.load_data_mc()
             if s.file_info['experiment'] == 'ant':
                 s.fix_ant()
             s.calc_results_mc()
 
-        elif s.file_info['system']=='neuroscan':
+        elif s.file_info['system'] == 'neuroscan':
             s.load_data()
             s.parse_seq()
-            s.calc_results() # puts behavioral results in s.results
+            s.calc_results()  # puts behavioral results in s.results
 
         else:
             print('system not recognized')
@@ -699,44 +209,44 @@ class AVGH1_File(CNTH1_File):
         for t, t_attrs in s.case_dict.items():
             nm = t_attrs['code']
             stmevs = s.ev_df['type_seq'] == t
-            if t_attrs['corr_resp'] == 0: # no response required
+            if t_attrs['corr_resp'] == 0:  # no response required
                 correct = s.ev_df.loc[stmevs, 'correct']
-                results[nm+'_acc'] = np.sum(correct) / np.sum(stmevs)
+                results[nm + '_acc'] = np.sum(correct) / np.sum(stmevs)
                 continue
             # response required
             rspevs = (np.roll(stmevs, 1)) & (s.ev_df['resp_seq'] != 0)
-            correct_late = (rspevs) & (s.ev_df['correct'])
-            correct = (correct_late) & ~(s.ev_df['late'])
+            correct_late = rspevs & (s.ev_df['correct'])
+            correct = correct_late & ~(s.ev_df['late'])
 
-            results[nm+'_acc'] = np.sum(correct) / np.sum(stmevs)
-            results[nm+'_accwithlate'] = np.sum(correct_late) / np.sum(stmevs)
-            results[nm+'_medianrt'] = s.ev_df.loc[correct, 'rt'].median()
-            results[nm+'_medianrtwithlate'] = \
+            results[nm + '_acc'] = np.sum(correct) / np.sum(stmevs)
+            results[nm + '_accwithlate'] = np.sum(correct_late) / np.sum(stmevs)
+            results[nm + '_medianrt'] = s.ev_df.loc[correct, 'rt'].median()
+            results[nm + '_medianrtwithlate'] = \
                 s.ev_df.loc[correct_late, 'rt'].median()
 
             # for certain experiments, keep track of noresp info
             if s.file_info['experiment'] in ['ant', 'ern', 'stp']:
                 noresp = s.ev_df.loc[stmevs, 'noresp']
-                results[nm+'_noresp'] = np.sum(noresp) / np.sum(stmevs)
-                results[nm+'_accwithresp'] = np.sum(correct) / \
-                    (np.sum(stmevs) - np.sum(noresp))
-                results[nm+'_accwithrespwithlate'] = np.sum(correct_late) / \
-                    (np.sum(stmevs) - np.sum(noresp))
+                results[nm + '_noresp'] = np.sum(noresp) / np.sum(stmevs)
+                results[nm + '_accwithresp'] = np.sum(correct) / \
+                                               (np.sum(stmevs) - np.sum(noresp))
+                results[nm + '_accwithrespwithlate'] = np.sum(correct_late) / \
+                                                       (np.sum(stmevs) - np.sum(noresp))
 
                 resp_codes = list(s.ev_df['resp_seq'].unique())
                 try:
                     resp_codes.remove(0)
-                except:
+                except ValueError:
                     pass
                 # this part logs the median reaction time for each type of response
                 # (i.e. both for correct and incorrect responses)
                 for rc in resp_codes:
-                    tmp_df = s.ev_df[(s.ev_df['resp_seq']==rc) & \
-                            ~(s.ev_df['early']) & ~(s.ev_df['errant'])]
-                    results[nm+str(rc)+'_medianrtwithlate'] = \
-                            tmp_df['rt'].median()
+                    tmp_df = s.ev_df[(s.ev_df['resp_seq'] == rc) &
+                                     ~(s.ev_df['early']) & ~(s.ev_df['errant'])]
+                    results[nm + str(rc) + '_medianrtwithlate'] = \
+                        tmp_df['rt'].median()
                     tmp_df2 = tmp_df[~tmp_df['late']]
-                    results[nm+str(rc)+'_medianrt'] = tmp_df2['rt'].median()
+                    results[nm + str(rc) + '_medianrt'] = tmp_df2['rt'].median()
 
         s.results = results
 
@@ -745,10 +255,10 @@ class AVGH1_File(CNTH1_File):
         for t, t_attrs in s.case_dict.items():
             nm = t_attrs['code']
             case_trials = s.trial_df[s.trial_df['Stimulus'] == t]
-            results[nm+'_acc'] = sum(case_trials['Correct']) / case_trials.shape[0]
-            if t_attrs['corr_resp'] != 0: # response required
+            results[nm + '_acc'] = sum(case_trials['Correct']) / case_trials.shape[0]
+            if t_attrs['corr_resp'] != 0:  # response required
                 case_trials.drop(case_trials[~case_trials['Correct']].index, inplace=True)
-                results[nm+'_medianrt'] = case_trials['Reaction Time (ms)'].median()
+                results[nm + '_medianrt'] = case_trials['Reaction Time (ms)'].median()
         s.results = results
 
     def load_data(s):
@@ -758,11 +268,11 @@ class AVGH1_File(CNTH1_File):
         s.case_dict = {}
         for column in f['file/run/case/case']:
             s.case_dict.update({column[3][0]: {'code': column[-3][0].decode(),
-                                         'descriptor': column[-2][0].decode(),
-                                          'corr_resp': column[4][0],
-                                           'resp_win': column[9][0]}})
-        s.type_seq = np.array([col[1][0]  for col in f['file/run/event/event']])
-        s.resp_seq = np.array([col[2][0]  for col in f['file/run/event/event']])
+                                               'descriptor': column[-2][0].decode(),
+                                               'corr_resp': column[4][0],
+                                               'resp_win': column[9][0]}})
+        s.type_seq = np.array([col[1][0] for col in f['file/run/event/event']])
+        s.resp_seq = np.array([col[2][0] for col in f['file/run/event/event']])
         s.time_seq = np.array([col[-1][0] for col in f['file/run/event/event']])
 
     def load_data_mc(s):
@@ -783,44 +293,44 @@ class AVGH1_File(CNTH1_File):
         s.trial_df.iloc[:, 8:12] = s.trial_df.iloc[:, 8:12].applymap(float)
         s.trial_df.columns = s.trial_columns
         s.trial_df.set_index('Trial', inplace=True)
-        
+
     def parse_seq(s):
         ''' parse the behavioral sequence and create a dataframe containing
             the event table '''
 
-        bad_respcodes = ~np.in1d(s.resp_seq, list(range(0,9)))
+        bad_respcodes = ~np.in1d(s.resp_seq, list(range(0, 9)))
         if np.any(bad_respcodes):
             s.resp_seq[bad_respcodes] = 0
-        nonresp_respcodes = (s.resp_seq!=0) & (s.type_seq!=0)
+        nonresp_respcodes = (s.resp_seq != 0) & (s.type_seq != 0)
         if np.any(nonresp_respcodes):
             s.resp_seq[nonresp_respcodes] = 0
 
         s.ev_len = len(s.type_seq)
-        s.errant =  np.zeros(s.ev_len, dtype=bool)
-        s.early =   np.zeros(s.ev_len, dtype=bool)
-        s.late =    np.zeros(s.ev_len, dtype=bool)
+        s.errant = np.zeros(s.ev_len, dtype=bool)
+        s.early = np.zeros(s.ev_len, dtype=bool)
+        s.late = np.zeros(s.ev_len, dtype=bool)
         s.correct = np.zeros(s.ev_len, dtype=bool)
-        s.noresp  = np.zeros(s.ev_len, dtype=bool)
+        s.noresp = np.zeros(s.ev_len, dtype=bool)
         s.type_descriptor = []
 
         # this is the main algorithm applied to the event sequence
         s.parse_alg()
 
-        event_interval_ms = np.concatenate([[0], np.diff(s.time_seq)*1000])
-        rt = np.empty_like(event_interval_ms)*np.nan
-        rt[(s.resp_seq!=0) & ~(s.errant)] = \
-            event_interval_ms[(s.resp_seq!=0) & ~s.errant]
+        event_interval_ms = np.concatenate([[0], np.diff(s.time_seq) * 1000])
+        rt = np.empty_like(event_interval_ms) * np.nan
+        rt[(s.resp_seq != 0) & ~s.errant] = \
+            event_interval_ms[(s.resp_seq != 0) & ~s.errant]
         s.type_descriptor = np.array(s.type_descriptor, dtype=np.object_)
         dd = {'type_seq': s.type_seq, 'type_descriptor': s.type_descriptor,
-            'correct': s.correct, 'rt': rt, 'resp_seq': s.resp_seq,
-            'noresp': s.noresp,
-            'errant': s.errant, 'early': s.early, 'late': s.late,
-            'time_seq': s.time_seq, 'event_intrvl_ms': event_interval_ms}
+              'correct': s.correct, 'rt': rt, 'resp_seq': s.resp_seq,
+              'noresp': s.noresp,
+              'errant': s.errant, 'early': s.early, 'late': s.late,
+              'time_seq': s.time_seq, 'event_intrvl_ms': event_interval_ms}
         ev_df = pd.DataFrame(dd)
 
         # reorder columns
         col_order = ['type_seq', 'type_descriptor', 'correct', 'rt', 'resp_seq',
-            'noresp', 'errant', 'early', 'late', 'time_seq', 'event_intrvl_ms']
+                     'noresp', 'errant', 'early', 'late', 'time_seq', 'event_intrvl_ms']
         ev_df = ev_df[col_order]
         s.ev_df = ev_df
 
@@ -828,8 +338,8 @@ class AVGH1_File(CNTH1_File):
         ''' algorithm applied to event structure. the underlying philosophy is:
             each descriptive of an event is false unless proven true '''
         for ev, t in enumerate(s.type_seq):
-            if t == 0: # some kind of response
-                prev_t = s.type_seq[ev-1]
+            if t == 0:  # some kind of response
+                prev_t = s.type_seq[ev - 1]
                 if ev == 0 or prev_t not in s.case_dict:
                     # first code is response, previous event is also response,
                     # or previous event is unrecognized
@@ -839,7 +349,7 @@ class AVGH1_File(CNTH1_File):
                 else:
                     # early / late responses
                     # early is considered incorrect, while late can be correct
-                    tmp_rt = (s.time_seq[ev] - s.time_seq[ev-1]) * 1000
+                    tmp_rt = (s.time_seq[ev] - s.time_seq[ev - 1]) * 1000
                     if tmp_rt > s.case_dict[prev_t]['resp_win']:
                         s.late[ev] = True
                     elif tmp_rt < s.min_resptime:
@@ -854,21 +364,21 @@ class AVGH1_File(CNTH1_File):
                     else:
                         s.type_descriptor.append('rsp_incorrect')
                         continue
-            else: # some kind of stimulus
+            else:  # some kind of stimulus
                 if t in s.case_dict:
-                    s.type_descriptor.append(s.exp+'_'+s.case_dict[t]['code'])
+                    s.type_descriptor.append(s.exp + '_' + s.case_dict[t]['code'])
                     # interpret correctness
-                    if ev+1 == s.ev_len: # if the last event
+                    if ev + 1 == s.ev_len:  # if the last event
                         # only correct if correct resp is no response
                         if s.case_dict[t]['corr_resp'] == 0:
                             s.correct[ev] = True
                     else:  # if not the last event
                         # only considered correct if following resp was correct
-                        if s.resp_seq[ev+1] == s.case_dict[t]['corr_resp']:
+                        if s.resp_seq[ev + 1] == s.case_dict[t]['corr_resp']:
                             s.correct[ev] = True
                         # if incorrect, note if due to response omission
                         elif s.case_dict[t]['corr_resp'] != 0 and \
-                            s.resp_seq[ev+1] == 0:
+                                        s.resp_seq[ev + 1] == 0:
                             s.noresp[ev] = True
                 else:
                     s.type_descriptor.append('stm_unknown')
@@ -888,12 +398,12 @@ class MT_File:
                                          (2, 'nt'): ['N1', 'P3'],
                                          (3, 'nv'): ['N1', 'P3']
                                          },
-                                 'ant': {(1, 'a'): ['N4','P3'],
-                                         (2,'j'): ['N4','P3'],
-                                         (3, 'w'): ['N4','P3'],
-                                         #(4, 'p'): ['P3', 'N4']
+                                 'ant': {(1, 'a'): ['N4', 'P3'],
+                                         (2, 'j'): ['N4', 'P3'],
+                                         (3, 'w'): ['N4', 'P3'],
+                                         # (4, 'p'): ['P3', 'N4']
                                          }
-                                }
+                                 }
 
     # string for reference
     data_structure = '{(case#,peak):{electrodes:(amplitude,latency),reaction_time:time} }'
@@ -934,7 +444,7 @@ class MT_File:
     query_fields = ['id', 'session', 'experiment']
 
     def normAntCase(s):
-        query = {k:v for k,v in s.file_info.items() if k in s.query_fields}
+        query = {k: v for k, v in s.file_info.items() if k in s.query_fields}
         doc = Mdb['avgh1s'].find_one(query)
         avgh1_path = doc['filepath']
         case_tup = extract_case_tuple(avgh1_path)
@@ -994,7 +504,7 @@ class MT_File:
     def parse_fileDB(s):
         s.parse_file()
         exp = s.file_info['experiment']
-        ddict = {'data': {} }
+        ddict = {'data': {}}
         for k in s.data:
             case_convdict = s.case_nums2names[exp]
             case = case_convdict[int(k[0])]
@@ -1003,14 +513,14 @@ class MT_File:
             for chan, amp_lat in s.data[k].items():  # chans
                 if type(amp_lat) is tuple:  # if amp / lat tuple
                     inner_ddict.update(
-                        { chan: {'amp': float(amp_lat[0]),
-                                 'lat': float(amp_lat[1])} }
-                                )
+                        {chan: {'amp': float(amp_lat[0]),
+                                'lat': float(amp_lat[1])}}
+                    )
             ddict['data'].update({case + '_' + peak: inner_ddict})
         s.data = ddict
         s.data.update(s.file_info)
         s.data['ID'] = s.data['id']
-        s.data['uID'] = s.data['ID']+'_'+s.data['session']
+        s.data['uID'] = s.data['ID'] + '_' + s.data['session']
         s.data['path'] = s.fullpath
 
     def parse_file(s):
@@ -1032,64 +542,64 @@ class MT_File:
         return
 
     def parse_fileDF(s):
-        s.dataDF = pd.read_csv(s.fullpath,delim_whitespace=True,
-                            comment='#',names = s.columns )
+        s.dataDF = pd.read_csv(s.fullpath, delim_whitespace=True,
+                               comment='#', names=s.columns)
 
     def check_peak_order(s):
         ''' Pandas Dataframe based '''
         if 'dataDF' not in dir(s):
             s.parse_fileDF()
         if 'normed_cases' in dir(s):
-            case_lk = { v:k for k,v in s.normed_cases.items() }
+            case_lk = {v: k for k, v in s.normed_cases.items()}
         probs = {}
-        #peaks by case number
-        case_peaks = { k[0]:v for k,v in \
-            s.cases_peaks_by_experiment[s.file_info['experiment']].items() }
-        cols_use = ['electrode','latency']
+        # peaks by case number
+        case_peaks = {k[0]: v for k, v in
+                      s.cases_peaks_by_experiment[s.file_info['experiment']].items()}
+        cols_use = ['electrode', 'latency']
         for case in s.dataDF['case_num'].unique():
-            cDF = s.dataDF[ s.dataDF['case_num']==case ]
+            cDF = s.dataDF[s.dataDF['case_num'] == case]
             if 'normed_cases' in dir(s):
                 case_norm = case_lk[case]
-            else: case_norm = case
+            else:
+                case_norm = case
             if case_norm in case_peaks:
                 pk = case_peaks[case_norm][0]
-                ordDF = cDF[ cDF['peak'] == pk ][cols_use]
-                ordDF.rename(columns={'latency':'latency_'+pk},inplace=True)
+                ordDF = cDF[cDF['peak'] == pk][cols_use]
+                ordDF.rename(columns={'latency': 'latency_' + pk}, inplace=True)
                 peak_track = [pk]
                 delta_cols = []
                 if case in case_peaks:
                     for pk in case_peaks[case][1:]:
-                        pkDF = cDF[ cDF['peak'] == pk ][cols_use]
-                        pkDF.rename(columns={'latency':'latency_'+pk},inplace=True)
-                        #return (ordDF, pkDF)
-                        ordDF = ordDF.join(pkDF,on='electrode',rsuffix=pk)
-                        delta_col = pk+'_'+peak_track[-1]+'_delta'
-                        ordDF[ delta_col ] = \
-                            ordDF['latency_'+pk] - ordDF['latency_'+peak_track[-1]]
+                        pkDF = cDF[cDF['peak'] == pk][cols_use]
+                        pkDF.rename(columns={'latency': 'latency_' + pk}, inplace=True)
+                        # return (ordDF, pkDF)
+                        ordDF = ordDF.join(pkDF, on='electrode', rsuffix=pk)
+                        delta_col = pk + '_' + peak_track[-1] + '_delta'
+                        ordDF[delta_col] = \
+                            ordDF['latency_' + pk] - ordDF['latency_' + peak_track[-1]]
                         peak_track.append(pk)
                         delta_cols.append(delta_col)
 
                 for dc in delta_cols:
-                    wrong_order = ordDF[ ordDF[dc] < 0 ]
+                    wrong_order = ordDF[ordDF[dc] < 0]
                     if len(wrong_order) > 0:
                         case_name = s.case_nums2names[s.file_info['experiment']][case_norm]
-                        probs[case_name+'_'+dc] = list(wrong_order['electrode'])
+                        probs[case_name + '_' + dc] = list(wrong_order['electrode'])
 
         if len(probs) == 0:
             return True
         else:
             return probs
 
-    def check_max_latency(s,latency_thresh=1000):
+    def check_max_latency(s, latency_thresh=1000):
         ''' Pandas Dataframe based '''
         if 'dataDF' not in dir(s):
             s.parse_fileDF()
-        high_lat = s.dataDF[ s.dataDF['latency'] > latency_thresh ]
+        high_lat = s.dataDF[s.dataDF['latency'] > latency_thresh]
         if len(high_lat) == 0:
             return True
         else:
-            return high_lat[ ['case_num','electorde','peak','amplitude','latency'] ]
-
+            return high_lat[['case_num', 'electorde', 'peak', 'amplitude', 'latency']]
 
     def build_header(s):
         if 'data' not in dir(s):
@@ -1104,10 +614,10 @@ class MT_File:
 
         # one less for reaction_time
         s.header_text = '#nchans ' + \
-            str(len(s.data[cases_peaks[0]]) - 1) + '\n'
+                        str(len(s.data[cases_peaks[0]]) - 1) + '\n'
         for cs, ch_count in header_data.items():
             s.header_text += '#case ' + \
-                str(cs) + '; npeaks ' + str(ch_count) + ';\n'
+                             str(cs) + '; npeaks ' + str(ch_count) + ';\n'
 
         print(s.header_text)
 
@@ -1132,10 +642,10 @@ class MT_File:
         if 'data' not in dir(s):
             s.parse_file()
         for case, peaks in s.cases_peaks_by_experiment[s.file_info['experiment']].items():
-            if ( case[0], peaks[0]) not in s.data:
-                return (False, 'case ' + str(case) + ' missing ' + peaks[0] + ' peak')
-            if ( case[0], peaks[1]) not in s.data:
-                return (False, 'case ' + str(case) + ' missing ' + peaks[1] + ' peak')
+            if (case[0], peaks[0]) not in s.data:
+                return False, 'case ' + str(case) + ' missing ' + peaks[0] + ' peak'
+            if (case[0], peaks[1]) not in s.data:
+                return False, 'case ' + str(case) + ' missing ' + peaks[1] + ' peak'
         return True
 
     def check_peak_orderNmax_latency(s, latency_thresh=1000):
@@ -1143,20 +653,110 @@ class MT_File:
             s.parse_file()
         for case, peaks in s.cases_peaks_by_experiment[s.file_info['experiment']].items():
             try:
-                latency1 = float(s.data[( case[0], peaks[0])]['FZ'][1])
-                latency2 = float(s.data[( case[0], peaks[1])]['FZ'][1])
+                latency1 = float(s.data[(case[0], peaks[0])]['FZ'][1])
+                latency2 = float(s.data[(case[0], peaks[1])]['FZ'][1])
             except:
                 print(s.fullpath + ': ' +
-                      str(s.data[( case[0], peaks[0])].keys()))
+                      str(s.data[(case[0], peaks[0])].keys()))
             if latency1 > latency_thresh:
                 return (
-                    False, str(case) + ' ' + peaks[0] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
+                    False,
+                    str(case) + ' ' + peaks[0] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
             if latency2 > latency_thresh:
                 return (
-                    False, str(case) + ' ' + peaks[1] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
+                    False,
+                    str(case) + ' ' + peaks[1] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
             if latency1 > latency2:
-                return (False, 'Wrong order for case ' + str(case))
+                return False, 'Wrong order for case ' + str(case)
         return True
+
+
+def move_picked_files_to_processed(from_base, from_folders, working_directory, filter_list=[], do_now=False):
+    ''' utility for moving processed files - places files in appropriate folders based on filenames
+
+        inputs:
+            from_base - folder containing all from_folders
+            from_folders - list of subfolders
+            working_directory - folder to store delete list (/active_projects can only be modified by exp)
+            filter_list - a list by which to limit the files
+
+            do_now - must be set to true to execute - by default, just a list of proposed copies is returned
+    '''
+
+    to_base = '/processed_data/mt-files/'
+    to_copy = []
+    counts = {'non coga': 0, 'total': 0,
+              'to move': 0, 'masscomp': 0, 'neuroscan': 0}
+    if do_now:
+        delete_file = open(os.path.join(working_directory,
+                                        next_file_with_base(working_directory, 'picked_files_copied_to_processed',
+                                                            'lst')), 'w')
+
+    for folder in from_folders:
+        for reject in [False, True]:
+            from_folder = os.path.join(from_base, folder)
+            if reject:
+                from_folder += os.path.sep + 'reject'
+            if not os.path.exists(from_folder):
+                print(from_folder + ' Does Not Exist')
+                continue
+
+            print('checking: ' + from_folder)
+            files = [f for f in os.listdir(from_folder) if not os.path.isdir(
+                os.path.join(from_folder, f))]
+            if filter_list:
+                print(len(files))
+                files = [f for f in files if any(
+                    [s in f for s in filter_list])]
+                print(len(files))
+            for file in files:
+                counts['total'] += 1
+                if not ('.lst' in file or '.txt' in file or '_list' in file):
+                    try:
+                        file_info = parse_filename(file)
+                        if 'subjects' in file_info['site']:
+                            counts['non coga'] += 1
+
+                        if file_info['system'] == 'masscomp':
+                            counts['masscomp'] += 1
+                            type_short = 'mc'
+                            session_path = None
+
+                        else:
+                            counts['neuroscan'] += 1
+                            type_short = 'ns'
+                            session_path = file_info['session'] + '-session'
+
+                        to_path = to_base + file_info['experiment'] + os.path.sep + file_info[
+                            'site'] + os.path.sep + type_short + os.path.sep
+
+                        if session_path:
+                            to_path += session_path + os.path.sep
+
+                        if reject:
+                            to_path += 'reject' + os.path.sep
+
+                        to_copy.append(
+                            (from_folder + os.path.sep + file, to_path))
+                        counts['to move'] += 1
+
+                    except:
+                        print('uninterpretable file: ' + file)
+
+        print(str(counts['total']) + ' total (' + str(counts['masscomp']) + ' masscomp, ' + str(
+            counts['neuroscan']) + ' neuroscan) ' + str(counts['to move']) + ' to move')
+
+    print('total non coga: ' + str(counts['non coga']))
+
+    if do_now:
+        for cf_dest in to_copy:
+            delete_file.write(cf_dest[0] + '\n')
+            if not os.path.exists(cf_dest[1]):
+                os.makedirs(cf_dest[1])
+            shutil.copy2(cf_dest[0], cf_dest[1])
+        delete_file.close()
+
+    return to_copy
 
 
 class ERO_CSV:
@@ -1170,7 +770,7 @@ class ERO_CSV:
                   'b': {'name': 'baseline type',
                         'values': {'0': 'none',
                                    '1': 'mean'}},
-                  #'m':{},
+                  # 'm':{},
                   'hi': {'name': 'hi-pass', 'values': 'numeric'},
                   'lo': {'name': 'lo-pass', 'values': 'numeric'},
                   'n': {'name': 'minimum trials', 'values': 'numeric'},
@@ -1181,6 +781,7 @@ class ERO_CSV:
                   }
     defaults_by_exp = {}
 
+    @staticmethod
     def parse_parameters(param_string, unknown=set()):
         pD = {'unknown': unknown}
         for p in param_string.split('-'):
@@ -1239,13 +840,11 @@ class ERO_CSV:
                        'time min': time_min,
                        'time max': time_max}
 
-
-
     def read_data(s):
         ''' prepare the data field for the database object '''
         s.data = pd.read_csv(s.filepath, converters={'ID': str},
-            na_values=['.'], error_bad_lines=False, warn_bad_lines=True)
-        dup_cols=[col for col in s.data.columns if '.' in col]
+                             na_values=['.'], error_bad_lines=False, warn_bad_lines=True)
+        dup_cols = [col for col in s.data.columns if '.' in col]
         s.data.drop(dup_cols, axis=1, inplace=True)
 
     def data_for_file(s):
@@ -1291,15 +890,15 @@ class ERO_CSV:
             param_str += '-' + str(s.parameters['threshold min time'])
 
         rename_dict = {col: '_'.join(['data',
-                          param_str,
-                          s.phenotype['power type'],
-                          s.exp_info['case'],
-                          str(s.phenotype['frequency min']).replace('.','p'),
-                          str(s.phenotype['frequency max']).replace('.','p'),
-                          str(s.phenotype['time min']),
-                          str(s.phenotype['time max']),
-                          col])
-                   		for col in s.data.columns}
+                                      param_str,
+                                      s.phenotype['power type'],
+                                      s.exp_info['case'],
+                                      str(s.phenotype['frequency min']).replace('.', 'p'),
+                                      str(s.phenotype['frequency max']).replace('.', 'p'),
+                                      str(s.phenotype['time min']),
+                                      str(s.phenotype['time max']),
+                                      col])
+                       for col in s.data.columns}
         s.data.rename(columns=rename_dict, inplace=True)
 
 
@@ -1341,14 +940,12 @@ class ERO_Summary_CSV(ERO_CSV):
 
     def read_data(s):
         s.data = pd.read_csv(s.filepath, converters={
-                             'ID': str}, na_values=['.'])
-        s.data.drop(s.rem_columns, axis=1, inplace=True) # drop extra cols
-        dup_cols=[col for col in s.data.columns if '.' in col]
+            'ID': str}, na_values=['.'])
+        s.data.drop(s.rem_columns, axis=1, inplace=True)  # drop extra cols
+        dup_cols = [col for col in s.data.columns if '.' in col]
         s.data.drop(dup_cols, axis=1, inplace=True)
 
     def data_3tuple_bulklist(s):
-        def join_ufields(row, exp):
-            return '_'.join([row['ID'], row['session'], exp])
 
         s.read_data()
         if s.data.empty:
@@ -1363,6 +960,7 @@ class ERO_Summary_CSV(ERO_CSV):
 
         s.data = list(s.data.to_dict(orient='records'))
 
+
 ##############################
 ##
 # Neuropsych
@@ -1374,7 +972,7 @@ class Neuropsych_XML:
 
     # labels for fields output by david's awk script
 
-            # subject info columns
+    # subject info columns
     cols = ['id', 'dob', 'gender', 'hand', 'testdate', 'sessioncode',
             'motivTOT', 'motivCBST', 'motivTOLT', 'age',
             # TOLT columns
@@ -1382,7 +980,7 @@ class Neuropsych_XML:
             'mim_4b', 'mom_4b', 'em_4b', 'ao_4b', 'apt_4b', 'atoti_4b', 'ttrti_4b', 'atrti_4b',
             'mim_5b', 'mom_5b', 'em_5b', 'ao_5b', 'apt_5b', 'atoti_5b', 'ttrti_5b', 'atrti_5b',
             'mim_tt', 'mom_tt', 'em_tt', 'ao_tt', 'apt_tt', 'atoti_tt', 'ttrti_tt', 'atrti_tt',
-            'otr_3b', 'otr_4b', 'otr_5b', 'otr_tt', # added 1/18/2017 - number of optimal trials
+            'otr_3b', 'otr_4b', 'otr_5b', 'otr_tt',  # added 1/18/2017 - number of optimal trials
             # CBST columns
             'tc_f', 'span_f', 'tcat_f', 'tat_f',
             'tc_b', 'span_b', 'tcat_b', 'tat_b']
@@ -1390,7 +988,7 @@ class Neuropsych_XML:
     # this function needs to be in /usr/bin of the invoking system
     func_name = '/opt/bin/do_np_processC'
     session_letters = 'abcdefghijkl'
-    npsession_npfollowup = {letter:number for letter, number in
+    npsession_npfollowup = {letter: number for letter, number in
                             zip(session_letters, range(len(session_letters)))}
 
     def __init__(s, filepath):
@@ -1415,7 +1013,7 @@ class Neuropsych_XML:
 
     def read_file(s):
         ''' use program s.func_name to extract results and put in s.data '''
-        
+
         raw_line = subprocess.check_output([s.func_name, s.filepath])
         data_dict = s.parse_csvline(raw_line)
         data_dict.pop('id', None)
@@ -1436,7 +1034,8 @@ class Neuropsych_XML:
             d[k] = s.parse_csvitem(k, d.pop(k))  # pop passes the val to parser
         return d
 
-    def parse_csvitem(s, k, v):
+    @staticmethod
+    def parse_csvitem(k, v):
         ''' given a string item from the results, parse it appropriately '''
 
         if v == ' ' or v == '  ':
@@ -1513,18 +1112,8 @@ class Neuropsych_Summary:
             ind += 1
             sec_cols = lines[section_beginnings[ind] + 1].split('\t')
             sec_lines = [L.split('\t') for L in lines[section_beginnings[
-                ind] + 2:section_beginnings[ind + 1]]]
+                                                          ind] + 2:section_beginnings[ind + 1]]]
             s.data[fun_nm[1]] = eval('s.' + fun_nm[0])(sec_cols, sec_lines)
-
-
-def parse_value_with_info(val, column, integer_columns, float_columns, boolean_columns={}):
-    if column in integer_columns:
-        val = int(val)
-    elif column in float_columns:
-        val = float(val)
-    elif column in boolean_columns:
-        val = bool(boolean_columns[column].index(val))
-    return val
 
 
 class TOLT_Summary_File(Neuropsych_Summary):
@@ -1556,10 +1145,10 @@ class TOLT_Summary_File(Neuropsych_Summary):
         for lnum, tl in enumerate(test_lines):
             if tl[0][0] == '%':
                 test_lines[lnum] = [tl[0]] + \
-                    [st[:-1] if '%' in st else st for st in tl[1:]]
-            # print(type(tl),tl)
-            # print([ st[:-1] if '%' in st else st for st in tl[1:] ])
-            # tlinesP.append( tl[0] + [ st[:-1] if '%' in st else st for st in tl[1:] ] )
+                                   [st[:-1] if '%' in st else st for st in tl[1:]]
+                # print(type(tl),tl)
+                # print([ st[:-1] if '%' in st else st for st in tl[1:] ])
+                # tlinesP.append( tl[0] + [ st[:-1] if '%' in st else st for st in tl[1:] ] )
         test_data = {line[0]: [parse_value_with_info(val, line[0], s.integer_columns, s.float_columns)
                                for val in line[1:]] for line in test_lines}
         caseD = {}  # case:{} for case in test_cols[1:] }
@@ -1618,89 +1207,11 @@ class CBST_Summary_File(Neuropsych_Summary):
         s.read_file()
 
 
-def move_picked_files_to_processed(from_base, from_folders, working_directory, filter_list=[], do_now=False):
-    ''' utility for moving processed files - places files in appropriate folders based on filenames
-
-        inputs:
-            from_base - folder containing all from_folders
-            from_folders - list of subfolders
-            working_directory - folder to store delete list (/active_projects can only be modified by exp)
-            filter_list - a list by which to limit the files
-
-            do_now - must be set to true to execute - by default, just a list of proposed copies is returned
-    '''
-
-    to_base = '/processed_data/mt-files/'
-    to_copy = []
-    counts = {'non coga': 0, 'total': 0,
-              'to move': 0, 'masscomp': 0, 'neuroscan': 0}
-    if do_now:
-        delete_file = open(os.path.join(working_directory,
-                                        next_file_with_base(working_directory, 'picked_files_copied_to_processed',
-                                                                  'lst')), 'w')
-
-    for folder in from_folders:
-        for reject in [False, True]:
-            from_folder = os.path.join(from_base, folder)
-            if reject:
-                from_folder += os.path.sep + 'reject'
-            if not os.path.exists(from_folder):
-                print(from_folder + ' Does Not Exist')
-                continue
-
-            print('checking: ' + from_folder)
-            files = [f for f in os.listdir(from_folder) if not os.path.isdir(
-                os.path.join(from_folder, f))]
-            if filter_list:
-                print(len(files))
-                files = [f for f in files if any(
-                    [s in f for s in filter_list])]
-                print(len(files))
-            for file in files:
-                counts['total'] += 1
-                if not ('.lst' in file or '.txt' in file or '_list' in file):
-                    try:
-                        file_info = parse_filename(file)
-                        if 'subjects' in file_info['site']:
-                            counts['non coga'] += 1
-
-                        if file_info['system'] == 'masscomp':
-                            counts['masscomp'] += 1
-                            type_short = 'mc'
-                            session_path = None
-
-                        else:
-                            counts['neuroscan'] += 1
-                            type_short = 'ns'
-                            session_path = file_info['session'] + '-session'
-
-                        to_path = to_base + file_info['experiment'] + os.path.sep + file_info[
-                            'site'] + os.path.sep + type_short + os.path.sep
-
-                        if session_path:
-                            to_path += session_path + os.path.sep
-
-                        if reject:
-                            to_path += 'reject' + os.path.sep
-
-                        to_copy.append(
-                            (from_folder + os.path.sep + file, to_path))
-                        counts['to move'] += 1
-
-                    except:
-                        print('uninterpretable file: ' + file)
-
-        print(str(counts['total']) + ' total (' + str(counts['masscomp']) + ' masscomp, ' + str(
-            counts['neuroscan']) + ' neuroscan) ' + str(counts['to move']) + ' to move')
-
-    print('total non coga: ' + str(counts['non coga']))
-
-    if do_now:
-        for cf_dest in to_copy:
-            delete_file.write(cf_dest[0] + '\n')
-            if not os.path.exists(cf_dest[1]):
-                os.makedirs(cf_dest[1])
-            shutil.copy2(cf_dest[0], cf_dest[1])
-        delete_file.close()
-
-    return to_copy
+def parse_value_with_info(val, column, integer_columns, float_columns, boolean_columns={}):
+    if column in integer_columns:
+        val = int(val)
+    elif column in float_columns:
+        val = float(val)
+    elif column in boolean_columns:
+        val = bool(boolean_columns[column].index(val))
+    return val

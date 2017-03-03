@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import os
 from matplotlib import pyplot as plt
 from matplotlib import gridspec
 from pandas.tools.plotting import table
@@ -71,6 +70,7 @@ def histogram(df,property,bins='auto',type='plot',continuous=False,ax=None):
             cntS = Series(counts,index=bins[:-1])
             cntS.rename('counts',inplace=True)
             return cntS
+
         else:
             return vc.rename('counts')
 

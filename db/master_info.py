@@ -1,94 +1,44 @@
 '''EEGmaster
 '''
 
-master_path = '/processed_data/master-file/old/EEG-master-file-21.csv'
-
 import os
-from numbers import Number
 from datetime import datetime
 
 import pandas as pd
-import numpy as np
 
-from .file_handling import site_hash
+from .utils.compilation import ID_nan_strint
+from .utils.dates import calc_date_w_Qs
+from .utils.filenames import site_fromIDstr
+
+master_path = '/processed_data/master-file/old/EEG-master-file-21.csv'
 
 subjects_sparser_sub = \
-                ['famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP',
-               'DOB', 'twin', 'EEG', 'System', 'Wave12', 'Wave12-fam',
-               'fMRI subject', 'Wave3', 'Phase4-session', 'Phase4-testdate',
-               'Phase4-age', '4500', 'ccGWAS', 'AAfamGWAS', 'ExomeSeq',
-               'EAfamGWAS', 'EAfamGWAS-fam', 'wave12-race', '4500-race',
-               'ccGWAS-race', 'core-race', 'COGA11k-fam', 'COGA11k-race',
-               'COGA11k-fam-race', 'ruID', 'genoID', 'SmS', 'CA/CO',
-               'a-session', 'b-session', 'c-session', 'd-session',
-               'e-session', 'f-session', 'g-session', 'h-session',
-               'i-session', 'j-session', 'k-session',
-               'a-raw', 'b-raw', 'c-raw', 'd-raw', 'e-raw', 'f-raw', 'g-raw',
-               'h-raw', 'i-raw', 'j-raw', 'k-raw', 'missing-EEG' 'remarks']
+    ['famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP',
+     'DOB', 'twin', 'EEG', 'System', 'Wave12', 'Wave12-fam',
+     'fMRI subject', 'Wave3', 'Phase4-session', 'Phase4-testdate',
+     'Phase4-age', '4500', 'ccGWAS', 'AAfamGWAS', 'ExomeSeq',
+     'EAfamGWAS', 'EAfamGWAS-fam', 'wave12-race', '4500-race',
+     'ccGWAS-race', 'core-race', 'COGA11k-fam', 'COGA11k-race',
+     'COGA11k-fam-race', 'ruID', 'genoID', 'SmS', 'CA/CO',
+     'a-session', 'b-session', 'c-session', 'd-session',
+     'e-session', 'f-session', 'g-session', 'h-session',
+     'i-session', 'j-session', 'k-session',
+     'a-raw', 'b-raw', 'c-raw', 'd-raw', 'e-raw', 'f-raw', 'g-raw',
+     'h-raw', 'i-raw', 'j-raw', 'k-raw', 'missing-EEG' 'remarks']
 
 subjects_sparser_add = \
-                ['ID', 'sex', 'handedness', 'Self-reported-race', 'alc_dep_dx',
-               'alc_dep_ons', 'a-age', 'b-age', 'c-age', 'd-age', 'e-age',
-               'f-age', 'g-age', 'h-age', 'i-age', 'j-age', 'k-age',
-               'famID', 'mID', 'fID', 'POP', 'alc_dep_dx_f', 'alc_dep_dx_m']
+    ['ID', 'sex', 'handedness', 'Self-reported-race', 'alc_dep_dx',
+     'alc_dep_ons', 'a-age', 'b-age', 'c-age', 'd-age', 'e-age',
+     'f-age', 'g-age', 'h-age', 'i-age', 'j-age', 'k-age',
+     'famID', 'mID', 'fID', 'POP', 'alc_dep_dx_f', 'alc_dep_dx_m']
 
 session_sadd = [field for field in subjects_sparser_add if 'age' not in field]
 session_sadd.extend(['session', 'followup', 'age', 'date'])
 
-def calc_date_w_Qs(dstr):
-    ''' assumes date of form mm/dd/yyyy
-    '''
-    dstr = str(dstr)
-    if dstr == 'nan':
-        return np.nan
-    if '?' in dstr:
-        if dstr[:2] == '??':
-            if dstr[3:5] == '??':
-                if dstr[5:7] == '??':
-                    return None
-                else:
-                    dstr = '6/1' + dstr[5:]
-            else:
-                dstr = '6' + dstr[2:]
-        else:
-            if dstr[3:5] == '??':
-                dstr = dstr[:2] + '/15' + dstr[5:]
-    try:
-        return datetime.strptime(dstr, '%m/%d/%Y')
-    except:
-        print('problem with date: ' + dstr)
-        return np.nan
-
-
-def site_fromIDstr(IDstr):
-    if IDstr[0].isnumeric():
-        return site_hash[IDstr[0]]
-    else:
-        return 'suny'
-
-def build_parentID(rec, famID_col, parentID_col):
-    try:
-        return rec[famID_col] + '{0:03d}'.format(int(rec[parentID_col]))
-    except ValueError:
-        return np.nan
-
-def ID_nan_strintfloat_COGA(v):
-    try:
-        return str(int(float(v))) # will work for fully numeric IDs
-    except ValueError:
-        return np.nan
-
-def ID_nan_strint(v):
-    try:
-        return str(int(v)) # will work for fully numeric IDs
-    except ValueError:
-        if v[0].isalpha(): # (if an ACHP ID)
-            return str(v)
-        else: # if is a missing val ('.')
-            return np.nan
 
 def load_master(preloaded=None, force_reload=False, custom_path=None):
-    
+    ''' load the most current HBNL master file as a pandas dataframe '''
+
     master = None
 
     if type(preloaded) == pd.core.frame.DataFrame and not custom_path:
@@ -104,7 +54,7 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
 
         # read as csv
         master = pd.read_csv(master_path_use,
-        					 converters={'ID': ID_nan_strint, 'famID': ID_nan_strint,
+                             converters={'ID': ID_nan_strint, 'famID': ID_nan_strint,
                                          'mID': ID_nan_strint, 'fID': ID_nan_strint},
                              na_values='.', low_memory=False)
         master.set_index('ID', drop=False, inplace=True)
@@ -120,10 +70,10 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
             jDF.set_index('ID_x', inplace=True)
             jDF.index.names = ['ID']
             master['alc_dep_dx_' + pcol[0]] = jDF['alc_dep_dx']
-        
+
     # check date modified on master file
     master_mtime = datetime.fromtimestamp(
-        os.path.getmtime(master_path_use))	
+        os.path.getmtime(master_path_use))
 
     return master, master_mtime
 
@@ -147,8 +97,8 @@ def ids_with_exclusions(master):
     return master[master['no-exp'].notnull()]['ID'].tolist()
 
 
-def excluded_experiments(master,id):
-    ex_str = master.ix[id]['no-exp']
+def excluded_experiments(master, ID):
+    ex_str = master.ix[ID]['no-exp']
     excluded = []
     if type(ex_str) == str:
         excluded = [tuple(excl.split('-')) for excl in ex_str.split('_')]
@@ -245,8 +195,8 @@ def protect_dates(filepath):
     inf.close()
     outf.close()
 
+
 def famID(stck):
-    
     try:
         assert len(stck) == 5
         assert stck[0] in '1234567'
@@ -256,56 +206,56 @@ def famID(stck):
 
 
 column_guides = {
-    'ID': ['start in',['1234567achp']] ,
+    'ID': ['start in', ['1234567achp']],
     'famID': famID,
-    'mID': ['start in',['1234567']],
-    'fID': ['start in',['1234567']],
-    'DNA': ['in','x'],
-    'rel2pro': ['in',['bil','fath','gof','hsib','m1c','m1c1r','ma','mate','mgf','mgm',
-                    'mgn','mhs','mu','moth','niece','neph','off','olaw','p1c','p1c1r',
-                    'pa','pgf','pgm','pgn','phs','pu','self','sib','sil','slaw']],
-    'famtype': ['in',['PILOT', 'I', 'IV', 'CONTROL', 'I-S-III', 'I-S-IV', 'II', 'L-II',
-       'III', 'IV-H', 'I-S-II', 'A-I', 'KIDS', 'I-S-IV-H', 'A-II', 'IRPG',
-       'IRPG-CTRL','L-IV', 'CTRL-K', 'CL-IV', 'A-IV-H', 'A-III',
-       'CL-SPEC', 'SPEC', 'CHAL-CON'] ],
-    'POP': ['in',['Pilot', 'COGA', 'COGA-Ctl', 'Relia', 'IRPG', 'IRPG-Ctl','Alc-chal', 
-            'A', 'C', 'H', 'P']],
-    'sex': ['in',['m','f','(m)','(f)']],
-    'handedness':['in',['b','l','r','w']] ,
+    'mID': ['start in', ['1234567']],
+    'fID': ['start in', ['1234567']],
+    'DNA': ['in', 'x'],
+    'rel2pro': ['in', ['bil', 'fath', 'gof', 'hsib', 'm1c', 'm1c1r', 'ma', 'mate', 'mgf', 'mgm',
+                       'mgn', 'mhs', 'mu', 'moth', 'niece', 'neph', 'off', 'olaw', 'p1c', 'p1c1r',
+                       'pa', 'pgf', 'pgm', 'pgn', 'phs', 'pu', 'self', 'sib', 'sil', 'slaw']],
+    'famtype': ['in', ['PILOT', 'I', 'IV', 'CONTROL', 'I-S-III', 'I-S-IV', 'II', 'L-II',
+                       'III', 'IV-H', 'I-S-II', 'A-I', 'KIDS', 'I-S-IV-H', 'A-II', 'IRPG',
+                       'IRPG-CTRL', 'L-IV', 'CTRL-K', 'CL-IV', 'A-IV-H', 'A-III',
+                       'CL-SPEC', 'SPEC', 'CHAL-CON']],
+    'POP': ['in', ['Pilot', 'COGA', 'COGA-Ctl', 'Relia', 'IRPG', 'IRPG-Ctl', 'Alc-chal',
+                   'A', 'C', 'H', 'P']],
+    'sex': ['in', ['m', 'f', '(m)', '(f)']],
+    'handedness': ['in', ['b', 'l', 'r', 'w']],
     'DOB': ['date'],
-    'twin': ['in',[0,1,2]],
-    'EEG': ['in',['x','e','-']],
-    'system': ['in',['es','es-ns','mc','mc-es','mc-ns','ns']],
-    'Wave12': ['in',['P','x']],
-    'Wave12-fam': ['in',[1,2]],
-    'fMRI': ['in',['1a','1b']],
-    'Wave3': ['in',['x','rm']],
-    'Phase4-session': ['in',['a','b','c','d']],
+    'twin': ['in', [0, 1, 2]],
+    'EEG': ['in', ['x', 'e', '-']],
+    'system': ['in', ['es', 'es-ns', 'mc', 'mc-es', 'mc-ns', 'ns']],
+    'Wave12': ['in', ['P', 'x']],
+    'Wave12-fam': ['in', [1, 2]],
+    'fMRI': ['in', ['1a', '1b']],
+    'Wave3': ['in', ['x', 'rm']],
+    'Phase4-session': ['in', ['a', 'b', 'c', 'd']],
     'Phase4-testdate': ['date'],
     'Phase4-age': 'numeric',
-    '4500': ['in',['x','x-','rm']],
+    '4500': ['in', ['x', 'x-', 'rm']],
     'ccGWAS': 'numeric',
-    'AAfamGWAS': ['in',['x','f']],
-    'ExomeSeq': ['in',['x']],
-    'EAfamGWAS':['x','xx','f'] ,
+    'AAfamGWAS': ['in', ['x', 'f']],
+    'ExomeSeq': ['in', ['x']],
+    'EAfamGWAS': ['x', 'xx', 'f'],
     'EEfamGWAS-fam': [famID],
-    'self-reported': ['in',['u8', 'h6', 'n4', 'n3', 'u2', 'h2', 'n2', 'h4', 'u6','u1',
-                    'n1', 'h8', 'n9', 'n8', 'u4', 'u3', 'u9', 'h9', 'h1', 'h3']],
-    'wave12-race': ['in',['Mixed-EA', 'Mixed-?', 'Mixed-other', 'White-EA', 'Black-AA',
-                    'Mixed-AA', 'PacIs']],
-    '4500-race': ['in',['EA_0', 'OTHER_0', 'EA_1', 'AA_0', 'AA_1', 'AA_.', 'OTHER_1',
-                    'EA_.', 'OTHER_.']],
-    'ccGWAS-race': ['in',['AA','EA']],
-    'core-race': ['in',['n6', 'n9', 'h6', 'n4', 'n2', 'h4', 'h9', 'n8', 'u6', 'h2' ]],
+    'self-reported': ['in', ['u8', 'h6', 'n4', 'n3', 'u2', 'h2', 'n2', 'h4', 'u6', 'u1',
+                             'n1', 'h8', 'n9', 'n8', 'u4', 'u3', 'u9', 'h9', 'h1', 'h3']],
+    'wave12-race': ['in', ['Mixed-EA', 'Mixed-?', 'Mixed-other', 'White-EA', 'Black-AA',
+                           'Mixed-AA', 'PacIs']],
+    '4500-race': ['in', ['EA_0', 'OTHER_0', 'EA_1', 'AA_0', 'AA_1', 'AA_.', 'OTHER_1',
+                         'EA_.', 'OTHER_.']],
+    'ccGWAS-race': ['in', ['AA', 'EA']],
+    'core-race': ['in', ['n6', 'n9', 'h6', 'n4', 'n2', 'h4', 'h9', 'n8', 'u6', 'h2']],
     'COGA11k-fam': famID,
-    'COGA11k-race': ['in',['AA','EA','other']],
-    'COGA11k-fam-race': ['in',['black','white','other']],
-    'ruID': [ 'start in',['AA', 'PG'] ],
+    'COGA11k-race': ['in', ['AA', 'EA', 'other']],
+    'COGA11k-fam-race': ['in', ['black', 'white', 'other']],
+    'ruID': ['start in', ['AA', 'PG']],
     'genoID': ['skip'],
-    'SmS': ['in',['x']],
-    'alc_dep_dx': ['in',[0,1]],
+    'SmS': ['in', ['x']],
+    'alc_dep_dx': ['in', [0, 1]],
     'alc_dep_ons': 'numeric',
-    'CA/CO': ['in',['CA', '0', '1', 'CO', 'CO(CA)', '(CA)']],
+    'CA/CO': ['in', ['CA', '0', '1', 'CO', 'CO(CA)', '(CA)']],
     # 'a-run': ,
     # 'a-raw': ,
     # 'a-date': ,
@@ -355,6 +305,7 @@ column_guides = {
 
 }
 
+
 def check_column_contents(filepath):
     M, store_date = load_master(filepath)
 
@@ -363,6 +314,6 @@ def check_column_contents(filepath):
         if col in column_guides:
             guide = column_guides[col]
             if guide == 'numeric':
-                tests = [ isinstance(v,numbers.Number) for v in vals ]
+                tests = [isinstance(v, numbers.Number) for v in vals]
             elif callable(guide):
-                tests = [ guide(v) for v in vals ]
+                tests = [guide(v) for v in vals]
