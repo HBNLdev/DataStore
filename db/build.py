@@ -21,9 +21,8 @@ from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
                            import_questfolder_ph4, import_questfolder_ssaga_ph4, import_questfolder_ph123,
                            import_questfolder_ssaga_ph123,
                            match_fups2sessions_fast_multi, match_fups_sessions_generic)
-from .utils.compilation import (calc_followupcol, join_ufields, convert_internalizing_columns, convert_intfup,
-                                convert_questname, groupby_followup, ID_nan_strintfloat_COGA, build_parentID)
-from .utils.df import df_fromcsv
+from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup, ID_nan_strintfloat_COGA,
+                                build_parentID, df_fromcsv)
 from .utils.filenames import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
 from .utils.files import identify_files, verify_files
 from .utils.text import get_toc, txt_tolines, find_lines
@@ -258,6 +257,32 @@ def internalizing():
 
 def internalizing2():
     ''' build only after ssaga has been built and updated '''
+
+    def convert_internalizing_columns(cols):
+        col_tups = []
+
+        for col in cols:
+            pieces = col.split('_')
+            info = '_'.join(pieces[:-2])
+            fup = '_'.join(pieces[-2:])
+
+            col_tups.append((info, fup))
+
+        return pd.MultiIndex.from_tuples(col_tups, names=('', 'followup'))
+
+    def convert_intfup(fup):
+        if fup[:2] == 's2':
+            fup_rn = 'p2'
+        else:
+            fup_rn = int(fup[-1])
+
+        return fup_rn
+
+    def convert_questname(v):
+        if v[0] == 'c':
+            return 'cssaga'
+        elif v[0] == 's':
+            return 'ssaga'
 
     folder = '/processed_data/zork/zork-phase4-69/subject/internalizing/'
     file = 'INT_Scale_All-Total-Scores_n11281.csv'

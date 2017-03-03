@@ -7,49 +7,34 @@ from glob import glob
 import numpy as np
 import pandas as pd
 
-from .utils.filenames import site_hash
+from .filenames import site_hash
 
 
-# groupby functions
+# csv import functions
 
 
-def groupby_followup(df):
-    df['followup'] = df.index.get_level_values('followup')
-    g = df.groupby(level=df.index.names[0])  # ID
-    df.drop('followup', axis=1, inplace=True)
-    return g
+def df_fromcsv(fullpath, id_lbl='ind_id', na_val=''):
+    ''' convert csv into dataframe, converting ID column to standard '''
 
+    # read csv in as dataframe
+    try:
+        df = pd.read_csv(fullpath, na_values=na_val)
+    except pd.parser.EmptyDataError:
+        print('csv file was empty, continuing')
+        return pd.DataFrame()
 
-# dataframe filter functions
+    # convert id to str and save as new column
+    df[id_lbl] = df[id_lbl].apply(int).apply(str)
+    df['ID'] = df[id_lbl]
+    df.set_index('ID', drop=False, inplace=True)
 
+    return df
 
-def latest_session(in_df):
-    ''' given a datframe with an (ID, session) index, return a version in which
-        only the latest sessions is kept for each '''
-    out_df = in_df.copy()
-    out_df['session'] = out_df.index.get_level_values('session')
-    g = out_df.groupby(level=out_df.index.names[0])  # ID
-    out_df = g.last()
-    out_df.set_index('session', append=True, inplace=True)
-    return out_df
-
-
-def mark_latest(in_df):
-    ''' given a datframe with an (ID, session) index, add a column that contains x's
-        for rows that are the latest session '''
-
-    out_df = in_df.copy()
-    out_df['session'] = out_df.index.get_level_values('session')
-    g = out_df.groupby(level=out_df.index.names[0])  # ID
-    uIDs = g.last().set_index('session', append=True).index.values
-    out_df['latest_session'] = np.nan
-    out_df.loc[uIDs, 'latest_session'] = 'x'
-    out_df.drop('session', axis=1, inplace=True)
-
-    return out_df
 
 
 # single value or column apply functions
+
+
 
 
 def ID_nan_strintfloat_COGA(v):
@@ -74,6 +59,8 @@ def ID_nan_strint(v):
 
 
 def mark_overthresh(v, thresh):
+    ''' if v is larger than thresh, return an 'x'. used to create a new columns marking supra-threshold rows '''
+
     if v > thresh:
         return 'x'
     else:
@@ -128,42 +115,41 @@ def num_chans(h1_path):
         return np.nan
 
 
-def convert_internalizing_columns(cols):
-    col_tups = []
+def column_split(v, ind=0, sep='_'):
+    ''' split value by sep and take the indth element of the result'''
 
-    for col in cols:
-        pieces = col.split('_')
-        info = '_'.join(pieces[:-2])
-        fup = '_'.join(pieces[-2:])
-
-        col_tups.append((info, fup))
-
-    return pd.MultiIndex.from_tuples(col_tups, names=('', 'followup'))
-
-
-def convert_intfup(fup):
-    if fup[:2] == 's2':
-        fup_rn = 'p2'
-    else:
-        fup_rn = int(fup[-1])
-
-    return fup_rn
-
-
-def convert_questname(v):
-    if v[0] == 'c':
-        return 'cssaga'
-    elif v[1] == 's':
-        return 'ssaga'
+    return v.split(sep)[ind]
 
 
 def extract_session_fromuID(v):
+    ''' given an HBNL-style uID (e. a1_10010001), extract the session '''
+
     return v.split('_')[0][0]
+
+
+# dealing with columns
+
+
+def reorder_columns(df, beginning_order):
+    ''' given a dataframe and a list of columns that you would like to be
+        at the beginning of the columns (in order), reorder them '''
+
+    cols = df.columns.tolist()
+    for col in reversed(beginning_order):
+        cols.insert(0, cols.pop(cols.index(col)))
+    return df[cols]
 
 
 # row-apply functions that usually operate on
 # a subject/session-collection-based dataframe
 # so certain columns are expected to exist
+
+
+def join_columns(row, columns, sep='_'):
+    ''' given list of columns, join all (string-compatible) values from those columns, using sep as delimiter '''
+
+    return sep.join([row[field] for field in columns])
+
 
 def build_parentID(rec, famID_col, parentID_col):
     ''' dataframe-apply function that uses partial ID info from
@@ -177,6 +163,8 @@ def build_parentID(rec, famID_col, parentID_col):
 
 
 def join_ufields(row, exp=None):
+    ''' join ID and session columns into a uID. if exp is True, also join experiment name '''
+
     if exp:
         return '_'.join([row['ID'], row['session'], exp])
     else:
@@ -215,6 +203,8 @@ def join_allcols(rec, sep='_'):
 
 
 def ID_in_x(rec, ck_set):
+    ''' if row's ID in ck_set, return x '''
+
     ID = rec.name[0]
     if ID in ck_set:
         return 'x'
@@ -269,9 +259,6 @@ def calc_nearestsession(row):
     except:
         return np.nan
 
-
-# the following functions operate on a subject/session-collection-based
-# dataframe that is indexed by ID and session
 
 def eeg_system(rec):
     ''' determine the EEG system that was used '''
@@ -359,6 +346,45 @@ def raw_folder_achp(rec):
 
 # functions that operate on a dataframe
 
+
+def drop_frivcols(df):
+    ''' given df, drop typically frivolous columns '''
+
+    friv_cols = [col for col in df if '_id' in col or 'insert_time' in col \
+                 or '_technique' in col or '_subject' in col \
+                 or '_questname' in col or '_ADM' in col or '_IND_ID' in col]
+    dcols = ['4500', '4500-race', 'AAfamGWAS', 'CA/CO', 'COGA11k-fam', 'COGA11k-fam-race',
+             'COGA11k-race', 'EAfamGWAS', 'EEfamGWAS-fam', 'ExomeSeq',
+             'Wave12', 'Wave12-fam', 'Wave3', '_ID', 'ccGWAS', 'ccGWAS-race',
+             'wave12-race', 'no-exp', 'remarks'] + friv_cols
+    return df.drop(dcols, axis=1)
+
+
+def latest_session(in_df):
+    ''' given a datframe with an (ID, session) index, return a version in which
+        only the latest sessions is kept for each '''
+    out_df = in_df.copy()
+    out_df['session'] = out_df.index.get_level_values('session')
+    g = out_df.groupby(level=out_df.index.names[0])  # ID
+    out_df = g.last()
+    out_df.set_index('session', append=True, inplace=True)
+    return out_df
+
+
+def mark_latest(in_df):
+    ''' given a datframe with an (ID, session) index, add a column that contains x's
+        for rows that are the latest session '''
+
+    out_df = in_df.copy()
+    out_df['session'] = out_df.index.get_level_values('session')
+    g = out_df.groupby(level=out_df.index.names[0])  # ID
+    uIDs = g.last().set_index('session', append=True).index.values
+    out_df['latest_session'] = np.nan
+    out_df.loc[uIDs, 'latest_session'] = 'x'
+    out_df.drop('session', axis=1, inplace=True)
+
+    return out_df
+
 def get_restingcnts(df):
     ''' given dataframe indexed by ID/session, find paths of resting CNTs '''
 
@@ -398,41 +424,14 @@ def keep_bestsession(df):
     return out_df
 
 
-# dealing with columns
-
-def drop_frivcols(df):
-    ''' given df, drop typically frivolous columns '''
-
-    friv_cols = [col for col in df if '_id' in col or 'insert_time' in col \
-                 or '_technique' in col or '_subject' in col \
-                 or '_questname' in col or '_ADM' in col or '_IND_ID' in col]
-    dcols = ['4500', '4500-race', 'AAfamGWAS', 'CA/CO', 'COGA11k-fam', 'COGA11k-fam-race',
-             'COGA11k-race', 'EAfamGWAS', 'EEfamGWAS-fam', 'ExomeSeq',
-             'Wave12', 'Wave12-fam', 'Wave3', '_ID', 'ccGWAS', 'ccGWAS-race',
-             'wave12-race', 'no-exp', 'remarks'] + friv_cols
-    return df.drop(dcols, axis=1)
+# groupby functions
 
 
-def reorder_columns(df, beginning_order):
-    ''' given a dataframe and a list of columns that you would like to be
-        at the beginning of the columns (in order), reorder them '''
+def groupby_followup(df):
+    ''' given ID+followup-indexed dataframe, create a groupby object, grouping by followup '''
 
-    cols = df.columns.tolist()
-    for col in reversed(beginning_order):
-        cols.insert(0, cols.pop(cols.index(col)))
-    return df[cols]
+    df['followup'] = df.index.get_level_values('followup')
+    g = df.groupby(level=df.index.names[0])  # ID
+    df.drop('followup', axis=1, inplace=True)
+    return g
 
-
-def my_strptime(v, dateform='%Y-%m-%d'):
-    ''' applymap function to convert all dataframe elements based on a date format '''
-
-    try:
-        return datetime.strptime(v, dateform)
-    except:
-        return np.nan
-
-
-def prepare_datedf(df):
-    ''' prepare a date dataframe to be used for finding date means '''
-
-    return df.dropna(how='all').applymap(my_strptime)

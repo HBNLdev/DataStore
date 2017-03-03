@@ -1,4 +1,4 @@
-# drinking variable knowledge
+''' drinking variable knowledge '''
 
 freq_vars = ['ssa_AL4a',
              'ssa_AL4e1',

@@ -1,3 +1,5 @@
+''' knowledge about experiments, their conditions, and regions of interest '''
+
 from collections import defaultdict
 
 # maps for experiments to the list of conditions

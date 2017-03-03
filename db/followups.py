@@ -5,8 +5,8 @@ from collections import defaultdict
 import pandas as pd
 
 from .compilation import get_sessiondatedf
-from .utils.compilation import prepare_datedf
 from .utils.math import robust_datemean
+from .utils.dates import my_strptime
 
 p123_master_path = '/processed_data/zork/zork-phase123/subject/master/master.sas7bdat.csv'
 p4_master_path = '/processed_data/zork/zork-phase4-72/subject/master/master4_30nov2016.sas7bdat.csv'
@@ -21,6 +21,12 @@ p3_cols = ['SAGA3_DT', 'CSGA3_DT', 'CSGC3_DT', 'ERP3_DT', 'FHAM3_DT',
            'SRE3_DT', 'SSSC3_DT']
 p4_col_prefixes = ['aeqg', 'aeqy', 'crv', 'cssaga', 'dp', 'hass',
                    'neo', 'ssaga', 'sssc', 'ssv']
+
+
+def prepare_datedf(df):
+    ''' prepare a date dataframe to be used for finding date means '''
+
+    return df.dropna(how='all').applymap(my_strptime)
 
 
 def import_mastercsv(path):

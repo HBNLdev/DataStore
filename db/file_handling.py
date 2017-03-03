@@ -12,9 +12,8 @@ import numpy as np
 import pandas as pd
 
 from .organization import Mdb
-from .utils.compilation import join_allcols, extract_session_fromuID, join_ufields
-from .utils.df import column_split
-from .utils.filenames import parse_filename, system_shorthands, extract_case_tuple
+from .utils.compilation import join_allcols, extract_session_fromuID, join_ufields, column_split
+from .utils.filenames import parse_filename, system_shorthands
 from .utils.records import unflatten_dict
 
 
@@ -128,6 +127,19 @@ def parse_maybe_numeric(st):
             return int(st)
     return st
 
+
+def extract_case_tuple(path):
+    ''' given a path to an .avg.h1 file, extract a case tuple for comparison '''
+    f = h5py.File(path, 'r')
+    case_info = f['file']['run']['case']['case'][:]
+    case_lst = []
+    for case in case_info:
+        index = case[0][0]
+        type_letter = case[-3][0].decode()
+        type_word = case[-2][0].decode()
+        case_lst.append((index, type_letter, type_word))
+    case_tup = tuple(case_lst)
+    return case_tup
 
 class AVGH1_File(CNTH1_File):
     ''' represents *.avg.h1 files, mostly for the behavioral info inside '''

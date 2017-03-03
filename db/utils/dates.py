@@ -80,3 +80,12 @@ def parse_date_apply_pd(dstr, dateform):
                 return None
     else:
         return None
+
+
+def my_strptime(v, dateform='%Y-%m-%d'):
+    ''' applymap function to convert all dataframe elements based on a date format '''
+
+    try:
+        return datetime.strptime(v, dateform)
+    except:
+        return np.nan

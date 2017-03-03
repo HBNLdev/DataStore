@@ -1,3 +1,5 @@
+''' knowledge about the SSAGA and the core phenotype file '''
+
 ssaga_cols = [
     'AL1',
     'AL1AgeOns',
