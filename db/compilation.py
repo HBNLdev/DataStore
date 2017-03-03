@@ -1,14 +1,16 @@
 ''' compilation tools for the HBNL '''
 
+import pprint
+
 import numpy as np
 import pandas as pd
-import pprint
-pp = pprint.PrettyPrinter(indent=4)
 
-from .organization import Mdb, flatten_dict
-from .quest_utils import quest_sparser_sub
 from .master_info import (subjects_sparser_sub, subjects_sparser_add,
-                            session_sadd)
+                          session_sadd)
+from .organization import Mdb
+from .utils.records import flatten_dict
+
+pp = pprint.PrettyPrinter(indent=4)
 
 subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     'AAfamGWASfam': {'AAfamGWAS': 'f'},
@@ -16,7 +18,7 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     'BrainDysfunction': {'POP': {'$in': ['A', 'C', 'H', 'P']},
                                          'EEG': 'x'},
                     'BrainDysfunction-AC': {'POP': {'$in': ['A', 'C']},
-                                         'EEG': 'x'},
+                                            'EEG': 'x'},
                     'ccGWAS': {'ccGWAS': {'$ne': np.nan}},
                     'COGA': {'POP': {'$in': ['COGA', 'COGA-Ctl', 'IRPG', 'IRPG-Ctl']}, 'EEG': 'x'},
                     'COGA11k': {'COGA11k-fam': {'$ne': np.nan}},
@@ -30,13 +32,13 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     # 'fMRI-NYU-hr':{'fMRI':{'$in':['3a','3b']}},
                     'h-subjects': {'POP': 'H'},
                     'HighRisk': {'POP': {'$in': ['COGA', 'COGA-Ctl', 'IRPG',
-                                            'IRPG-Ctl']},
+                                                 'IRPG-Ctl']},
                                  'site': 'suny', 'EEG': 'x'},
                     'HighRiskFam': {'POP': {'$in': ['COGA', 'COGA-Ctl', 'IRPG',
-                                            'IRPG-Ctl']},
-                                 'site': 'suny'},
+                                                    'IRPG-Ctl']},
+                                    'site': 'suny'},
                     'PhaseIV': {'Phase4-session':
-                                {'$in': ['a', 'b', 'c', 'd']}},
+                                    {'$in': ['a', 'b', 'c', 'd']}},
                     'p-subjects': {'POP': 'P'},
                     'smokeScreen': {'SmS': {'$ne': np.nan}},
                     'bigsmokeScreen': {'$or': [{'SmS': {'$ne': np.nan}},
@@ -48,6 +50,8 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
 subcoll_fnames = {'questionnaires': 'questname',
                   'ssaga': 'questname',
                   }
+
+quest_sparser_sub = {'achenbach': ['af_', 'bp_']}
 
 sparse_submaps = {'questionnaires': quest_sparser_sub,
                   'subjects': subjects_sparser_sub,
@@ -65,9 +69,10 @@ def populate_subcolldict():
     ''' make dict whose keys are collections and values are lists of
         subcollections (if they exist) '''
     subcoll_dict = {coll: Mdb[coll].distinct(subcoll_fnames[coll])
-                    if coll in subcoll_fnames.keys() else None
+    if coll in subcoll_fnames.keys() else None
                     for coll in Mdb.collection_names()}
     return subcoll_dict
+
 
 subcoll_dict = populate_subcolldict()
 
@@ -94,7 +99,7 @@ def get_subjectdocs(sample, sparsify=False):
             proj = format_sparseproj('subjects')
             proj.update({'_id': 0})
             docs = Mdb['subjects'].find(subjects_queries[sample], proj)
-        else:    
+        else:
             docs = Mdb['subjects'].find(subjects_queries[sample])
         return docs
 
@@ -116,7 +121,7 @@ def get_sessiondocs(sample, followups=None, sparsify=False):
             proj = format_sparseproj('sessions')
             proj.update({'_id': 0})
             docs = Mdb['sessions'].find(subjects_queries[sample], proj)
-        else:    
+        else:
             docs = Mdb['sessions'].find(subjects_queries[sample])
         return docs
 
@@ -171,7 +176,7 @@ def get_colldocs(coll, subcoll=None, add_query={}, add_proj={}):
     return docs
 
 
-def buildframe_fromdocs(docs, inds=['ID','session']):
+def buildframe_fromdocs(docs, inds=['ID', 'session']):
     ''' build a dataframe from a list of docs '''
     df = pd.DataFrame.from_records(
         [flatten_dict(d) for d in list(docs)])
@@ -181,17 +186,10 @@ def buildframe_fromdocs(docs, inds=['ID','session']):
                 df.set_index(ind, inplace=True)
             else:
                 df.set_index(ind, append=True, inplace=True)
-    
-    df.dropna(axis=1, how='all', inplace=True) # drop empty columns
-    df.sort_index(inplace=True) # sort
+
+    df.dropna(axis=1, how='all', inplace=True)  # drop empty columns
+    df.sort_index(inplace=True)  # sort
     return df
-
-
-def txt2list(path):
-    ''' given path to text file, return a list of its lines '''
-    with open(path, 'r') as f:
-        lst = [line.strip() for line in f]
-    return lst
 
 
 def format_sparseproj(coll, subcoll=None):
@@ -220,13 +218,13 @@ def format_ERPprojection_tups(cond_peak_chans_lst, measures=['amp', 'lat']):
         for chan in chans:
             for measure in measures:
                 key = 'data.' + cond + '_' + peak + '.' + chan + '.' + measure
-                proj[key] = 1            
-    
+                proj[key] = 1
+
     return proj
 
 
 def format_EROprojection(conds, freqs, times, chans,
-        measures=['evo', 'tot'], calc_types=['v60-all']):
+                         measures=['evo', 'tot'], calc_types=['v60-all']):
     ''' format a projection to retrieve specific ERO information '''
 
     freqs = [[str(float(lim)).replace('.', 'p') for lim in lims]
@@ -241,15 +239,15 @@ def format_EROprojection(conds, freqs, times, chans,
 
 
 def prepare_joindata(keyDF, coll, subcoll=None, add_query={}, add_proj={},
-                    left_join_inds=['ID'], right_join_inds=['ID'], 
-                    id_field='ID', flatten=True, prefix=None):
+                     left_join_inds=['ID'], right_join_inds=['ID'],
+                     id_field='ID', flatten=True, prefix=None):
     ''' given a "key" dataframe and target collection,
         prepare a dataframe of corresponding info '''
 
     if not prefix and prefix != '':
         if subcoll is not None:
             prefix = subcoll[:3] + '_'
-            if prefix == 'dx__': # catch the dx subcollections
+            if prefix == 'dx__':  # catch the dx subcollections
                 prefix = subcoll[3:6] + '_'
         else:
             prefix = coll[:3] + '_'
@@ -266,7 +264,7 @@ def prepare_joindata(keyDF, coll, subcoll=None, add_query={}, add_proj={},
     docs = get_colldocs(coll, subcoll, query, proj)
 
     if flatten:
-        recs =[flatten_dict(r) for r in list(docs)]
+        recs = [flatten_dict(r) for r in list(docs)]
     else:
         recs = [r for r in list(docs)]
 
@@ -275,14 +273,14 @@ def prepare_joindata(keyDF, coll, subcoll=None, add_query={}, add_proj={},
 
     prepare_indices(newDF, left_join_inds)
     newDF.columns = [prefix + c for c in newDF.columns]
-    newDF.dropna(axis=1, how='all', inplace=True) # drop empty columns
-    newDF.sort_index(inplace=True)                # sort
+    newDF.dropna(axis=1, how='all', inplace=True)  # drop empty columns
+    newDF.sort_index(inplace=True)  # sort
 
     return newDF
 
 
 def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
-                    left_join_inds=['ID'], right_join_inds=['ID'], 
+                    left_join_inds=['ID'], right_join_inds=['ID'],
                     id_field='ID', flatten=True, prefix=None,
                     drop_empty=True, how='left'):
     ''' given a "key" dataframe and target collection,
@@ -291,8 +289,8 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
     keyDF = keyDF_in.copy()
 
     newDF = prepare_joindata(keyDF_in, coll, subcoll, add_query, add_proj,
-                    left_join_inds, right_join_inds, 
-                    id_field, flatten, prefix)
+                             left_join_inds, right_join_inds,
+                             id_field, flatten, prefix)
 
     prepare_indices(keyDF, right_join_inds)
 
@@ -333,13 +331,14 @@ def get_cnth1s(df):
 
     df_out = df.copy()
     for exp in exps:
-        query = {'experiment':exp}
+        query = {'experiment': exp}
         matching_docs = Mdb[coll].find(query)
         eegDF = buildframe_fromdocs(matching_docs)
-        eegDF[exp+'_cnth1_path'] = eegDF['filepath']
-        df_out = df_out.join(eegDF[exp+'_cnth1_path'])
+        eegDF[exp + '_cnth1_path'] = eegDF['filepath']
+        df_out = df_out.join(eegDF[exp + '_cnth1_path'])
 
     return df_out
+
 
 def get_famdf(df):
     ''' given df with famID column, get the corresponding family dataframe
@@ -350,3 +349,19 @@ def get_famdf(df):
     fam_df_allrels = buildframe_fromdocs(docs)
 
     return fam_df_allrels
+
+
+def get_sessiondatedf(df):
+    ''' given a df indexed by ID (minimally), get a corresponding session dataframe
+        indexed by both ID and session, with the session date info '''
+
+    IDs = df.index.get_level_values('ID').tolist()
+    session_query = {'ID': {'$in': IDs}}
+    session_fields = ['ID', 'session', 'date']
+    session_proj = {k: 1 for k in session_fields}
+    session_proj['_id'] = 0
+    session_docs = Mdb['sessions'].find(session_query, session_proj)
+    sdate_df = buildframe_fromdocs(session_docs)
+    sdate_df.rename(columns={'date': 'session_date'}, inplace=True)
+
+    return sdate_df

@@ -8,11 +8,13 @@ import pandas as pd
 from scipy import interpolate
 from tqdm import tqdm
 
+from .cnth1_to_stmat import build_paramstr
 from .compilation import join_collection
 from .organization import Mdb
-from .pipeline import version_info, chan_mapping, powertype_mapping
-from .pipeline_st import build_paramstr
-from .utils import join_allcols
+from .stmat_to_eromat import version_info, chan_mapping, powertype_mapping
+from .utils.compilation import join_allcols
+from .utils.math import convert_scale
+from .utils.matlab_h5 import handle_parse
 
 opt_info = {'Add baseline': ('add_baseline', 'array'),
             'Calculation type': ('calc_type', 'array'),
@@ -42,24 +44,27 @@ opt_info = {'Add baseline': ('add_baseline', 'array'),
             'Times': ('time_vec_ds', 'array'),
             }
 
-chans = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ',
-         'F4', 'F3', 'FC6', 'FC5', 'FC2', 'FC1', 'T8', 'T7', 'CZ',
-         'C3', 'C4', 'CP5', 'CP6', 'CP1', 'CP2', 'P3', 'P4', 'PZ',
-         'P8', 'P7', 'PO2', 'PO1', 'O2', 'O1', 'X', 'AF7', 'AF8',
-         'F5', 'F6', 'FT7', 'FT8', 'FPZ', 'FC4', 'FC3', 'C6', 'C5',
-         'F2', 'F1', 'TP8', 'TP7', 'AFZ', 'CP3', 'CP4', 'P5',
-         'P6', 'C1', 'C2', 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ',
-         'P2', 'P1', 'CPZ']
+chans_61 = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ',
+            'F4', 'F3', 'FC6', 'FC5', 'FC2', 'FC1', 'T8', 'T7', 'CZ',
+            'C3', 'C4', 'CP5', 'CP6', 'CP1', 'CP2', 'P3', 'P4', 'PZ',
+            'P8', 'P7', 'PO2', 'PO1', 'O2', 'O1', 'X', 'AF7', 'AF8',
+            'F5', 'F6', 'FT7', 'FT8', 'FPZ', 'FC4', 'FC3', 'C6', 'C5',
+            'F2', 'F1', 'TP8', 'TP7', 'AFZ', 'CP3', 'CP4', 'P5',
+            'P6', 'C1', 'C2', 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ',
+            'P2', 'P1', 'CPZ']
 
 chans_19 = ['O1', 'F4', 'F8', 'P3', 'C4', 'P7', 'T8', 'T7', 'P8', 'C3',
-            'P4', 'F7', 'F3', 'O2', 'FP1', 'FZ', 'FP2', 'CZ', 'PZ',]
+            'P4', 'F7', 'F3', 'O2', 'FP1', 'FZ', 'FP2', 'CZ', 'PZ', ]
 
 chans_31 = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ', 'F4', 'F3', 'FC6',
             'FC5', 'FC2', 'FC1', 'T8', 'T7', 'CZ', 'C3', 'C4', 'CP5', 'CP6',
             'CP1', 'CP2', 'P3', 'P4', 'PZ', 'P8', 'P7', 'PO2', 'PO1', 'O2', 'O1']
 
+
+# prep functions
+
 def prepare_erodf(ero_df):
-    ''' given an ero_df prepared by EROStack.tf_mean_lowmem_multiwin_chans,
+    ''' given an ero_df prepared by EROStack.tf_mean_multiwin_chans,
         that is row-index by ID, session, powertype, experiment, and condition,
         and column-indexed by TFROI and channel,
         reorganize the dataframe to be in an export-friendly format '''
@@ -95,7 +100,7 @@ def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked'], n_ch
     prc_ver = proc_type[1]
     parent_dir = version_info[prc_ver]['storage path']
 
-    df_out = df_out[ df_out['cnt_n_chans'].notnull() ]
+    df_out = df_out[df_out['cnt_n_chans'].notnull()]
 
     for exp, cases in exp_cases.items():
         for case in cases:
@@ -103,12 +108,16 @@ def add_eropaths(df, proc_type, exp_cases, power_types=['total', 'evoked'], n_ch
                 ptype_short = powertype_mapping[ptype]
                 apply_args = [parent_dir, proc_type, exp, case, ptype_short]
                 pathcol_name = '_'.join([proc_type, exp, case, ptype])
-                df_out[pathcol_name] = df_out.apply(gen_path2, axis=1, args=apply_args)
+                df_out[pathcol_name] = df_out.apply(gen_path, axis=1, args=apply_args)
 
     return df_out
 
 
-def gen_path2(rec, parent_dir, proc_type, exp, case, power_type_short):
+def gen_path(rec, parent_dir, proc_type, exp, case, power_type_short):
+    ''' apply function designed to operate on a dataframe indexed by ID and session.
+        given processing version, parameter string, number of channels in the raw data, experiment,
+        case, power type, ID, and session, generate the path to the expected 3d ero mat '''
+
     ID = rec.name[0]
     session = rec.name[1]
     raw_chans = rec['cnt_n_chans']
@@ -121,7 +130,6 @@ def gen_path2(rec, parent_dir, proc_type, exp, case, power_type_short):
     else:
         n_chans = chan_mapping[raw_chans]
 
-
     path_start = os.path.join(parent_dir, param_str, n_chans, exp)
     fname = '_'.join([ID, session, exp, case, power_type_short])
     ext = '.mat'
@@ -131,122 +139,20 @@ def gen_path2(rec, parent_dir, proc_type, exp, case, power_type_short):
     return path
 
 
-def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
-    ''' apply function designed to operate on a dataframe indexed by ID and session.
-        given processing version, parameter string, number of channels in the raw data, experiment,
-        case, power type, ID, and session, generate the path to the expected 3d ero mat '''
+# math function for interpolation
 
-    ID = rec.name[0]
-    session = rec.name[1]
-
-    parent_dir = version_info[prc_ver]['storage path']
-
-    # handle the expected number of channels
-    if '-s9-' in param_str:
-        n_chans = '20'
-    else:
-        n_chans = chan_mapping[raw_chans]
-
-    path_start = os.path.join(parent_dir, param_str, n_chans, exp)
-    fname = '_'.join([ID, session, exp, case, powertype_mapping[power_type]])
-    ext = '.mat'
-
-    path = os.path.join(path_start, fname + ext)
-
-    return path
+def interp_freqdomain(a, t, f1, f2):
+    ''' given time-frequency array a that is of shape (t.size, f1.size),
+        timepoint vector t, and two frequency vectors, f1 and f2,
+        use 2d interpolation to produce output array that is of size (t.size, f2.size) '''
+    f = interpolate.interp2d(f1, t, a)
+    return f(f2, t)
 
 
-def gen_path_stdf(rec, power_type):
-    ''' apply function designed to operate on a dataframe indexed by ID and session.
-        given processing version, parameter string, number of channels in the raw data, experiment,
-        case, power type, ID, and session, generate the path to the expected 3d ero mat '''
-
-    try:
-        ID = rec.name[0]
-        session = rec.name[1]
-
-        parent_dir = version_info[rec['prc_ver']]['storage path']
-
-        # handle the expected number of channels
-        if '-s9-' in rec['param_string']:
-            n_chans = '20'
-        else:
-            n_chans = chan_mapping[rec['n_chans']]
-
-        path_start = os.path.join(parent_dir, rec['param_string'], n_chans, rec['experiment'])
-        fname = '_'.join([ID, session, rec['experiment'], rec['case'], powertype_mapping[power_type]])
-        ext = '.mat'
-
-        path = os.path.join(path_start, fname + ext)
-
-        return path
-    except KeyError:
-        print(ID, session, 'had a key missing')
-        return None
-    except IndexError:
-        print(ID, 'had an index missing')
-
-
-# h5py parsing functions
-
-def parse_text(dset, dset_field):
-    ''' parse .mat-style h5 field that contains text '''
-    dset_ref = dset[dset_field]
-    return ''.join(chr(c[0]) for c in dset_ref[:])
-
-
-def parse_textarray(dset, dset_field):
-    ''' parse .mat-style h5 field that contains a text array '''
-    dset_ref = dset[dset_field]
-    array = dset_ref[:]
-    return [''.join([chr(arg) for arg in args]).rstrip() for args in
-            zip(*array)]
-
-
-def parse_cell(dset, dset_field):
-    ''' parse .mat-style h5 field that contains a cell array '''
-    try:
-        dset_ref = dset[dset_field]
-        refs = [t[0] for t in dset_ref[:]]
-        out_lst = [''.join(chr(c) for c in dset[ref][:]) for ref in refs]
-        return out_lst
-    except:
-        return []
-
-
-def parse_array(dset, dset_field):
-    ''' parse .mat-style h5 field that contains a numerical array.
-        not in use yet. '''
-    contents = dset[dset_field][:]
-    if contents.shape == (1, 1):
-        return contents[0][0]
-    elif contents == np.array([0, 0], dtype=np.uint64):
-        return None
-    else:
-        return contents
-
-
-ftypes_funcs = {'text': parse_text, 'cell': parse_cell, 'array': None,
-                'text_array': parse_textarray}
-
-
-def handle_parse(dset, dset_field, field_type):
-    ''' given file pointer, field, and datatype, apply appropriate parser '''
-    func = ftypes_funcs[field_type]
-    return func(dset, dset_field) if func else dset[dset_field][:]
-
-
-# dataframe functions
-
-def join_columns(row, columns):
-    return '_'.join([row[field] for field in columns])
-
-
-# array functions
-
-def convert_scale(scale_array, scale_val):
-    ''' given array, find index nearest to given value '''
-    return np.argmin(np.fabs(scale_array - scale_val))
+def interp_freqdomain_fast(a, t, f1, f2):
+    ''' faster version of above that uses a cubic spline procedure '''
+    f = interpolate.RectBivariateSpline(t, f1, a)
+    return f(t, f2)
 
 
 # main classes
@@ -257,7 +163,7 @@ class EmptyStackError(Exception):
 
 
 class EROStack:
-    ''' represents a list of .mat's as a dask stack '''
+    ''' represents a list of .mat's as a stack of arrays '''
 
     def __init__(s, path_lst, touch_db=False):
         s.init_df(path_lst, touch_db=touch_db)
@@ -267,7 +173,7 @@ class EROStack:
     def init_df(s, path_lst, touch_db=False):
         ''' given, a list of paths, intializes the dataframe that represents each existent EROmat.
             pulls info out of the path of each. '''
-        
+
         row_lst = []
         pointer_lst = []
 
@@ -275,7 +181,7 @@ class EROStack:
         for fp in path_lst:
             if os.path.exists(fp):
                 em = EROMat(fp)
-                
+
                 if touch_db:
                     em.prepare_row()
 
@@ -298,12 +204,16 @@ class EROStack:
         s.pointer_lst = pointer_lst
 
     def get_params(s):
+        ''' get the ERO file parameters, using the first file as an assumed exemplar '''
+
         # em = EROMat(s.data_df.ix[0, 'path'])
         em = EROMat(s.data_df['path'][0])
         em.get_params()
         s.params = em.params
 
     def survey_vecs(s):
+        ''' survey all .mat's for their frequency and channel vectors,
+            and create data structures to keep track of them for later steps '''
 
         # freqs /chans
         freqlen_lst = []
@@ -327,7 +237,36 @@ class EROStack:
         s.params['Frequencies'] = freqlen_dict[max(freqlen_dict)]
         s.params['Channels'] = chanlen_dict[max(chanlen_dict)]
 
-    def tf_mean_lowmem(s, times, freqs):
+    def survey_conds(s):
+        ''' survey what conditions are available among all ERO .mat's
+            so that later it's possible to build a results package-style data array,
+            in which conditions is its own dimension '''
+
+        cond_lst = list(set(s.data_df.index.get_level_values('condition')))
+        n_conds = len(cond_lst)
+        g = s.data_df.reset_index('condition').groupby(level=['ID', 'session'])
+        cond_counts = g['condition'].count()
+        cond_deficient_uIDs = cond_counts.index[(cond_counts < n_conds).values]
+        data_df_fullconds = s.data_df.drop(cond_deficient_uIDs)
+        data_df_fullconds_uID = data_df_fullconds.reset_index().set_index(['ID', 'session'])
+        fullcond_uIDs = list(set(data_df_fullconds_uID.index.values))
+        data_df_fullconds_uIDconds = data_df_fullconds_uID.set_index('condition', append=True)
+        g = data_df_fullconds_uID.groupby(level=data_df_fullconds_uID.index.names)
+        data_df_fullconds_uID_nodupes = g.first()
+
+        s.cond_lst = cond_lst
+        s.fullcond_uIDs = fullcond_uIDs
+        s.data_df_fullconds = data_df_fullconds
+        s.data_df_fullconds_uIDconds = data_df_fullconds_uIDconds
+        s.data_df_fullconds_uID_nodupes = data_df_fullconds_uID_nodupes
+
+    # all of the below functions use a low memory style which, rather than stacking all of the 3d ERO arrays in memory,
+    # takes the mean of each and removes the array from memory before continuing
+
+    def tfmean(s, times, freqs):
+        ''' given 2-tuples of start and end times and frequencies,
+            return a dataframe containing the mean value in that TFROI
+            for each .mat in the stack '''
 
         time_lims = [convert_scale(s.params['Times'], time) for time in times]
         freq_lims = dict()
@@ -342,8 +281,7 @@ class EROStack:
 
         fpi = 0
         for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
-            mean_array[fpi, :] = fp['data'] \
-                [:, time_lims[0]:time_lims[1] + 1,
+            mean_array[fpi, :] = fp['data'][:, time_lims[0]:time_lims[1] + 1,
                                  freq_lims[fl][0]:freq_lims[fl][1] + 1].mean(axis=(1, 2))
             fpi += 1
 
@@ -355,9 +293,10 @@ class EROStack:
         mean_df = pd.DataFrame(mean_array, index=s.data_df.index, columns=lbls)
         return mean_df
 
-    def tf_mean_lowmem_multiwin(s, windows):
+    def tfmean_multiwin(s, windows):
         ''' given a list of tf windows, which are 4-tuples of (t1, t2, f1, f2),
             calculate means in those windows for all channels and subjects '''
+
         win_inds = []
         win_lbls = []
         for win in windows:
@@ -383,8 +322,7 @@ class EROStack:
         fpi = 0
         for fp, fl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values)):
             for wi, winds in enumerate(win_inds):
-                mean_array[fpi, wi, :] = fp['data'] \
-                    [:, winds[fl][0]:winds[fl][1] + 1,
+                mean_array[fpi, wi, :] = fp['data'][:, winds[fl][0]:winds[fl][1] + 1,
                                          winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
             fpi += 1
 
@@ -393,9 +331,10 @@ class EROStack:
         mean_df = pd.DataFrame(mean_array_reshaped, index=s.data_df.index, columns=win_lbls)
         return mean_df
 
-    def tf_mean_lowmem_multiwin_chans(s, windows, channels):
-        ''' given a list of tf windows, which are 4-tuples of (t1, t2, f1, f2),
-            calculate means in those windows for all channels and subjects '''
+    def tfmean_multiwin_chans(s, windows, channels):
+        ''' same as tfmean_multiwin but only compiles for a subset of channels,
+            supplied by name as a list '''
+
         win_inds = []
         win_lbls = []
         for win in windows:
@@ -448,19 +387,16 @@ class EROStack:
             for wi, winds in enumerate(win_inds):
                 if minds[cl] or cl == 20:
                     if cl == 20:
-                        data_vec = fp['data'] \
-                            [:, winds[fl][0]:winds[fl][1] + 1,
-                                                 winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                        data_vec = fp['data'][:, winds[fl][0]:winds[fl][1] + 1,
+                                   winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
                         for new_ind, old_ind in c20_newind_oldind.items():
                             mean_array[fpi, wi, new_ind] = data_vec[old_ind]
                     else:
-                        mean_array[fpi, wi, :len(cinds[cl])] = fp['data'] \
-                            [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
-                                                 winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                        mean_array[fpi, wi, :len(cinds[cl])] = fp['data'][cinds[cl], winds[fl][0]:winds[fl][1] + 1,
+                                                               winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
                 else:
-                    mean_array[fpi, wi, :] = fp['data'] \
-                        [cinds[cl], winds[fl][0]:winds[fl][1] + 1,
-                                    winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                    mean_array[fpi, wi, :] = fp['data'][cinds[cl], winds[fl][0]:winds[fl][1] + 1,
+                                             winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
             fpi += 1
 
         mean_array_reshaped = np.reshape(mean_array, (n_files, n_windows * n_chans))
@@ -470,10 +406,11 @@ class EROStack:
         mean_df = pd.DataFrame(mean_array_reshaped, index=s.data_df.index, columns=column_mi)
         return mean_df
 
+    def tfmean_multi_winchantups(s, windows_channels):
+        ''' given a list of 5-tuples of (t1, t2, f1, f2, chans),
+            where chans is a list of channels that you want to calculate for those windows,
+            calculate TFROI means '''
 
-    def tf_mean_lowmem_multi_winchantups(s, windows_channels):
-        ''' given a list of tf windows, which are 4-tuples of (t1, t2, f1, f2),
-            calculate means in those windows for all channels and subjects '''
         winchan_inds = []
         winchan_lbl_tups = []
         channels = set()
@@ -519,7 +456,7 @@ class EROStack:
             wci = 0
             for winds, win_chans in winchan_inds:
                 data_vec_win = data_vec[:, winds[fl][0]:winds[fl][1] + 1,
-                                           winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                               winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
                 for chan in win_chans:
                     try:
                         chan_ind = cinds[cl][chan]
@@ -534,10 +471,10 @@ class EROStack:
         mean_df = pd.DataFrame(mean_array, index=s.data_df.index, columns=column_mi)
         return mean_df
 
-    def tf_mean_lowmem_multi_winchantups_bl(s, windows_channels, bl_window=[-187.5, -100]):
-        ''' given a list of tf windows, which are 4-tuples of (t1, t2, f1, f2),
-            calculate means in those windows for all channels and subjects '''
-    
+    def tfmean_multi_winchantups_bl(s, windows_channels, bl_window=[-187.5, -100]):
+        ''' same as tfmean_multi_winchantups but uses the ERSP-style baseline normalization
+            in a given baseline window'''
+
         bl_time1 = convert_scale(s.params['Times'], bl_window[0])
         bl_time2 = convert_scale(s.params['Times'], bl_window[1])
 
@@ -583,12 +520,12 @@ class EROStack:
         fpi = 0
         for fp, fl, cl in tqdm(zip(s.pointer_lst, s.data_df['freq_len'].values, s.data_df['chan_len'].values)):
             data_vec = fp['data']
-            to_div = data_vec[:, bl_time1:bl_time2+1, :].mean(axis=1, keepdims=True)
+            to_div = data_vec[:, bl_time1:bl_time2 + 1, :].mean(axis=1, keepdims=True)
             data_vec_bl = 10 * np.log10(data_vec / to_div)
             wci = 0
             for winds, win_chans in winchan_inds:
                 data_vec_win = data_vec_bl[:, winds[fl][0]:winds[fl][1] + 1,
-                                              winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
+                               winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
                 for chan in win_chans:
                     try:
                         chan_ind = cinds[cl][chan]
@@ -603,7 +540,7 @@ class EROStack:
         mean_df = pd.DataFrame(mean_array, index=s.data_df.index, columns=column_mi)
         return mean_df
 
-    def sub_mean_lowmem(s):
+    def sub_mean(s):
         ''' calculate a grand (cross-subject) mean.
             creates a numpy array of shape (chans, freqs, times) '''
 
@@ -632,7 +569,7 @@ class EROStack:
 
         return mean_array
 
-    def sub_mean_lowmem_interp(s):
+    def sub_mean_interp(s):
         ''' calculate a grand (cross-subject) mean. creates a numpy array of shape (chans, freqs, times)
             if interpolation is necessary '''
 
@@ -665,6 +602,7 @@ class EROStack:
         return mean_array
 
     def load_data_interp(s):
+        ''' load all data (memory-intensive) and stack it, interpolating if necessary '''
 
         n_files = len(s.data_df['path'].values)
         n_chans = int(s.params['# of channels'][0][0])
@@ -692,27 +630,8 @@ class EROStack:
 
         return data_array
 
-    def survey_conds(s):
-
-        cond_lst = list(set(s.data_df.index.get_level_values('condition')))
-        n_conds = len(cond_lst)
-        g = s.data_df.reset_index('condition').groupby(level=['ID', 'session'] )
-        cond_counts = g['condition'].count()
-        cond_deficient_uIDs = cond_counts.index[(cond_counts < n_conds).values]
-        data_df_fullconds = s.data_df.drop(cond_deficient_uIDs)
-        data_df_fullconds_uID = data_df_fullconds.reset_index().set_index(['ID', 'session'])
-        fullcond_uIDs = list(set(data_df_fullconds_uID.index.values))
-        data_df_fullconds_uIDconds = data_df_fullconds_uID.set_index('condition', append=True)
-        g = data_df_fullconds_uID.groupby(level=data_df_fullconds_uID.index.names)
-        data_df_fullconds_uID_nodupes = g.first()
-        
-        s.cond_lst = cond_lst
-        s.fullcond_uIDs = fullcond_uIDs
-        s.data_df_fullconds = data_df_fullconds
-        s.data_df_fullconds_uIDconds = data_df_fullconds_uIDconds
-        s.data_df_fullconds_uID_nodupes = data_df_fullconds_uID_nodupes
-
     def load_data_interp_conds(s):
+        ''' same as load_data_interp, but transpose conditions into its own dimension '''
 
         if 'cond_lst' not in dir(s):
             s.survey_conds()
@@ -724,8 +643,8 @@ class EROStack:
         n_times = time_vec.size
         max_freqsize = max(s.freqlen_dict)
         n_freqs = s.freqlen_dict[max_freqsize].shape[1]
-        print('{} subjects, {} conds, {} chans, {} times, {} freqs'.\
-            format(n_subjects, n_conds, n_chans, n_times, n_freqs))
+        print('{} subjects, {} conds, {} chans, {} times, {} freqs'.format(
+            n_subjects, n_conds, n_chans, n_times, n_freqs))
 
         # subjects, conditions, channels, freq, timepoints
         data_array = np.empty((n_subjects, n_conds, n_chans, n_times, n_freqs))
@@ -751,25 +670,6 @@ class EROStack:
                 data_array[uidi, ci, :, :, :] = data
 
         return data_array
-
-    def retrieve_dbdata(s, times, freqs):
-        # for mat in s.data_df.iterrows():
-        #     proj = C.format_EROprojection()
-        pass
-
-
-def interp_freqdomain(a, t, f1, f2):
-    ''' given time-frequency array a that is of shape (t.size, f1.size),
-        timepoint vector t, and two frequency vectors, f1 and f2,
-        use 2d interpolation to produce output array that is of size (t.size, f2.size) '''
-    f = interpolate.interp2d(f1, t, a)
-    return f(f2, t)
-
-
-def interp_freqdomain_fast(a, t, f1, f2):
-    ''' faster version of above that uses a cubic spline procedure '''
-    f = interpolate.RectBivariateSpline(t, f1, a)
-    return f(t, f2)
 
 
 class EROMat:
@@ -824,7 +724,10 @@ class EROMat:
         ''' prepare 3d ERO data '''
         s.data = h5py.File(s.filepath, 'r')['data'][:]
 
-    def tf_mean(s, times, freqs):
+    def tfmean(s, times, freqs):
+        ''' given 2-tuples of start and end times and frequencies,
+            return a dataframe containing the mean value in that TFROI '''
+
         time_lims = [convert_scale(s.params['Times'], time) for time in times]
         freq_lims = [convert_scale(s.params['Frequencies'], freq)
                      for freq in freqs]
@@ -832,10 +735,10 @@ class EROMat:
         print(freq_lims)
         tf_slice = s.data[:, time_lims[0]:time_lims[1] + 1,
                    freq_lims[0]:freq_lims[1] + 1]
-        tf_mean = tf_slice.mean(axis=2)
-        out_array = tf_mean.mean(axis=1)
+        tfmean = tf_slice.mean(axis=2)
+        out_array = tfmean.mean(axis=1)
 
-        mean_df = pd.DataFrame(out_array, index=chans,
+        mean_df = pd.DataFrame(out_array, index=chans_61,
                                columns=[s.filepath[-10:]])
         return mean_df
 
@@ -882,30 +785,19 @@ def find_column_groups(column_list, exclusions=['trial', 'age'], var_ind=-1):
 
     return col_groups
 
-    # Tools to extract order from column names and produce them flexibly - aiming at more generalization
-    # Information to guide processing
 
+# i dont like declaring module-global variables with vague, common names
+# especially when it's done at line ~800
+# it runs every time the module is imported which is also wasteful
+# i've done a refactor here
+# sorry if it break anything
 
-experiments = Mdb.STinverseMats.distinct('experiment')
-case_name_aliases = {'tt': 'target', 'nv': 'novel', 'nt': 'nontarget'}
-cases_db = Mdb.STinverseMats.distinct('case')
-cases = []
-for case in cases_db:
-    cases.append(case)
-    if case in case_name_aliases:
-        cases.append(case_name_aliases[case])
+# Representational class to parse and produce labels
 
-powers = ['tot-pwr', 'evo-pwr', 'total', 'evoked']
-units = ['ms', 'Hz']
-method_descriptor_type = type(str.lower)
-function_type = type(lambda x: x)
-
-
-# utility functions
 def num_drop_units(st):
     stD = st
     found_unit = None
-    for unit in units:
+    for unit in ['ms', 'Hz']:
         if unit in stD:
             stD = stD.replace(unit, '')
             found_unit = unit
@@ -915,70 +807,6 @@ def num_drop_units(st):
 def split_label(label, sep='_'):
     parts = label.split(sep)
     return parts
-
-
-def parse_col_group(col_list, field_names, sep='_'):
-    all_pieces = [split_label(c, sep) for c in col_list]
-    num_parts = set([len(pcs) for pcs in all_pieces])
-    if len(num_parts) > 1:
-        return 'non_uniform'
-    else:
-        num_parts = list(num_parts)[0]
-    options = [set() for i in range(num_parts)]
-    for col_pcs in all_pieces:
-        [options[i].add(pc) for i, pc in enumerate(col_pcs)]
-    options = [list(o) for o in options]
-
-    part_names = field_names.copy()  # set([k for k in def_desc.keys()])
-    # identify part meanings
-    part_order = []
-    parsed_opts = []
-    unitsD = {}
-    for opts in options:
-        if len(part_names) == 1:  # handle the final remaining field
-            part_order.append(list(part_names)[0])
-            parsed_opts.append(opts)
-        elif opts[0] in cases:
-            part_order.append('case')
-            part_names.remove('case')
-            parsed_opts.append(opts)
-        elif opts[0] in experiments or opts[0] in [e.upper() for e in experiments]:
-            part_order.append('experiment')
-            part_names.remove('experiment')
-            parsed_opts.append(opts)
-        elif opts[0] in powers:
-            part_order.append('power')
-            part_names.remove('power')
-            parsed_opts.append(opts)
-        elif '-' in opts[0] and 'pwr' not in opts[0]:
-            nums_pieces = opts[0].split('-')
-            nums = []
-            this_unit = ''
-            for numS in nums_pieces:
-                val, unit = num_drop_units(numS)
-                nums.append(val)
-                if unit:
-                    this_unit = unit
-            if nums[1] - nums[0] < 40:
-                part_order.append('frequency')
-                part_names.remove('frequency')
-
-            else:
-                part_order.append('time')
-                part_names.remove('time')
-
-            parsed_opts.append([tuple(nums)])
-            unitsD[part_order[-1]] = this_unit
-
-        else:
-            part_order.append('channels')
-            part_names.remove('channels')
-            parsed_opts.append(opts)
-
-    return part_order, parsed_opts, unitsD
-
-
-    # Representational class to parse and produce labels
 
 
 class EROpheno_label_set:
@@ -994,6 +822,19 @@ class EROpheno_label_set:
                   'power': ['total']}
     def_order = ['experiment', 'case', 'frequency', 'time', 'power', 'channels']
 
+    experiments = Mdb.STinverseMats.distinct('experiment')
+    case_name_aliases = {'tt': 'target', 'nv': 'novel', 'nt': 'nontarget'}
+    cases_db = Mdb.STinverseMats.distinct('case')
+    cases = []
+    for case in cases_db:
+        cases.append(case)
+        if case in case_name_aliases:
+            cases.append(case_name_aliases[case])
+    powers = ['tot-pwr', 'evo-pwr', 'total', 'evoked']
+
+    method_descriptor_type = type(str.lower)
+    function_type = type(lambda x: x)
+
     def __init__(s, description={}, fields=None, implicit_values={}, sep='_'):
         s.in_sep = sep
         s.units = {}
@@ -1004,7 +845,7 @@ class EROpheno_label_set:
 
         if type(description) == list:
             s.in_cols = description.copy()
-            parse_out = parse_col_group(s.in_cols, fields, sep='_')
+            parse_out = s.parse_col_group(s.in_cols, fields, sep='_')
             if type(parse_out) != tuple:
                 print(parse_out)
                 return
@@ -1016,6 +857,66 @@ class EROpheno_label_set:
         s.parsed_desc = {fd: desc for fd, desc in zip(field_order, options)}
 
         s.parsed_order = field_order
+
+    def parse_col_group(s, col_list, field_names, sep='_'):
+        all_pieces = [split_label(c, sep) for c in col_list]
+        num_parts = set([len(pcs) for pcs in all_pieces])
+        if len(num_parts) > 1:
+            return 'non_uniform'
+        else:
+            num_parts = list(num_parts)[0]
+        options = [set() for i in range(num_parts)]
+        for col_pcs in all_pieces:
+            [options[i].add(pc) for i, pc in enumerate(col_pcs)]
+        options = [list(o) for o in options]
+
+        part_names = field_names.copy()  # set([k for k in def_desc.keys()])
+        # identify part meanings
+        part_order = []
+        parsed_opts = []
+        unitsD = {}
+        for opts in options:
+            if len(part_names) == 1:  # handle the final remaining field
+                part_order.append(list(part_names)[0])
+                parsed_opts.append(opts)
+            elif opts[0] in s.cases:
+                part_order.append('case')
+                part_names.remove('case')
+                parsed_opts.append(opts)
+            elif opts[0] in s.experiments or opts[0] in [e.upper() for e in s.experiments]:
+                part_order.append('experiment')
+                part_names.remove('experiment')
+                parsed_opts.append(opts)
+            elif opts[0] in s.powers:
+                part_order.append('power')
+                part_names.remove('power')
+                parsed_opts.append(opts)
+            elif '-' in opts[0] and 'pwr' not in opts[0]:
+                nums_pieces = opts[0].split('-')
+                nums = []
+                this_unit = ''
+                for numS in nums_pieces:
+                    val, unit = num_drop_units(numS)
+                    nums.append(val)
+                    if unit:
+                        this_unit = unit
+                if nums[1] - nums[0] < 40:
+                    part_order.append('frequency')
+                    part_names.remove('frequency')
+
+                else:
+                    part_order.append('time')
+                    part_names.remove('time')
+
+                parsed_opts.append([tuple(nums)])
+                unitsD[part_order[-1]] = this_unit
+
+            else:
+                part_order.append('channels')
+                part_names.remove('channels')
+                parsed_opts.append(opts)
+
+        return part_order, parsed_opts, unitsD
 
     def produce_column_names(s, order=def_order, units=False, dec_funs={'frequency': "%.1f", 'time': "%.0f"},
                              translators={'experiment': str.lower}, sep='_'):
@@ -1069,13 +970,13 @@ class EROpheno_label_set:
                 optL = n_cols * optL
 
             # print(optL)
-            cols = [];
+            cols = []
             ind = -1
             for cs, opt in zip(Wcols, optL):
                 ind += 1
                 if field in sort_fields:
                     out_sorts[ind].append(opt)
-                if type(translator) in [method_descriptor_type, function_type]:
+                if type(translator) in [s.method_descriptor_type, s.function_type]:
                     opt = translator(opt)
                 elif type(translator) == dict:
                     if opt in translator:
@@ -1100,143 +1001,75 @@ class EROpheno_label_set:
 
 # Compilation functions for use with processing module
 standard_cols = ['uID', 'nearest session to fMRI', 'Sl. No.', 'NYU fMRI ID',
-             'fMRI test date', 'followup', 'POP', 'alc_dep_dx',
-             'alc_dep_ons', 'PH', 'fhd_dx4_ratio', 'fhd_dx4_sum',
-             'n_rels', 'date', 'sex', 'handedness', 'current_age',
-             'session_age', 'alc_dep_dx_f', 'alc_dep_dx_m', 'fID', 'mID',
-             'famID', 'famtype', 'DNA', 'SmS', 'genoID', 'rel2pro',
-             'ruID', 'self-reported', 'core-race', 'site', 'system',
-             'twin', 'genotyped', 'methylation']
+                 'fMRI test date', 'followup', 'POP', 'alc_dep_dx',
+                 'alc_dep_ons', 'PH', 'fhd_dx4_ratio', 'fhd_dx4_sum',
+                 'n_rels', 'date', 'sex', 'handedness', 'current_age',
+                 'session_age', 'alc_dep_dx_f', 'alc_dep_dx_m', 'fID', 'mID',
+                 'famID', 'famtype', 'DNA', 'SmS', 'genoID', 'rel2pro',
+                 'ruID', 'self-reported', 'core-race', 'site', 'system',
+                 'twin', 'genotyped', 'methylation']
 
-def PR_load_session_file(path, cols=standard_cols ):   
-    df = pd.read_csv( path, converters={'ID':str})
-    df.set_index(['ID','session'], inplace=True)
-    
+
+def PR_load_session_file(path, cols=standard_cols):
+    df = pd.read_csv(path, converters={'ID': str})
+    df.set_index(['ID', 'session'], inplace=True)
 
     cols_use = df.columns.intersection(cols)
-    comp_df = df[ cols_use ]
-    
+    comp_df = df[cols_use]
+
     return comp_df
+
+
 PR_load_session_file.store_name = 'db/eromat.load_session_file'
 
-def PR_stack_from_mat_lst(df,proc_type):
-    path_cols = [ c for c in df.columns if proc_type in c ]
+
+def PR_stack_from_mat_lst(df, proc_type):
+    path_cols = [c for c in df.columns if proc_type in c]
     mat_list = []
     for pc in path_cols:
-        mat_list.extend( list( df[pc].dropna().values ) )
-    stack = EROStack( mat_list )
+        mat_list.extend(list(df[pc].dropna().values))
+    stack = EROStack(mat_list)
     return stack
+
+
 PR_stack_from_mat_lst.store_name = 'db/eromat.stack_from_mat_lst'
 
-def PR_get_tf_means(erostack,tf_windows,electrodes):
-    return erostack.tf_mean_lowmem_multiwin_chans(tf_windows,electrodes)
-PR_get_tf_means.store_name = 'db/eromat.get_tf_means'
+
+def PR_get_tfmeans(erostack, tf_windows, electrodes):
+    return erostack.tfmean_multiwin_chans(tf_windows, electrodes)
 
 
-'''
-Usage example for post processing tools:
-
-v4_sep16_old = pd.read_csv('/active_projects/mort/custom/SmokescreenGWAS_ERO_v4_update_9-2016.csv',
-                             na_values=['.'], converters={'ID':str})
-v4_sep16_old.set_index(['ID','session'], inplace=True)
+PR_get_tfmeans.store_name = 'db/eromat.get_tfmeans'
 
 
-v4_ERO_power_frames = {}
-for group,phenos in v4_pheno_groups.items():
-    tf_wins = [ tuple( [ float(val) for val in \
-                pheno[2].split('-') + pheno[1].split('-') ] ) \
-                for pheno in phenos ]
-    print( group, tf_wins)
-    mat_lst = list(v4_ses_df[group].values)
-    stack = EM.EROStack(mat_lst)
-    v4_ERO_power_frames[group] = stack.tf_mean_lowmem_multiwin(tf_wins)
-    del stack  
+# graveyard
 
-
-v4_comb_set = v4_sep16_old.copy()
-v4_old_groups = find_column_groups(v4_sep16_old.columns)
-v4_old_col_set = EM.EROpheno_label_set( next( iter (v4_old_groups.values()) ) )
-print(v4_old_col_set.parsed_order)
-v4_all_rn = []
-for k,df in v4_ERO_power_frames.items():
-    exp = k.split('_')[0]
-    exp_renames = {}
-    if len(df.index.levels) > 2: # drop uniform experiment index
-        df.index = df.index.droplevel(2)  
-    col_groups = find_column_groups( df.columns, var_ind=0 )
-    for cgk,group in col_groups.items():
-        this_col_set = EM.EROpheno_label_set( group , implicit_values = {'experiment':[exp],'power':['total']})
-        renamed_cols = this_col_set.produce_column_names( order=v4_old_col_set.parsed_order,#order=['experiment','frequency','time','case','power','channels']
-                                    translators={'experiment':str.upper,
-                                    'power':{'total':'tot-pwr','evoked':'evo-pwr'} })
-        rename_dict = { old:new for old,new in zip(group,renamed_cols) }
-        exp_renames.update(rename_dict)
-    #print(exp_renames)
-    dfRN = df.rename(columns=exp_renames)
-    v4_all_rn.append(dfRN.copy())
-    comb_set = comb_set.combine_first(dfRN)
-    c_cols = comb_set.columns
-    u_cols = dfRN.columns
-    print( len(c_cols), len(u_cols), len(set(c_cols).intersection(u_cols)) )
-v4_comb_set.describe()
-
-v4_full_new = pd.concat(v4_all_rn,join='inner',axis=1)
-
-
-'''
-
-''' retired code
-
-    def load_stack(s):
-        dsets = [fp['data'] for fp in s.pointer_lst]
-        arrays = [da.from_array(dset, chunks=dset.shape) for dset in dsets]
-        s.stack = da.stack(arrays, axis=-1)
-        print(s.stack.shape)
-
-    def load_stack_np(s):
-        arrays = [fp['data'][:] for fp in s.pointer_lst]
-        s.stack_np = np.stack(arrays, axis=-1)
-        print(s.stack_np.shape)
-
-    def tf_mean(s, times, freqs):
-        time_lims = [convert_scale(s.params['Times'], time) for time in times]
-        freq_lims = [convert_scale(s.params['Frequencies'], freq)
-                                for freq in freqs]
-        print(time_lims)
-        print(freq_lims)
-        tf_slice = s.stack[:, time_lims[0]:time_lims[1]+1,
-                              freq_lims[0]:freq_lims[1]+1, :]
-        tf_mean = tf_slice.mean(axis=2)
-        tf_mean = tf_mean.mean(axis=1)
-        out_array = np.empty(tf_mean.shape)
-        da.store(tf_mean, out_array)
-
-        time_lbl = '-'.join([str(t) for t in times])+'ms'
-        freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
-        lbls = ['_'.join([chan, time_lbl, freq_lbl])
-                        for chan in s.params['Channels']]
-
-        mean_df = pd.DataFrame(out_array.T, index=s.data_df.index, columns=lbls)
-        return mean_df
-
-    def tf_mean_np(s, times, freqs):
-        time_lims = [convert_scale(s.params['Times'], time) for time in times]
-        freq_lims = [convert_scale(s.params['Frequencies'], freq)
-                                for freq in freqs]
-        print(time_lims)
-        print(freq_lims)
-        tf_slice = s.stack_np[:, time_lims[0]:time_lims[1]+1,
-                              freq_lims[0]:freq_lims[1]+1, :]
-        print('slice', tf_slice.shape)
-        tf_mean = tf_slice.mean(axis=(1,2))
-        print('mean', tf_mean.shape)
-
-        time_lbl = '-'.join([str(t) for t in times])+'ms'
-        freq_lbl = '-'.join([str(f) for f in freqs])+'Hz'
-        lbls = ['_'.join([chan, time_lbl, freq_lbl])
-                        for chan in s.params['Channels']]
-
-        mean_df = pd.DataFrame(tf_mean.T, index=s.data_df.index, columns=lbls)
-        return mean_df
-
-'''
+# def gen_path_stdf(rec, power_type):
+#     ''' apply function designed to operate on a dataframe indexed by ID and session.
+#         given processing version, parameter string, number of channels in the raw data, experiment,
+#         case, power type, ID, and session, generate the path to the expected st mat '''
+#
+#     try:
+#         ID = rec.name[0]
+#         session = rec.name[1]
+#
+#         parent_dir = version_info[rec['prc_ver']]['storage path']
+#
+#         # handle the expected number of channels
+#         if '-s9-' in rec['param_string']:
+#             n_chans = '20'
+#         else:
+#             n_chans = chan_mapping[rec['n_chans']]
+#
+#         path_start = os.path.join(parent_dir, rec['param_string'], n_chans, rec['experiment'])
+#         fname = '_'.join([ID, session, rec['experiment'], rec['case'], powertype_mapping[power_type]])
+#         ext = '.mat'
+#
+#         path = os.path.join(path_start, fname + ext)
+#
+#         return path
+#     except KeyError:
+#         print(ID, session, 'had a key missing')
+#         return None
+#     except IndexError:
+#         print(ID, 'had an index missing')

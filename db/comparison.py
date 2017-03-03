@@ -86,7 +86,7 @@ def contents_eq(df1_in, df2_in, join_how='inner', lsuffix='_larry', rsuffix='_ri
         print('differing columns will be appended to the diff dataframe')
     print('~~~')
 
-    df1_tmp, df2_tmp = df1_in.fillna('NA'), df2_in.fillna('NA')    
+    df1_tmp, df2_tmp = df1_in.fillna('NA'), df2_in.fillna('NA')
     dfj = df1_tmp.join(df2_tmp, how=join_how, lsuffix=lsuffix, rsuffix=rsuffix)
 
     lsl, rsl = len(lsuffix), len(rsuffix)

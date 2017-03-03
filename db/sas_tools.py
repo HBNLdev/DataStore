@@ -3,13 +3,16 @@
 import os
 from collections import OrderedDict
 
+import pandas as pd
 from sas7bdat import SAS7BDAT
+
 from .quest_import import map_ph4, map_ph4_ssaga
 
 map_subject = {'core': {'file_pfixes': []}}
 
 parent_dir = '/processed_data/zork/zork-phase4-69/session/'
 n_header_lines = 30
+
 
 def extract_descriptions(path):
     ''' given path to .sas7bdat file, returns dictionary mapping column labels
@@ -18,7 +21,7 @@ def extract_descriptions(path):
         (if there was a description, and it was different from the label) '''
     f = SAS7BDAT(path)
     kmap = OrderedDict()
-    for line in str(f.header).splitlines()[n_header_lines+1:]:
+    for line in str(f.header).splitlines()[n_header_lines + 1:]:
         line_parts = line.split(maxsplit=4)
         label = line_parts[1]
         try:
@@ -30,6 +33,7 @@ def extract_descriptions(path):
         except IndexError:
             pass
     return kmap
+
 
 def exemplary_files(kdict):
     ''' given a questionnaire knowledge map,
@@ -47,6 +51,7 @@ def exemplary_files(kdict):
                 print(fp, 'did not exist')
     return exemplars
 
+
 def build_labelmaps():
     ''' return a dict in which keys are questionnaires names and values are
         dictionaries mapping column labels to descriptions '''
@@ -58,3 +63,17 @@ def build_labelmaps():
         kmap = extract_descriptions(fp)
         big_kmap[test] = kmap
     return big_kmap
+
+
+def df_fromsas(fullpath, id_lbl='ind_id'):
+    ''' convert .sas7bdat to dataframe.
+        unused because fails on incorrectly formatted files. '''
+
+    # read csv in as dataframe
+    df = pd.read_sas(fullpath, format='sas7bdat')
+
+    # convert id to str and save as new column
+    df[id_lbl] = df[id_lbl].apply(int).apply(str)
+    df['ID'] = df[id_lbl]
+
+    return df

@@ -4,58 +4,13 @@
 import datetime
 
 import pymongo
-import pandas as pd
 
+from .utils.records import remove_NaTs, unflatten_dict
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
 
-# utility functions
-
-def flatten_dict(D, delim='_', prefix=''):
-    ''' given nested dict, return un-nested dict with str-joined keys '''
-    if len(prefix) > 0:
-        prefix += delim
-    flat = {}
-    for k, v in D.items():
-        if type(v) == dict:
-            F = flatten_dict(v, delim, prefix + k)
-            flat.update(F)
-        else:
-            flat[prefix + k] = v
-    return flat
-
-def unflatten_dict(D, delimiter='_', do_skip=True, skipkeys=set()):
-    ''' given flat dict, nest keys given a key delimiter.
-        use with caution, specify keys to skip. '''
-    default_skipkeys = {'_id', 'test_type', 'ind_id', 'insert_time', 'form_id'}
-    skipkeys.update(default_skipkeys)
-    resultDict = dict()
-    for key, value in D.items():
-        if do_skip and key in skipkeys:
-            d = resultDict
-            d[key] = value
-        else:
-            parts = key.split(delimiter)
-            d = resultDict
-            for part in parts[:-1]:
-                if part not in d:
-                    d[part] = dict()
-                d = d[part]
-            if isinstance(d, dict): # this OK?
-                d[parts[-1]] = value
-    return resultDict
-
-def remove_NaTs(rec):
-    ''' given a record-style dict, convert all NaT vals to None '''
-    for k, v in rec.items():
-        typ = type(v)
-        if typ != dict and typ == pd.tslib.NaTType:
-            rec[k] = None
-
-# base classess
 
 class MongoBacked:
-
     ''' base class representing record obj to be stored, compared, or updated
         into a MongoDB collection. classes that inherit specify type
         of info and target collection '''
@@ -106,17 +61,16 @@ class MongoBacked:
         s.data['update_time'] = datetime.datetime.now()
         s.Mdb[s.collection].update_one(s.update_query, {'$set': s.data})
 
+
 # expose Mdb for use at module level
 Mdb = MongoBacked.Mdb
 
 
 class SourceInfo(MongoBacked):
-
     '''  a record containing info about the data source
         for an obj or a collection build operation '''
 
     def __init__(s, coll, source_set, subcoll=None):
-
         s.collection = coll
         s.data = {'_source': source_set, '_subcoll': subcoll}
         s.update_query = {'_source': {'$exists': True}}
@@ -125,98 +79,84 @@ class SourceInfo(MongoBacked):
 # specific record type classes
 
 class Neuropsych(MongoBacked):
-    
     ''' results of neuropsychological tests '''
 
     collection = 'neuropsych'
 
 
 class RawEEGData(MongoBacked):
-
     ''' *.cnt file containing raw continuous EEG data '''
 
     collection = 'raw_eegdata'
 
 
 class EEGData(MongoBacked):
-
     ''' *.cnt.h1 file containing continuous EEG data '''
 
     collection = 'cnth1s'
 
 
 class ERPData(MongoBacked):
-
     ''' *.avg.h1 file containing ERP data '''
 
     collection = 'avgh1s'
 
 
 class ERPPeak(MongoBacked):
-
     ''' time-regional maxima in event-related potential waveforms '''
 
     collection = 'ERPpeaks'
 
 
 class RestingPower(MongoBacked):
-
     ''' resting state power estimates '''
 
     collection = 'resting_power'
 
 
 class STransformInverseMats(MongoBacked):
-
     ''' *.mat file containing inverse S-tranformed ERO power data '''
 
     collection = 'STinverseMats'
 
 
 class EEGBehavior(MongoBacked):
-
     ''' behavioral info (accuracy, reaction time) from EEG experiments '''
 
     collection = 'EEGbehavior'
 
 
 class Core(MongoBacked):
-
     ''' substance abuse info distilled from SSAGA questionnaires '''
 
     collection = 'core'
 
 
 class Internalizing(MongoBacked):
-
     ''' John Kramer's internalizing phenotype info '''
 
     collection = 'internalizing'
 
 
 class Externalizing(MongoBacked):
-
     ''' externalizing phenotype info '''
 
     collection = 'externalizing'
 
 
 class FHAM(MongoBacked):
-
     ''' family history assessment module '''
 
     collection = 'fham'
 
 
 class AllRels(MongoBacked):
-
     ''' all relatives file '''
 
     collection = 'allrels'
 
 
 class Questionnaire(MongoBacked):
-    
     ''' questionnaire info '''
 
     collection = 'questionnaires'
@@ -232,14 +172,12 @@ class Questionnaire(MongoBacked):
 
 
 class SSAGA(Questionnaire):
-
     ''' SSAGA questionnaire info '''
 
     collection = 'ssaga'
 
 
 class Subject(MongoBacked):
-
     ''' subject info, including demographics and sample membership '''
 
     collection = 'subjects'
@@ -252,7 +190,6 @@ class Subject(MongoBacked):
 
 
 class Session(MongoBacked):
-
     ''' HBNL (EEG) session info, including date and followup # '''
 
     collection = 'sessions'
@@ -265,7 +202,6 @@ class Session(MongoBacked):
 
 
 class FollowUp(MongoBacked):
-
     ''' COGA follow-up info, including mean date and corresponding session letter '''
 
     collection = 'followups'
@@ -278,12 +214,11 @@ class FollowUp(MongoBacked):
 
 
 class EROcsv(MongoBacked):
-
     ''' CSV containing ERO power results '''
 
     collection = 'EROcsv'
     desc_fields = ['power type', 'experiment', 'case', 'frequency min',
-                   'frequency max','time min', 'time max', 'parameters',
+                   'frequency max', 'time min', 'time max', 'parameters',
                    'file date', 'mod date']
 
     def __init__(s, filepath, info):
@@ -293,7 +228,6 @@ class EROcsv(MongoBacked):
 
 
 class EROcsvresults(MongoBacked):
-
     ''' ERO power results inside a EROcsv '''
 
     collection = 'EROcsvresults'

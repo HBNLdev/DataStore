@@ -1,65 +1,67 @@
 ''' build collections '''
 
 import os
-from glob import glob
-from datetime import datetime
 from collections import OrderedDict
+from datetime import datetime
+from glob import glob
 
-import numpy as np
 import pandas as pd
-from tqdm import tqdm
 import pymongo
+from tqdm import tqdm
 
-from .master_info import load_master, master_path, ID_nan_strintfloat_COGA, build_parentID
+from .compilation import buildframe_fromdocs
+from .file_handling import (MT_File, CNTH1_File, AVGH1_File, RestingDAT, Neuropsych_XML,
+                            TOLT_Summary_File, CBST_Summary_File, ERO_CSV)
+from .followups import preparefupdfs_forbuild
+from .master_info import load_master, master_path
+from .organization import (Subject, SourceInfo, Session, FollowUp, ERPPeak, Neuropsych, Questionnaire, Core,
+                           Internalizing, Externalizing, FHAM, AllRels, RawEEGData, EEGData, ERPData, RestingPower,
+                           STransformInverseMats, EEGBehavior, SSAGA, Mdb, EROcsv, EROcsvresults)
 from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
                            import_questfolder_ph4, import_questfolder_ssaga_ph4, import_questfolder_ph123,
                            import_questfolder_ssaga_ph123,
-                           match_fups2sessions_fast_multi,
-                           match_fups_sessions_generic, df_fromcsv)
-from .organization import (Subject, SourceInfo, Session, FollowUp, ERPPeak, Neuropsych,
-    Questionnaire, Core, Internalizing, Externalizing, FHAM, AllRels, RawEEGData, EEGData, ERPData, RestingPower,
-    STransformInverseMats, EEGBehavior, SSAGA, Mdb, EROcsv, EROcsvresults)
-from .file_handling import (identify_files,
-                            parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path,
-                            MT_File, CNTH1_File, AVGH1_File, RestingDAT,
-                            Neuropsych_XML, TOLT_Summary_File, CBST_Summary_File,
-                            ERO_CSV)
-from .followups import preparefupdfs_forbuild
-from .compilation import buildframe_fromdocs
+                           match_fups2sessions_fast_multi, match_fups_sessions_generic)
+from .utils.compilation import (calc_followupcol, join_ufields, convert_internalizing_columns, convert_intfup,
+                                convert_questname, groupby_followup, ID_nan_strintfloat_COGA, build_parentID)
+from .utils.df import df_fromcsv
+from .utils.filenames import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
+from .utils.files import identify_files, verify_files
+from .utils.text import get_toc, txt_tolines, find_lines
 
-buildAssociations = { 
-            'Core':'core',
-            'EEGBehavior':'eeg_behavior',
-            'EEGData':'raw_eegdata',
-            'EROcsv':'ero_pheno_join_bulk',
-            'EROcsvresults':['shared','EROcsv','ero_pheno_join_bulk'],
-            'ERPData':'erp_data',
-            'ERPPeak':'erp_peaks',
-            'Externalizing':'externalizing',
-            'FHAM':'fham',
-            'Internalizing':'internalizing',
-            'Neuropsych':['multiple','neuropsych_TOLT','neuropsych_CBST'],
-            'Questionnaire':'questionnaires_ph4',#questionnaires_ph123
-            'RawEEGData':'raw_eegdata',
-            'SSAGA':'questionnaires_ssaga',
-            'STransformInverseMats':'mat_st_inv_walk',
-            'Session':'sessions',
-            'Subject':'subjects'
-            }
+buildAssociations = {
+    'Core': 'core',
+    'EEGBehavior': 'eeg_behavior',
+    'EEGData': 'raw_eegdata',
+    'EROcsv': 'ero_pheno_join_bulk',
+    'EROcsvresults': ['shared', 'EROcsv', 'ero_pheno_join_bulk'],
+    'ERPData': 'erp_data',
+    'ERPPeak': 'erp_peaks',
+    'Externalizing': 'externalizing',
+    'FHAM': 'fham',
+    'Internalizing': 'internalizing',
+    'Neuropsych': ['multiple', 'neuropsych_TOLT', 'neuropsych_CBST'],
+    'Questionnaire': 'questionnaires_ph4',  # questionnaires_ph123
+    'RawEEGData': 'raw_eegdata',
+    'SSAGA': 'questionnaires_ssaga',
+    'STransformInverseMats': 'mat_st_inv_walk',
+    'Session': 'sessions',
+    'Subject': 'subjects'
+}
 
 
 def builderEngine(which='all'):
     funcs = []
-    for category,builder in buildAssociations.items():
+    for category, builder in buildAssociations.items():
         if which == 'all' or category in which:
-            if type( builder ) == list:
+            if type(builder) == list:
                 if builder[0] == 'multiple':
                     builder_list = builder[1:]
                 elif builder[0] == 'shared':
                     builder_list = []
-            else: builder_list = [builder]
+            else:
+                builder_list = [builder]
             for bf_name in builder_list:
-                build_func = eval( bf_name )
+                build_func = eval(bf_name)
 
                 funcs.append(build_func)
     return funcs
@@ -67,52 +69,6 @@ def builderEngine(which='all'):
 
 zork_path = '/processed_data/zork/zork-phase4-72/'
 
-# utility functions
-
-def calc_followupcol(row):
-    ''' return the Phase 4 followup # '''
-    if row['Phase4-session'] is np.nan or row['Phase4-session'] not in 'abcd':
-        return np.nan
-    else:
-        return ord(row['session']) - ord(row['Phase4-session'])
-
-def join_ufields(row):
-    ''' join ID and session fields in a dataframe '''
-    return '_'.join([row['ID'], row['session']])
-
-def get_toc(target_dir, toc_str):
-    ''' given dir containing toc files and string to be found in one,
-        find the path of the most recently modified one matching the string '''
-    pd_tocfiles = [f for f in glob(target_dir+'*.toc') if toc_str in f]
-    pd_tocfiles.sort(key=os.path.getmtime)
-    latest = pd_tocfiles[-1]
-    return latest
-
-def txt_tolines(path):
-    ''' given path to text file, return its lines as list '''
-    with open(path, 'r') as f:
-        lines = [l.strip() for l in f.readlines()]
-    return lines
-    
-def find_lines(lines, start, end):
-    ''' find lines that match start and end exressions '''
-    tmp_lines = [l for l in lines if l[:len(start)] == start \
-                                 and l[-len(end):] == end]
-    return tmp_lines
-
-def verify_files(files):
-    ''' given a list of paths, return the ones that exist '''
-    existent_files = []
-    for f in files:
-        if os.path.isfile(f):
-            existent_files.append(f)
-        else:
-            print(f + ' does not exist')
-    return existent_files
-
-def get_dates(files):
-    ''' given a list of paths, return a matching list of modified times '''
-    return [os.path.getmtime(f) for f in files]
 
 # build functions
 #   each builds a collection, usually named after the function
@@ -126,6 +82,7 @@ def subjects():
     sourceO = SourceInfo(Subject.collection, (master_path, master_mtime))
     sourceO.store()
     Mdb[Subject.collection].create_index([('ID', pymongo.ASCENDING)])
+
 
 def sessions():
     # fast
@@ -153,8 +110,8 @@ def sessions():
     sourceO.store()
     Mdb[Session.collection].create_index([('ID', pymongo.ASCENDING)])
 
-def followups():
 
+def followups():
     fup_dfs = preparefupdfs_forbuild()
     for fup, df in fup_dfs.items():
         print(fup)
@@ -164,8 +121,6 @@ def followups():
 
     Mdb[FollowUp.collection].create_index([('ID', pymongo.ASCENDING)])
 
-def add_sessions_info():    
-    pass
 
 def erp_peaks():
     # 3 minutes
@@ -173,8 +128,8 @@ def erp_peaks():
     mt_files, datemods = identify_files('/processed_data/mt-files/', '*.mt')
     add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
                 'ant_phase4_peaks_2016',
-                'vp3_phase4__peaks_2015','vp3_phase4__peaks_2016',
-                'aod_phase4__peaks_2015','aod_phase4__peaks_2016',
+                'vp3_phase4__peaks_2015', 'vp3_phase4__peaks_2016',
+                'aod_phase4__peaks_2015', 'aod_phase4__peaks_2016',
                 'cpt_h1_peaks_may_2016',
                 # 'non_coga_vp3',
                 # 'aod_bis_18-25controls',
@@ -182,7 +137,7 @@ def erp_peaks():
                 ]
     for subdir in add_dirs:
         mt_files2, datemods2 = identify_files(
-            '/active_projects/HBNL/'+subdir+'/', '*.mt')
+            '/active_projects/HBNL/' + subdir + '/', '*.mt')
         mt_files.extend(mt_files2)
         datemods.extend(datemods2)
     bad_files = ['/processed_data/mt-files/ant/uconn/mc/an1a0072007.df.mt',
@@ -194,6 +149,7 @@ def erp_peaks():
         mtO.parse_fileDB()
         erpO = ERPPeak(mtO.data)
         erpO.store()
+
 
 def neuropsych_xmls():
     # 10 minutes
@@ -209,23 +165,25 @@ def neuropsych_xmls():
 def questionnaires_ph123():
     kmap = map_ph123
     path = '/processed_data/zork/zork-phase123/session/'
-    followups = ['p2', 'p3']
+    fups = ['p2', 'p3']
     for qname in kmap.keys():
         print(qname)
         import_questfolder_ph123(qname, kmap, path)
-        for fup in followups:
+        for fup in fups:
             match_fups_sessions_generic(Questionnaire.collection, fup, qname)
+
 
 def questionnaires_ph123_ssaga():
     kmap = map_ph123_ssaga
     path = '/processed_data/zork/zork-phase123/session/'
-    followups = ['p1', 'p2', 'p3']
+    fups = ['p1', 'p2', 'p3']
     for qname in kmap.keys():
         print(qname)
         import_questfolder_ssaga_ph123(qname, kmap, path)
-        for fup in followups:
+        for fup in fups:
             match_fups_sessions_generic(SSAGA.collection, fup, qname)
             match_fups_sessions_generic(SSAGA.collection, fup, 'dx_' + qname)
+
 
 def questionnaires_ph4():
     # takes  ~20 seconds per questionnaire
@@ -233,23 +191,24 @@ def questionnaires_ph4():
     kmap = map_ph4.copy()
     del kmap['cal']
     path = zork_path + 'session/'
-    followups = list(range(7))
+    fups = list(range(7))
     for qname in kmap.keys():
         print(qname)
         import_questfolder_ph4(qname, kmap, path)
-        for fup in followups:
+        for fup in fups:
             match_fups_sessions_generic(Questionnaire.collection, fup, qname)
+
 
 def questionnaires_ph4_ssaga():
     ''' import all session-based questionnaire info related to SSAGA '''
     # SSAGA
     kmap = map_ph4_ssaga.copy()
     path = zork_path + 'session/'
-    followups = list(range(7))
+    fups = list(range(7))
     for qname in kmap.keys():
         print(qname)
         import_questfolder_ssaga_ph4(qname, kmap, path)
-        for fup in followups:
+        for fup in fups:
             match_fups_sessions_generic(SSAGA.collection, fup, qname)
             match_fups_sessions_generic(SSAGA.collection, fup, 'dx_' + qname)
 
@@ -266,10 +225,11 @@ def ssaga_all():
         import_questfolder_ssaga_ph4(qname, map_ph4_ssaga, ph4_path)
     match_fups2sessions_fast_multi(SSAGA.collection, followups=match_followups)
 
+
 def core():
     # fast
     folder = zork_path + 'subject/core/'
-    csv_files = glob(folder+'*.csv')
+    csv_files = glob(folder + '*.csv')
     if len(csv_files) != 1:
         print(len(csv_files), 'csvs found, aborting')
     path = csv_files[0]
@@ -280,6 +240,7 @@ def core():
         ro.store()
     sourceO = SourceInfo(Core.collection, (path, datemod))
     sourceO.store()
+
 
 def internalizing():
     # fast
@@ -294,40 +255,6 @@ def internalizing():
     sourceO = SourceInfo(Internalizing.collection, (path, datemod))
     sourceO.store()
 
-def convert_internalizing_columns(cols):
-    
-    col_tups = []
-    
-    for col in cols:
-        pieces = col.split('_')
-        info = '_'.join(pieces[:-2])
-        fup = '_'.join(pieces[-2:])
-        
-        col_tups.append((info, fup))
-    
-    return pd.MultiIndex.from_tuples(col_tups, names=('', 'followup'))
-
-def convert_intfup(fup):
-    
-    if fup[:2] == 's2':
-        fup_rn = 'p2'
-    else:
-        fup_rn = int(fup[-1])
-        
-    return fup_rn
-
-def convert_questname(v):
-    
-    if v[0] == 'c':
-        return 'cssaga'
-    elif v[1] == 's':
-        return 'ssaga'
-
-def groupby_followup(df):
-    df['followup'] = df.index.get_level_values('followup')
-    g = df.groupby(level=df.index.names[0]) # ID
-    df.drop('followup', axis=1, inplace=True)
-    return g
 
 def internalizing2():
     ''' build only after ssaga has been built and updated '''
@@ -339,14 +266,14 @@ def internalizing2():
     int_df = pd.read_csv(int_path, na_values=' ')
     int_df['ID'] = int_df['ID'].apply(int).apply(str)
     int_df.set_index('ID', inplace=True)
-    
+
     # convert columns into multiindex
-    int_df2 = int_df.copy() 
+    int_df2 = int_df.copy()
     int_df2.columns = convert_internalizing_columns(int_df2.columns)
 
     # stack followups and rename columns to be in DB convention
-    int_df3 = int_df2.stack(-1).dropna(how='all').reset_index().\
-                rename(columns={'intvyr': 'date', 'intvsource': 'questname'})
+    int_df3 = int_df2.stack(-1).dropna(how='all').reset_index(). \
+        rename(columns={'intvyr': 'date', 'intvsource': 'questname'})
 
     # convert followups and questnames to be in DB convention
     int_df4 = int_df3.copy()
@@ -360,7 +287,7 @@ def internalizing2():
     score_cols = [col for col in int_df4.columns if 'score' in col]
     int_df5 = int_df4.reset_index().set_index('ID')
     for col in score_cols:
-        int_df5[col+'_fupmax'] = g[col].max()
+        int_df5[col + '_fupmax'] = g[col].max()
     int_df5.set_index(['questname', 'followup'], append=True, inplace=True)
 
     # retrieve date and session association from ssaga collection
@@ -375,6 +302,7 @@ def internalizing2():
         ro = Internalizing(drec)
         ro.store()
 
+
 def externalizing():
     # fast
     folder = '/processed_data/zork/zork-phase4-69/subject/vcuext/'
@@ -388,15 +316,15 @@ def externalizing():
     sourceO = SourceInfo(Externalizing.collection, (path, datemod))
     sourceO.store()
 
-def allrels():
 
+def allrels():
     folder = zork_path + 'subject/rels/'
     file = 'allrels_30nov2016.sas7bdat.csv'
     path = folder + file
     datemod = datetime.fromtimestamp(os.path.getmtime(path))
-    
+
     import_convcols = ['IND_ID', 'FAM_ID', 'F_ID', 'M_ID']
-    import_convdict = {col:ID_nan_strintfloat_COGA for col in import_convcols}
+    import_convdict = {col: ID_nan_strintfloat_COGA for col in import_convcols}
     rename_dict = {'FAM_ID': 'famID', 'IND_ID': 'ID', 'TWIN': 'twin', 'SEX': 'sex'}
 
     rel_df = pd.read_csv(path, converters=import_convdict, low_memory=False)
@@ -410,6 +338,7 @@ def allrels():
     sourceO = SourceInfo(AllRels.collection, (path, datemod))
     sourceO.store()
 
+
 def fham():
     # fast
     folder = zork_path + 'subject/fham/'
@@ -422,6 +351,7 @@ def fham():
         ro.store()
     sourceO = SourceInfo(FHAM.collection, (path, datemod))
     sourceO.store()
+
 
 def raw_eegdata():
     # ~2 mins?
@@ -453,12 +383,13 @@ def raw_eegdata():
         except:
             print('problem with', cnt_path)
 
-    # raw_files = rd_files + cnt_files
-    # raw_datemods = rd_datemods + cnt_datemods
-    # sourceO = SourceInfo(RawEEGData.collection,
-    #                 list(zip(raw_files, raw_datemods)))
-    # sourceO.store()
-    # too large!
+            # raw_files = rd_files + cnt_files
+            # raw_datemods = rd_datemods + cnt_datemods
+            # sourceO = SourceInfo(RawEEGData.collection,
+            #                 list(zip(raw_files, raw_datemods)))
+            # sourceO.store()
+            # too large!
+
 
 def eeg_data():
     # ~2 mins?
@@ -473,8 +404,9 @@ def eeg_data():
         eegO = EEGData(data)
         eegO.store()
     sourceO = SourceInfo(EEGData.collection,
-                    list(zip(cnth1_files, datemods)))
+                         list(zip(cnth1_files, datemods)))
     sourceO.store()
+
 
 def erp_data():
     # ~2 mins?
@@ -487,8 +419,9 @@ def erp_data():
         erpO = ERPData(fO.data)
         erpO.store()
     sourceO = SourceInfo(ERPData.collection,
-                    list(zip(avgh1_files, datemods)))
+                         list(zip(avgh1_files, datemods)))
     sourceO.store()
+
 
 def resting_power():
     # fast
@@ -504,7 +437,7 @@ def resting_power():
     mcO_A = RestingDAT(start_dir + mc_fileA)
     mcO_A.mc_to_dataframe(session='a')
     rec_lst.extend(mcO_A.file_df.to_dict(orient='records'))
-    
+
     mcO_B = RestingDAT(start_dir + mc_fileB)
     mcO_B.mc_to_dataframe(session='b')
     rec_lst.extend(mcO_B.file_df.to_dict(orient='records'))
@@ -513,18 +446,19 @@ def resting_power():
         rpO = RestingPower(rec)
         rpO.store()
 
-    # sourceO = SourceInfo(RestingPower.collection, [])
+        # sourceO = SourceInfo(RestingPower.collection, [])
+
 
 def mat_st_inv_walk(check_update=False, mat_files=None):
     # can take a while depending on network traffic
     if mat_files is None:
         start_base = '/processed_data/mat-files-v'
-        start_fins = ['40','60']
+        start_fins = ['40', '60']
         glob_expr = '*st.mat'
         mat_files = []
         dates = []
         for fin in start_fins:
-            f_mats, f_dates = identify_files(start_base+fin,glob_expr)
+            f_mats, f_dates = identify_files(start_base + fin, glob_expr)
             mat_files.extend(f_mats)
             dates.extend(f_dates)
     for f in tqdm(mat_files):
@@ -542,7 +476,8 @@ def mat_st_inv_walk(check_update=False, mat_files=None):
 
         if store:
             matO.store()
-    # Mdb[STransformInverseMats.collection].create_index([('id', pymongo.ASCENDING)])
+            # Mdb[STransformInverseMats.collection].create_index([('id', pymongo.ASCENDING)])
+
 
 def eeg_behavior(files_dms=None):
     ''' unlike others, this build does an "update".
@@ -561,9 +496,9 @@ def eeg_behavior(files_dms=None):
         try:
             fO = AVGH1_File(f)  # get uID and file_info
             if fO.file_info['experiment'] == 'err':
-                continue 
+                continue
 
-            # simply check if the ID-session-experiment already exists
+                # simply check if the ID-session-experiment already exists
             erpbeh_obj_ck = EEGBehavior(fO.data)
             erpbeh_obj_ck.compare()  # populates s.new with bool
 
@@ -586,12 +521,13 @@ def eeg_behavior(files_dms=None):
     # sourceO.store()
     inds = Mdb[EEGBehavior.collection].list_indexes()
     try:
-        next(inds) # returns the _id index
-        next(inds) # check if any other index exists
-        Mdb[EEGBehavior.collection].reindex() # if it does, just reindex
-    except StopIteration: # otherwise, create it
+        next(inds)  # returns the _id index
+        next(inds)  # check if any other index exists
+        Mdb[EEGBehavior.collection].reindex()  # if it does, just reindex
+    except StopIteration:  # otherwise, create it
         Mdb[EEGBehavior.collection].create_index([('uID', pymongo.ASCENDING)])
-        
+
+
 # not recommended / graveyard below
 
 def mat_st_inv_toc():
@@ -617,10 +553,11 @@ def mat_st_inv_toc():
         matO = STransformInverseMats(infoD)
         matO.store()
 
+
 def neuropsych_TOLT():
     # 30 seconds
     tolt_files, datemods = identify_files('/raw_data/neuropsych/',
-                                             '*TOLT*sum.txt')
+                                          '*TOLT*sum.txt')
     for fp in tqdm(tolt_files):
         toltO = TOLT_Summary_File(fp)
         nsO = Neuropsych('TOLT', toltO.data)
@@ -629,10 +566,11 @@ def neuropsych_TOLT():
         zip(tolt_files, datemods)), 'TOLT')
     sourceO.store()
 
+
 def neuropsych_CBST():
     # 30 seconds
     cbst_files, datemods = identify_files('/raw_data/neuropsych/',
-                                             '*CBST*sum.txt')
+                                          '*CBST*sum.txt')
     for fp in tqdm(cbst_files):
         cbstO = CBST_Summary_File(fp)
         nsO = Neuropsych('CBST', cbstO.data)
@@ -641,9 +579,11 @@ def neuropsych_CBST():
         zip(cbst_files, datemods)), 'CBST')
     sourceO.store()
 
+
 def ero_pheno_join_bulk(csvs, start_ind=0):
     ''' build collection of ERO results from CSVs by joining all CSVs in one
         terminal subdirectory together, then bulk_writing their rows '''
+
     def split_field(s, ind, delim='_'):
         return s.split(delim)[ind]
 
@@ -660,14 +600,14 @@ def ero_pheno_join_bulk(csvs, start_ind=0):
             for filename in file_list:
                 fpath = os.path.join(subdir, filename)
                 csvfileO = ERO_CSV(fpath)
-                file_info = csvfileO.data_for_file()  #filename parsing to here
-                
+                file_info = csvfileO.data_for_file()  # filename parsing to here
+
                 # '''
-                if (file_info['site']=='washu' or \
-                    file_info['site']=='suny') and \
-                    file_info['experiment']=='vp3' and \
-                    'threshold electrodes' in csvfileO.parameters and \
-                    csvfileO.parameters['threshold electrodes']==9:
+                if (file_info['site'] == 'washu' or
+                            file_info['site'] == 'suny') and \
+                                file_info['experiment'] == 'vp3' and \
+                                'threshold electrodes' in csvfileO.parameters and \
+                                csvfileO.parameters['threshold electrodes'] == 9:
                     print(',', end='')
                     continue
                 # '''

@@ -3,11 +3,12 @@
 from collections import defaultdict
 from itertools import combinations
 
+import graphviz as gv
+import networkx as nx
 import numpy as np
 import pandas as pd
 
-import networkx as nx
-import graphviz as gv
+from .utils.compilation import conv_159
 
 default_field_eponyms = {'ID', 'famID', 'mID', 'fID', 'sex', 'twin'}
 # default_dx_sxc = {'cor_alc_dep_dx_fam': 'fam_dx4',
@@ -35,33 +36,6 @@ famscore_map = {'Mpred': 0.5, 'Fpred': 0.5, 'sibs': 0.5,
                 'hsibs': 0.25}
 
 
-def conv_159(v):
-    ''' convert COGA coding to regular coding '''
-    if v == 1:
-        return 0
-    elif v == 5:
-        return 1
-    else:
-        return np.nan
-
-
-def harmonize_fields_max(row, field1, field2):
-    ''' harmonize two columns by return the max of the two '''
-    if row[field1] == row[field2] or \
-            (np.isnan(row[field1]) and np.isnan(row[field2])):
-        return row[field1]
-    else:
-        return max(row[field1], row[field2])
-
-
-def harmonize_fields_left(row, field1, field2):
-    ''' harmonize two columns such that field1 overrules field2, but field2 is accepted if field1 is missing '''
-    if np.isnan(row['field1']):
-        return row['field2']
-    else:
-        return row['field1']
-
-
 def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
     ''' prepare a dataframe for FHD calculation by removing irrelevant columns
         and assuring the necessary columns are present '''
@@ -83,7 +57,7 @@ def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
         print('df has all requisite columns')
     else:
         print('df missing requisite columns')
-        raise
+        return
 
     for col in extra_cols:
         if do_conv_159 and (0 not in df[col].unique()):  # expecting column to be in the COGA 159 format here
@@ -99,7 +73,7 @@ def prepare_dfs(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rena
         fd = def_fields.copy()
         fd.update(rename_cols)
         rename_dict = {k: v for k, v in fd.items()}
-        fDF = in_fDF.rename(columns=rename_dict)
+        in_fDF = in_fDF.rename(columns=rename_dict)
 
     sDF = prepare_for_fhd(in_sDF)
     fDF = prepare_for_fhd(in_fDF, [aff_col], do_conv_159)
@@ -107,7 +81,7 @@ def prepare_dfs(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rena
     return sDF, fDF
 
 
-def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True,
+def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
              degrees=[1, 2], descend=False, cat_norm=True, rename_cols=None):
     '''
 
@@ -133,7 +107,7 @@ def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True,
 
     '''
 
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, conv_159, rename_cols)
+    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
     # drop missing data of affectedness column from fDF
     # don't do this because they tell us about family structure even if they lack affectedness info
@@ -145,7 +119,7 @@ def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True,
     return sDF
 
 
-def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, rename_cols=None):
+def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
     '''
 
     fast version of calc_fhd that always uses only primary and secondary forebears,
@@ -169,7 +143,7 @@ def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, renam
 
     '''
 
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, conv_159, rename_cols)
+    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
     all_counts, all_sums, all_ratios = fam_fhd(fDF)
 
@@ -186,14 +160,14 @@ def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, renam
     return sDF
 
 
-def calc_fhd_fast2(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, rename_cols=None):
+def calc_fhd_fast2(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
     '''
 
     second version of calc_fhd_fast that uses a different algorithm
 
     '''
 
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, conv_159, rename_cols)
+    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
     all_counts, all_sums, all_ratios = fam_fhd2(fDF)
 
@@ -210,7 +184,7 @@ def calc_fhd_fast2(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', conv_159=True, rena
     return sDF
 
 
-def fam_fhd(fDF, calc_degrees={1, 2}):
+def fam_fhd(fDF):
     ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
         affectedness is known, the FHD sum scores, and the FHD ratio scores '''
 
@@ -222,7 +196,7 @@ def fam_fhd(fDF, calc_degrees={1, 2}):
 
     for fam in fams:
         famDF = fDF[fDF['famID'] == fam]
-        famO = Family(famDF, calc_degrees=calc_degrees)
+        famO = Family(famDF)
         famO.define_rels()
         famO.calc_famfhd()
         all_counts.update(famO.count_dict)
@@ -232,7 +206,7 @@ def fam_fhd(fDF, calc_degrees={1, 2}):
     return all_counts, all_sums, all_ratios
 
 
-def fam_fhd2(fDF, calc_degrees={1, 2}):
+def fam_fhd2(fDF):
     ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
         affectedness is known, the FHD sum scores, and the FHD ratio scores '''
 
@@ -244,7 +218,7 @@ def fam_fhd2(fDF, calc_degrees={1, 2}):
 
     for fam in fams:
         famDF = fDF[fDF['famID'] == fam]
-        famO = Family(famDF, calc_degrees=calc_degrees)
+        famO = Family(famDF)
         famO.G2 = famO.build_graph2()
         famO.calc_famfhd2()
         all_counts.update(famO.count_dict)
@@ -269,15 +243,17 @@ def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
     return I.ratio_score(aff, 1, cat_norm), I.sum_score(aff, 1, cat_norm), I.n_rels
 
 
+# attributes for the graphviz pedigree figures
 sex_shape = {'M': 'square', 'F': 'circle', '?': 'polygon'}
 dx_fillcolor = {0: '#FFFFFF', 1: '#000000'}
 dx_wordcolor = {0: '#000000', 1: '#FFFFFF'}
+
 
 class Family:
     ''' given a famDF containing columns of ID, sex ('M', 'F'), fatherID, and motherID
         represents a family as a directed graph '''
 
-    def __init__(s, famDF, calc_degrees=(1, 2)):
+    def __init__(s, famDF):
         s.df = famDF
         s.dx_dict = famDF['cor_alc_dep_dx'].dropna().to_dict()
         s.G = s.build_graph()
@@ -327,7 +303,6 @@ class Family:
 
         return G
 
-
     def build_graph_gv(s):
         ''' builds the graph in graphviz (for plotting) '''
 
@@ -343,9 +318,9 @@ class Family:
                 word_color = '#000000'
                 style = 'filled,dashed'
             D.node(ID, label=ID, shape=sex_shape[sex], fontcolor=word_color,
-                         fillcolor=fill_color, style=style)
+                   fillcolor=fill_color, style=style)
             # D.node(ID, label='', shape=sex_shape[sex], fontcolor=word_color,
-                         # fillcolor=fill_color, style=style)
+            # fillcolor=fill_color, style=style)
             try:
                 # D.node(fID, label=fID, shape='square')
                 # D.node(mID, label=mID, shape='circle')
@@ -508,7 +483,7 @@ class Family:
                 weight = 1 / (2 ** distance)
                 val = weight * dx
                 # print(rel, distance, dx, weight, val)
-                
+
                 if distance > 0:
                     fhd_num += val
                     fhd_denom += weight

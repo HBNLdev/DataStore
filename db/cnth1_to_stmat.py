@@ -7,18 +7,20 @@ from collections import defaultdict
 
 import numpy as np
 
+from .knowledge.experiments import exp_cases, ant_cind_map
+
 proctype_info = {'v40center9': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v4.0_custom.rb',
-                                 'old storage path': '/processed_data/mat-files-v40/',
-                                 'storage path': '/processed_data/mat-files-ps-v40/',
-                                 'experiments': ['vp3', 'aod', 'ant']},
+                                'old storage path': '/processed_data/mat-files-v40/',
+                                'storage path': '/processed_data/mat-files-ps-v40/',
+                                'experiments': ['vp3', 'aod', 'ant']},
                  'v60center9': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v6.0_custom.rb',
-                                 'old storage path': '/processed_data/mat-files-v60/',
-                                 'storage path': '/processed_data/mat-files-ps-v60/',
-                                 'experiments': ['vp3', 'aod', 'ant', 'ans', 'cpt', 'ern', 'err', 'gng', 'stp']},
+                                'old storage path': '/processed_data/mat-files-v60/',
+                                'storage path': '/processed_data/mat-files-ps-v60/',
+                                'experiments': ['vp3', 'aod', 'ant', 'ans', 'cpt', 'ern', 'err', 'gng', 'stp']},
                  'v60all': {'ruby script': '/active_projects/ERO_scripts/calc_hdf1_st_v6.0_custom.rb',
-                             'old storage path': '/processed_data/mat-files-v60/',
-                             'storage path': '/processed_data/mat-files-ps-v60/',
-                             'experiments': ['vp3', 'aod', 'ant', 'ans', 'cpt', 'ern', 'err', 'gng', 'stp']},
+                            'old storage path': '/processed_data/mat-files-v60/',
+                            'storage path': '/processed_data/mat-files-ps-v60/',
+                            'experiments': ['vp3', 'aod', 'ant', 'ans', 'cpt', 'ern', 'err', 'gng', 'stp']},
                  }
 
 # ruby file parameter reference
@@ -64,32 +66,9 @@ exp_params = {
     'gng': {'-hi': '0.3', '-lo': '45', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5', 'z': '-50'},
     'stp': {'-hi': '0.3', '-lo': '45', 'n': '15', 'o': '25', 'p': '100', 'u': '-187.5', 'y': '-187.5', 'z': '-50'},
 }
+
+
 # 'cpt2': {'k': '300', 'n': '15', 'u': '-200', 'v': '1000', 'y': '-300', 'z': '-50'} # second set of cpt params
-
-# maps for experiments to the list of conditions
-exp_cases = {'ant': ['a', 'j', 'w', 'p'],  # need renaming (for masscomp files, tttt --> ajwp)
-             'aod': ['tt', 'nt'],  # need renaming (t --> tt)
-             'vp3': ['tt', 'nt', 'nv'],
-             'ans': ['r1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8'],
-             'cpt': ['cg', 'c', 'cn', 'un', 'dn', 'dd'],
-             'ern': ['n50', 'n10', 'p10', 'p50'],
-             'err': ['p', 'n'],
-             'gng': ['g', 'ng'],
-             'stp': ['c', 'in'], }
-
-# maps experiments to possible #s of chans
-exp_nchans = {'ant': ['21', '32', '64'],
-              'aod': ['21', '32', '64'],
-              'vp3': ['21', '32', '64'],
-              'ans': ['32', '64'],
-              'ern': ['32', '64'],
-              'err': ['32', '64'],
-              'gng': ['64'],
-              'cpt': ['64'],
-              'stp': ['64'], }
-
-# maps from new condition order for ant to the old (fix)
-ant_cind_map = {'1': '3', '2': '1', '3': '4', '4': '2'}
 
 
 def run_calls_cwds(call_edir_lst, proc_lim=10):
@@ -148,30 +127,6 @@ def get_stmat_calls(docs, file_lim=None):
 
     return call_edir_lst
 
-def build_oldpath_apply(rec, proc_type, exp, case):
-    rec_type = rec['cnt_rec_type']
-    cnth1_fp = rec['cnt_filepath']
-    site = rec['cnt_site']
-    try:
-        fp = build_old_eventualpath(proc_type, rec_type, exp, case, cnth1_fp, site)
-        if os.path.exists(fp):
-            return fp
-        else:
-            return np.nan
-    except:
-        return np.nan
-
-def build_path_apply(rec, proc_type, exp, case):
-    rec_type = rec['cnt_rec_type']
-    cnth1_fp = rec['cnt_filepath']
-    try:
-        fp = build_eventualpath(proc_type, rec_type, exp, case, cnth1_fp)
-        if os.path.exists(fp):
-            return fp
-        else:
-            return np.nan
-    except:
-        return np.nan
 
 def organize_docs(docs):
     ''' given a mongo cursor of cnth1 docs, organize them into a dict where the keys are 4-tuples of
@@ -303,8 +258,10 @@ def get_params(proc_type, rec_type, exp, case):
 
     return pdict
 
+
 def build_eventualpath(proc_type, rec_type, exp, case, cnth1_fp):
-    ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat path '''
+    ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat path,
+        using the new (longer pre-stim) storage path '''
 
     parent_dir = proctype_info[proc_type]['storage path']
     n_chans = rec_type[-2:]
@@ -314,8 +271,10 @@ def build_eventualpath(proc_type, rec_type, exp, case, cnth1_fp):
     fp = os.path.join(parent_dir, rec_type, exp, exp + '-' + case, param_str, fname)
     return fp
 
+
 def build_old_eventualpath(proc_type, rec_type, exp, case, cnth1_fp, site):
-    ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat path '''
+    ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat path,
+        using the old (traditional) storage path'''
 
     parent_dir = proctype_info[proc_type]['old storage path']
     n_chans = rec_type[-2:]
@@ -324,6 +283,42 @@ def build_old_eventualpath(proc_type, rec_type, exp, case, cnth1_fp, site):
     fname = '.'.join([cnth1_fn, case, 'st', 'mat'])
     fp = os.path.join(parent_dir, rec_type, exp, exp + '-' + case, param_str, site, fname)
     return fp
+
+
+def build_path_apply(rec, proc_type, exp, case):
+    ''' dataframe apply function.
+        given processing type, experiment, case, return the eventual st mat path,
+        using the new (longer pre-stim) storage path '''
+
+    rec_type = rec['cnt_rec_type']
+    cnth1_fp = rec['cnt_filepath']
+    try:
+        fp = build_eventualpath(proc_type, rec_type, exp, case, cnth1_fp)
+        if os.path.exists(fp):
+            return fp
+        else:
+            return np.nan
+    except:
+        return np.nan
+
+
+def build_oldpath_apply(rec, proc_type, exp, case):
+    ''' dataframe apply function.
+        given processing type, experiment, case, return the eventual st mat path,
+        using the old (traditional) storage path '''
+
+    rec_type = rec['cnt_rec_type']
+    cnth1_fp = rec['cnt_filepath']
+    site = rec['cnt_site']
+    try:
+        fp = build_old_eventualpath(proc_type, rec_type, exp, case, cnth1_fp, site)
+        if os.path.exists(fp):
+            return fp
+        else:
+            return np.nan
+    except:
+        return np.nan
+
 
 def build_eventualdir(proc_type, rec_type, exp, case):
     ''' given processing type, recording type, experiment, case, and cnth1 path, return the eventual st mat dir '''

@@ -3,8 +3,8 @@
     3D representation of the ERO results '''
 
 import os
-import time
 import subprocess
+import time
 from collections import defaultdict
 
 from .organization import Mdb
@@ -87,26 +87,26 @@ version_info = {'4': {'ruby script': '/active_projects/ERO_scripts/extract_st_ba
 center9_text = '/export/home/mort/projects/electrodes-for_21.txt'
 
 extract_st_bands_params = {
-        'b': {'name': 'apply_baseline','options': { '0':'no default', '1':'yes'} },
-        'd': {'name': 'st_type_to_use','options': { '1':'total default', '2':'evoked',
-                         '3':'total-evoked'} },
-        'e': {'name': 'electrode_list_type','options': { '1':'old elec_list default',
-                         '2':'rows across head', '3':'rows within 6 regions', 
-                         'custom':'own elec_list'} },
-        'f': {'name': 'st_mat_filelist_filename'},      
-        'm': {'name': 'calc_val_type ','options': { '1':'mean default', '2':'max',
-                         '3':'centroid', '4':'maxfreq', '5':'maxtime', '6':'sum'} },
-        'o': {'name': 'output_text'}, #,'options': { 'additional information in the ps-file name'} },
-        'p': {'name': 'power_out_type','options': { '1':'power (lin) default',
-                         '2':'amplitude (lin)', '3':'power (ln)', '4':'amplitude (ln)'} },
-        'q': {'name': 'add_baseline_values','options': { '0':'no', '1':'yes default'} },
-        'v': {'name': 'curve_band_type','options': { '1':'bands default',
-                         '2':'single frequencies', '3':'low frequencies',
-                          '4':'high frequencies', '5': 'one frequency',
-                          'custom':'freq_file'} },
-        'x': {'name': 'min_win_time_ms','options': { 'int':'300 default'} },
-        'y': {'name': 'max_win_time_ms','options': { 'int':'500 default'} }
-        }
+    'b': {'name': 'apply_baseline', 'options': {'0': 'no default', '1': 'yes'}},
+    'd': {'name': 'st_type_to_use', 'options': {'1': 'total default', '2': 'evoked',
+                                                '3': 'total-evoked'}},
+    'e': {'name': 'electrode_list_type', 'options': {'1': 'old elec_list default',
+                                                     '2': 'rows across head', '3': 'rows within 6 regions',
+                                                     'custom': 'own elec_list'}},
+    'f': {'name': 'st_mat_filelist_filename'},
+    'm': {'name': 'calc_val_type ', 'options': {'1': 'mean default', '2': 'max',
+                                                '3': 'centroid', '4': 'maxfreq', '5': 'maxtime', '6': 'sum'}},
+    'o': {'name': 'output_text'},  # ,'options': { 'additional information in the ps-file name'} },
+    'p': {'name': 'power_out_type', 'options': {'1': 'power (lin) default',
+                                                '2': 'amplitude (lin)', '3': 'power (ln)', '4': 'amplitude (ln)'}},
+    'q': {'name': 'add_baseline_values', 'options': {'0': 'no', '1': 'yes default'}},
+    'v': {'name': 'curve_band_type', 'options': {'1': 'bands default',
+                                                 '2': 'single frequencies', '3': 'low frequencies',
+                                                 '4': 'high frequencies', '5': 'one frequency',
+                                                 'custom': 'freq_file'}},
+    'x': {'name': 'min_win_time_ms', 'options': {'int': '300 default'}},
+    'y': {'name': 'max_win_time_ms', 'options': {'int': '500 default'}}
+}
 
 # maps expected number of chans to the calculated number
 chan_mapping = {'21': '20',
@@ -116,17 +116,6 @@ chan_mapping = {'21': '20',
 powertype_mapping = {'total': 'tot',
                      'evoked': 'evo'}
 
-### Utilities ###
-
-def txt2list(path):
-    ''' given path to text file, return a list of its lines '''
-    with open(path, 'r') as f:
-        lst = [line.strip() for line in f]
-    return lst
-
-def list2txt(out_path):
-    ''' given path, write a list of strings to a text file there, with one element per line '''
-    pass
 
 def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
     ''' apply function designed to operate on a dataframe indexed by ID and session.
@@ -145,15 +134,16 @@ def gen_path(rec, prc_ver, param_str, raw_chans, exp, case, power_type):
         n_chans = chan_mapping[raw_chans]
 
     path_start = os.path.join(parent_dir, param_str, n_chans, exp)
-    fname = '_'.join( [ ID, session, exp, case, powertype_mapping[power_type] ] )
+    fname = '_'.join([ID, session, exp, case, powertype_mapping[power_type]])
     ext = '.mat'
 
     path = os.path.join(path_start, fname + ext)
 
     return path
 
+
 def gen_path_stdf(rec, power_type):
-    ''' version of above, with dataframe based off STinverse docs
+    ''' version of above, using dataframe built from STinversemat docs
     '''
 
     try:
@@ -169,7 +159,7 @@ def gen_path_stdf(rec, power_type):
             n_chans = chan_mapping[rec['n_chans']]
 
         path_start = os.path.join(parent_dir, rec['param_string'], n_chans, rec['experiment'])
-        fname = '_'.join( [ ID, session, rec['experiment'], rec['case'], powertype_mapping[power_type] ] )
+        fname = '_'.join([ID, session, rec['experiment'], rec['case'], powertype_mapping[power_type]])
         ext = '.mat'
 
         path = os.path.join(path_start, fname + ext)
@@ -181,6 +171,7 @@ def gen_path_stdf(rec, power_type):
     except IndexError:
         print(ID, 'had an index missing')
 
+
 def doc_exists(path):
     ''' given a path to a new ero-mat, determine if a corresponding STinverseMats doc exists '''
     filedir, filename = os.path.split(path)
@@ -188,7 +179,7 @@ def doc_exists(path):
 
     param_string = dirparts[-3]
     prc_ver = dirparts[-4][-1]
-    
+
     name, ext = os.path.splitext(filename)
     ID, session, experiment, condition, measure = name.split('_')
 
@@ -205,6 +196,7 @@ def doc_exists(path):
     else:
         return False
 
+
 def hasbeen_calculated(d):
     ''' given a doc containing info about an STinverseMat, determine if its already been calculated '''
 
@@ -217,13 +209,14 @@ def hasbeen_calculated(d):
         n_chans = chan_mapping[d['n_chans']]
 
     path_start = os.path.join(parent_dir, d['param_string'], n_chans, d['experiment'])
-    fname_start = '_'.join( [ d['id'], d['session'], d['experiment'], d['case'] ] )
+    fname_start = '_'.join([d['id'], d['session'], d['experiment'], d['case']])
     target_paths = (os.path.join(path_start, fname_start + '_tot.mat'),
                     os.path.join(path_start, fname_start + '_evo.mat'))
     if os.path.exists(target_paths[0]) and os.path.exists(target_paths[1]):
         return True
     else:
         return False
+
 
 def organize_docs(docs):
     ''' given a mongo cursor of STinverseMats docs, organize them into a dictionary whose keys are 5-tuples of
@@ -239,6 +232,7 @@ def organize_docs(docs):
                         d['n_chans'])].append(d['path'])
     return batch_dict
 
+
 def add_stringparams(params, param_str):
     ''' given a params dictionary and a param string, add any parameters that need to be added.
         currently just checks to see if center 9 or not and changes the e param. '''
@@ -247,6 +241,7 @@ def add_stringparams(params, param_str):
     else:
         params.update({'-e': '1'})
     return params
+
 
 def make_STlistfile(ver_ps_exp_case_nchans, file_list, limit=None):
     ''' given a batch-identifying 5-tuple, a list of st-inverse-mat files,
@@ -265,9 +260,10 @@ def make_STlistfile(ver_ps_exp_case_nchans, file_list, limit=None):
     list_path = st_tomat_list_dir + \
                 batch_id + '_mats-' + tstamp + lim_flag + '.lst'
     with open(list_path, 'w') as list_file:
-            list_file.writelines([L + '\n' for L in file_list[:limit]])
+        list_file.writelines([L + '\n' for L in file_list[:limit]])
 
     return list_path
+
 
 ### Main functions ###
 
@@ -283,7 +279,7 @@ def create_3dmats(docs, file_lim=None, run_now=False, proc_lim=10):
     batch_dict = organize_docs(docs)
 
     for ver_ps_exp_case_nchans, STmat_lst in batch_dict.items():
-        
+
         if file_lim is None:
             n_files = len(STmat_lst)
         else:
@@ -318,14 +314,14 @@ def create_3dmats(docs, file_lim=None, run_now=False, proc_lim=10):
                     os.wait()
                     processes.difference_update(
                         [p for p in processes if p.poll() is not None])
-                
+
     return call_lst
 
 
 def run_calls(call_lst, proc_lim=10):
     ''' given a list of complete command-line call strings, administer them into a pool of processes.
         use when a list of calls is accessible but the mongo db is not (e.g. on mp3 or mp6). '''
-    
+
     processes = set()
 
     for call_ind, call_string in enumerate(call_lst):
@@ -340,96 +336,3 @@ def run_calls(call_lst, proc_lim=10):
             os.wait()
             processes.difference_update(
                 [p for p in processes if p.poll() is not None])
-
-
-'''
-code for compiling custom list for High Risk sample:
-
-HRsubs = C.get_subjectdocs('HighRisk')
-HRids = [s['ID'] for s in HRsubs]
-HRinv_mats = list( O.Mdb['STinverseMats'].find( {'id':{'$in':HRids}}) )
-HRses = set([ (im['id'], im['session']) for im in HRinv_mats ]) # 3889 sessions
-
-def get_age( id_ses ):
-    docs = list(O.Mdb['sessions'].find( {'ID':id_ses[0],'session':id_ses[1]} ))
-    if len(docs) == 1:
-        return docs[0]['age']
-    elif len(docs) == 0:
-        return 0
-    else:
-        return -1
-
-# 1840 in range 17-31, 9 missing sessions(0), 0 others(-1)
-HR_ses_ages = [ get_age(s) for s in HRses ]
-
-HRses_age17t31 = [ ses for ses,age in zip(HRses,HR_ses_ages) if 17 < age < 31 ]
-
-STinv_HR17t31 = []
-for ses in HRses_age17t31:
-    STs = list( O.Mdb['STinverseMats'].find({'id':ses[0],'session':ses[1]}) )
-    STinv_HR17t31.extend( STs )
-
-P.process_ero_mats_study(STinv_HR17t31,run_now=True,proc_lim=12)
-
-
-'''
-
-# def process_ero_mats_study(study_or_STinvList, run_now=False,
-#                            file_lim=None, proc_lim=10):
-#     ''' given a sample string or list of STinverseMat file paths,
-#         convert the corresponding ST inverse mats to new ERO mats '''
-
-#     # assemble logs to lookup processing parameters
-#     log_dir = '/processed_data/EROdbLogs/'
-#     ero_logs = os.listdir(log_dir)
-
-#     processes = set()
-
-#     # assemble file lists
-#     if type(study_or_STinvList) == str:
-#         file_lists_by_exp_case = assemble_file_lists(study_or_STinvList)
-#     else:
-#         file_lists_by_exp_case = assemble_file_lists(
-#             '', STinv_mats=study_or_STinvList)
-
-#     # for each experiment, case combo
-#     for exp_case, mat_files in tqdm(file_lists_by_exp_case.items()):
-#         if file_lim is None:
-#             file_lim = len(mat_files)
-#             lim_flag = ''
-#         else:
-#             lim_flag = '_L' + str(file_lim)
-
-#         ec_st = exp_case[0] + '-' + exp_case[1]
-
-#         # need loop over versions here
-#         version = '6'
-#         tstamp = str(int(time.time() * 1000))
-#         list_file_path = '/processed_data/EROprc_lists/' + \
-#             ec_st + '_mats-' + tstamp + lim_flag + '.lst'
-#         with open(list_file_path, 'w') as list_file:
-#             list_file.writelines([L + '\n' for L in mat_files[:file_lim]])
-
-#         # read logs to determine processing parameters
-#         # repeats for sites, so just take first
-#         log_path = [fp for fp in ero_logs if ec_st in fp][0]
-#         logDs = read_ero_log(os.path.join(log_dir, log_path))
-
-#         paramD = logDs[0]['parameters']
-#         paramD['-f'] = list_file_path
-#         if '-e' not in paramD:
-#             paramD['-e'] = '1'  # old_elec list
-
-#         # construct command
-#         paramL = [k + ' ' + v for k, v in paramD.items()]
-#         paramS = ' '.join(paramL)
-#         call = [ruby_scripts_byversion[version], paramS]
-#         print(' '.join(call))
-
-#         # queue the process
-#         if run_now:
-#             processes.add(subprocess.Popen(' '.join(call), shell=True))
-#             if len(processes) >= proc_lim:
-#                 os.wait()
-#                 processes.difference_update(
-#                     [p for p in processes if p.poll() is not None])
