@@ -7,7 +7,7 @@ from glob import glob
 import numpy as np
 import pandas as pd
 
-from .filenames import site_hash
+from .utils.filenames import site_hash
 
 
 # groupby functions

@@ -132,7 +132,7 @@ def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, re
                     'ID', 'famID', 'mID', 'fID', 'sex', and aff_col
     aff_col:    the affectedness column for which to calculate density
     conv_159:   if True, convert aff_col from a (1, 5, 9) to a (0, 1, nan) coding
-    rename_cols: a dict mapping old column names to new column names if the DFs use a different naming scheme
+    rename_cols: a dict mapping input column names to new column names if the DFs use a different naming scheme
 
     outputs:
 

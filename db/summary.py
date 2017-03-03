@@ -1,9 +1,6 @@
 import pandas as pd
 import numpy as np
-import os
 from matplotlib import pyplot as plt
-
-from collections import Counter
 
 def session_counts(df):
     df = df.reset_index()
@@ -26,7 +23,7 @@ def histogram(df,property,bins='auto',type='plot',continuous=False,ax=None):
     elif type == 'table':
         if continuous:
             counts, bins = np.histogram(df[property])
-            return Series(counts,index=bins[:-1])
+            return pd.Series(counts,index=bins[:-1])
         else:
             return vc
 

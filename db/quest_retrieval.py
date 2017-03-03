@@ -9,7 +9,7 @@ from time import sleep
 import pandas as pd
 import requests
 
-from db.quest_import import sasdir_tocsv, map_ph4, map_ph4_ssaga, map_subject, ach_url
+from .quest_import import sasdir_tocsv, map_ph4, map_ph4_ssaga, map_subject, ach_url
 
 # combine maps for future usage
 all_kmap = map_ph4.copy()

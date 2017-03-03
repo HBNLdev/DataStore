@@ -238,7 +238,7 @@ class EROcsvresults(MongoBacked):
 
     def store_joined_bulk(s):
         ''' bulk_write list of records that have been formatted
-            from joining many CSVs together '''
+            as a result of joining many CSVs together '''
         adding_uids = [new_rec['uID'] for new_rec in s.data]
         doc_lookup = s.Mdb[s.collection].find(
             {'uID': {'$in': adding_uids}}, {'uID': 1})

@@ -1,5 +1,6 @@
 ''' h5py parsing functions designed to interpret MATLAB .mat's saved using '-v7.3' '''
 
+import numpy as np
 
 def parse_text(dset, dset_field):
     ''' parse .mat-style h5 field that contains text '''
