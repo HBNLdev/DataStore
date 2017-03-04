@@ -1,7 +1,7 @@
 ''' h5py parsing functions designed to interpret MATLAB .mat's saved using '-v7.3' '''
 
-import numpy as np
 import h5py
+import numpy as np
 
 
 def show_file_hierarchy(h5_path):

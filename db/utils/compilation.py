@@ -196,7 +196,7 @@ def join_ufields(row, exp=None):
 def eq_fields(row, field1, field2):
     ''' create a boolean that represents whether field1 and field2 are equal '''
 
-    if row[field1]==row[field2] or (np.isnan(row[field1]) and np.isnan(row[field1])):
+    if row[field1] == row[field2] or (np.isnan(row[field1]) and np.isnan(row[field1])):
         return True
     else:
         return False

@@ -5,8 +5,6 @@ import pprint
 import numpy as np
 import pandas as pd
 
-from .master_info import (subjects_sparser_sub, subjects_sparser_add,
-                          session_sadd)
 from .organization import Mdb
 from .utils.records import flatten_dict
 
@@ -46,6 +44,29 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                                                {'EAfamGWAS': 'x'}]},
                     'wave12': {'Wave12': 'x'},
                     }
+
+subjects_sparser_sub = \
+    ['famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP',
+     'DOB', 'twin', 'EEG', 'System', 'Wave12', 'Wave12-fam',
+     'fMRI subject', 'Wave3', 'Phase4-session', 'Phase4-testdate',
+     'Phase4-age', '4500', 'ccGWAS', 'AAfamGWAS', 'ExomeSeq',
+     'EAfamGWAS', 'EAfamGWAS-fam', 'wave12-race', '4500-race',
+     'ccGWAS-race', 'core-race', 'COGA11k-fam', 'COGA11k-race',
+     'COGA11k-fam-race', 'ruID', 'genoID', 'SmS', 'CA/CO',
+     'a-session', 'b-session', 'c-session', 'd-session',
+     'e-session', 'f-session', 'g-session', 'h-session',
+     'i-session', 'j-session', 'k-session',
+     'a-raw', 'b-raw', 'c-raw', 'd-raw', 'e-raw', 'f-raw', 'g-raw',
+     'h-raw', 'i-raw', 'j-raw', 'k-raw', 'missing-EEG' 'remarks']
+
+subjects_sparser_add = \
+    ['ID', 'sex', 'handedness', 'Self-reported-race', 'alc_dep_dx',
+     'alc_dep_ons', 'a-age', 'b-age', 'c-age', 'd-age', 'e-age',
+     'f-age', 'g-age', 'h-age', 'i-age', 'j-age', 'k-age',
+     'famID', 'mID', 'fID', 'POP', 'alc_dep_dx_f', 'alc_dep_dx_m']
+
+session_sadd = [field for field in subjects_sparser_add if 'age' not in field]
+session_sadd.extend(['session', 'followup', 'age', 'date'])
 
 subcoll_fnames = {'questionnaires': 'questname',
                   'ssaga': 'questname',
