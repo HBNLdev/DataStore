@@ -12,8 +12,8 @@ from tqdm import tqdm
 
 from .compilation import buildframe_fromdocs
 from .organization import Mdb, Questionnaire, SSAGA
-from .utils.dates import parse_date, parse_date_apply_pd
 from .utils.compilation import df_fromcsv
+from .utils.dates import parse_date, parse_date_apply_pd
 
 # note we defaultly use this dateformat because pandas sniffs to this format
 def_info = {'date_lbl': ['ADM_Y', 'ADM_M', 'ADM_D'],

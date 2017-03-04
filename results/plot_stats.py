@@ -1,22 +1,11 @@
 ''' plotting functions that operate on an eeg.Results object
 	that are designed to plot statistical information '''
 
-import os
-
-import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import scipy.stats as ss
-import mne
-from mne.viz import plot_connectivity_circle
+import numpy as np
 
-from .plot import measure_pps
-from ._plot_utils import (subplot_heuristic, figsize_heuristic,
-                          is_nonstr_sequence, nested_strjoin,
-                          MidpointNormalize,
-                          blank_topo, plot_arcs, ordinalize_one,
-                          ordered_chans, layout, n_colors)
-from ._array_utils import basic_slice, compound_take, handle_by, handle_pairs
+from ._plot_utils import (layout, n_colors)
 
 ''' initialize matplotlib backend settings '''
 # print(mpl.matplotlib_fname())

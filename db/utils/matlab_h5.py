@@ -1,6 +1,24 @@
 ''' h5py parsing functions designed to interpret MATLAB .mat's saved using '-v7.3' '''
 
 import numpy as np
+import h5py
+
+
+def show_file_hierarchy(h5_path):
+    def disp_node(name, node):
+        print(name)
+        indent = name.count('/') * 5 * ' '
+        if 'items' in dir(node):
+            for k, v in node.items():
+                print(indent, k, ': ', v)
+        else:
+            print(indent, node)
+            if type(node) == h5py._hl.dataset.Dataset:
+                print(indent, node.dtype)
+
+    loaded = h5py.File(h5_path, 'r')
+    loaded.visititems(disp_node)
+
 
 def parse_text(dset, dset_field):
     ''' parse .mat-style h5 field that contains text '''

@@ -57,3 +57,10 @@ def verify_files(files):
 def get_dates(files):
     ''' given a list of paths, return a matching list of modified times '''
     return [os.path.getmtime(f) for f in files]
+
+
+def get_dir(fp, depth=3):
+    ''' from a full file_path, retrieve the directory containing it to an arbitrary depth
+        e.g. get_dir('/usr/local/bin/file.py', 2) returns '/usr/local/' '''
+
+    return '/'.join(fp.split('/')[:depth+1])

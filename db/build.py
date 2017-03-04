@@ -23,7 +23,7 @@ from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
                            match_fups2sessions_fast_multi, match_fups_sessions_generic)
 from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup, ID_nan_strintfloat_COGA,
                                 build_parentID, df_fromcsv)
-from .utils.filenames import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
+from .utils.filename_parsing import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
 from .utils.files import identify_files, verify_files
 from .utils.text import get_toc, txt_tolines, find_lines
 

@@ -7,10 +7,17 @@ from glob import glob
 import numpy as np
 import pandas as pd
 
-from .filenames import site_hash
+from .filename_parsing import site_hash
 
 
 # csv import functions
+
+
+def readcsv_uID(csv_path, inds=['ID', 'session']):
+    df = pd.read_csv(csv_path)
+    df['ID'] = df['ID'].apply(int).apply(str)
+    df.set_index(inds, inplace=True)
+    return df
 
 
 def df_fromcsv(fullpath, id_lbl='ind_id', na_val=''):
@@ -29,7 +36,6 @@ def df_fromcsv(fullpath, id_lbl='ind_id', na_val=''):
     df.set_index('ID', drop=False, inplace=True)
 
     return df
-
 
 
 # single value or column apply functions
@@ -145,6 +151,22 @@ def reorder_columns(df, beginning_order):
 # so certain columns are expected to exist
 
 
+def fix_fhdratio(row, k=10):
+    ''' given a dataset with the columns fhd_dx4_ratio and n_rels,
+        return a version of the fhd ratio so that none of the values are 0 and 1 exactly.
+        this is a preparatory step to apply logarithm-based transforms to the values. '''
+
+    ratio = row['fhd_dx4_ratio']
+    n_rels = row['n_rels']
+
+    if ratio == 0:
+        return 1 / (k * n_rels)
+    elif ratio == 1:
+        return 1 - (1 / (k * n_rels))
+    else:
+        return ratio
+
+
 def join_columns(row, columns, sep='_'):
     ''' given list of columns, join all (string-compatible) values from those columns, using sep as delimiter '''
 
@@ -169,6 +191,15 @@ def join_ufields(row, exp=None):
         return '_'.join([row['ID'], row['session'], exp])
     else:
         return '_'.join([row['ID'], row['session']])
+
+
+def eq_fields(row, field1, field2):
+    ''' create a boolean that represents whether field1 and field2 are equal '''
+
+    if row[field1]==row[field2] or (np.isnan(row[field1]) and np.isnan(row[field1])):
+        return True
+    else:
+        return False
 
 
 def harmonize_fields_max(row, field1, field2):
@@ -360,6 +391,15 @@ def drop_frivcols(df):
     return df.drop(dcols, axis=1)
 
 
+def first_session(df):
+    df_latest = df.copy()
+    df_latest['session'] = df_latest.index.get_level_values('session')
+    g = df_latest.groupby(level=df_latest.index.names[0])
+    df_latest = g.first()
+    df_latest.set_index('session', append=True, inplace=True)
+    return df_latest
+
+
 def latest_session(in_df):
     ''' given a datframe with an (ID, session) index, return a version in which
         only the latest sessions is kept for each '''
@@ -384,6 +424,7 @@ def mark_latest(in_df):
     out_df.drop('session', axis=1, inplace=True)
 
     return out_df
+
 
 def get_restingcnts(df):
     ''' given dataframe indexed by ID/session, find paths of resting CNTs '''
@@ -435,3 +476,11 @@ def groupby_followup(df):
     df.drop('followup', axis=1, inplace=True)
     return g
 
+
+def groupby_session(df):
+    ''' given ID+followup-indexed dataframe, create a groupby object, grouping by followup '''
+
+    df['session'] = df.index.get_level_values('session')
+    g = df.groupby(level=df.index.names[0])  # ID
+    df.drop('session', axis=1, inplace=True)
+    return g

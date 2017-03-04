@@ -13,7 +13,7 @@ import pandas as pd
 
 from .organization import Mdb
 from .utils.compilation import join_allcols, extract_session_fromuID, join_ufields, column_split
-from .utils.filenames import parse_filename, system_shorthands
+from .utils.filename_parsing import parse_filename, system_shorthands
 from .utils.records import unflatten_dict
 
 
@@ -140,6 +140,7 @@ def extract_case_tuple(path):
         case_lst.append((index, type_letter, type_word))
     case_tup = tuple(case_lst)
     return case_tup
+
 
 class AVGH1_File(CNTH1_File):
     ''' represents *.avg.h1 files, mostly for the behavioral info inside '''

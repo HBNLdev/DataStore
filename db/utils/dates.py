@@ -89,3 +89,10 @@ def my_strptime(v, dateform='%Y-%m-%d'):
         return datetime.strptime(v, dateform)
     except:
         return np.nan
+
+
+def datetime_fromtimestamp(stamp):
+    ''' given a UTC timestamp, return a datetime '''
+
+    ts = (stamp - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's')
+    return datetime.utcfromtimestamp(ts)

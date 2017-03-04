@@ -1,21 +1,20 @@
 ''' represents EEG results from MATLAB processing pipeline or ERO-mats '''
 
 import os
-from glob import glob
-from datetime import datetime
 from collections import OrderedDict
+from datetime import datetime
+from glob import glob
 
-import h5py
 import dask.array as da
+import h5py
+import mne
 import numpy as np
 import pandas as pd
-import mne
 from mne.channels import read_ch_connectivity
 
-from ._plot_utils import measure_pps, nested_strjoin, freq_tick_heuristic
 from ._array_utils import (get_data, convert_ms, baseline_sub, baseline_div, handle_by,
                            basic_slice, compound_take, reverse_dimorder)
-
+from ._plot_utils import measure_pps, nested_strjoin, freq_tick_heuristic
 
 time_plotlims_ms = [-100, 800]
 freq_plotlims_hz = [0, 32]
@@ -28,7 +27,7 @@ opt_info = {'Options path': ('optpath', 'text'),
 
             'Condition labels': ('case_label', 'cell'),
             'Measures available': ('measures', 'cell'),
-            
+
             'Sampling rate': ('rate', 'array'),
             '# of timepoints': ('n_samps', 'array'),
             'Temporal limits': ('epoch_lims', 'array'),
@@ -64,9 +63,9 @@ def uid_inds(df):
     # check current inds
     for current_ind in df.index.names:
         if current_ind in desired_inds:
-            desired_inds.remove(current_ind) # already an ind
+            desired_inds.remove(current_ind)  # already an ind
         else:
-            df.reset_index(current_ind, inplace=True) # not desired
+            df.reset_index(current_ind, inplace=True)  # not desired
 
     # for remaining desired inds, set them as inds if found
     for ind in desired_inds:
@@ -105,7 +104,6 @@ def handle_parse(dset, dset_field, field_type):
 
 
 class Results:
-    
     def add_demogs(s, csv_or_df):
         ''' read demographics file with ID/session columns, join to file_df '''
 
@@ -199,7 +197,7 @@ class Results:
         s.time_ticks()  # additional helper function for ticks
 
         # time plot limits
-        
+
         s.time_plotlims = [convert_ms(s.time, ms) for ms in time_plotlims_ms]
         s.time_tf_plotlims = [convert_ms(s.time_tf, ms)
                               for ms in time_plotlims_ms]
@@ -286,7 +284,7 @@ class Results:
         chan_erps = s.erp.mean(axis=(0, 1)) / 1e6  # subject/condition mean
         return mne.EvokedArray(chan_erps, info,
                                tmin=s.params['Temporal limits'][0] / 1000)
-    
+
     def save_mean(s, measure, spec_dict, saveas=None):
         ''' save data-means and add as columns in s.demog_df. spec_dict is a
             dict that specifies which values should be taken in each dimension.
@@ -359,10 +357,11 @@ class Results:
 
         s.demog_df = pd.concat([s.demog_df, amean_df], axis=1)
 
+
 class ResultsFromMATLAB(Results):
     ''' represents HDF-compatible .mat's as dask stacks '''
 
-    source_pipeline = 'matlab' # by default
+    source_pipeline = 'matlab'  # by default
 
     def __init__(s, optpath, csv_or_df=None, trial_thresh=15):
         s.opt = h5py.File(optpath, 'r')
@@ -418,7 +417,6 @@ class ResultsFromMATLAB(Results):
         s.freq = np.array([2 * s.srate / scale[0]
                            for scale in s.params['TF scales'][::-1]])  # reverse
 
-
     def load(s, measure, dset_name, transpose_lst, df_attr='demog_df'):
         ''' given measure, h5 dataset name, transpose list: load data '''
 
@@ -467,7 +465,6 @@ class ResultsFromMATLAB(Results):
         if baseline:
             s.baseline('erp', 'subtractive', bl_window, avgcond_baseline)
 
-
     def load_power(s, baseline=False, bl_window=[-500, -200],
                    avgcond_baseline=False):
         ''' load (total) power data and divisively baseline-normalize '''
@@ -496,7 +493,7 @@ class ResultsFromMATLAB(Results):
 
         dsets = [h5py.File(fn, 'r')['wave_evknorm']
                  for fn in s.demog_df['path'].values]
-                 
+
         # test whether these are single or double precision complex arrays
         dset_dtype = dsets[0].dtype[0]
         if dset_dtype == np.float64:
@@ -637,37 +634,36 @@ class ResultsFromMATLAB(Results):
                          np.array(s.montage.ch_names, dtype=object),
                          s.freq, s.time_tf)
 
-class ResultsFromEROStack(Results):
 
+class ResultsFromEROStack(Results):
     # notes:
-    
+
     # should NOT have inconsistent freq_vecs
     # if using conditions dimension, should be condition-complete across subjects
 
     source_pipeline = 'erostack'
 
     default_params = {'Options path': None,
-    'Data path': None,
-    'Batch ID': 'erostack0',
-    'Coordinates file': '/active_projects/matlab_common/61chans_ns.mat',
-    'Measures available': ['wave_totpow'],
-    'TF scales': None,
-    'TF time-downsample ratio': 2,
-    'CSD matrix': np.array([0]),
-    'Coherence pair subsets': None,
-    'Coherence pairs': None,
-    'Coherence pair subset index': None,
-    }
-
+                      'Data path': None,
+                      'Batch ID': 'erostack0',
+                      'Coordinates file': '/active_projects/matlab_common/61chans_ns.mat',
+                      'Measures available': ['wave_totpow'],
+                      'TF scales': None,
+                      'TF time-downsample ratio': 2,
+                      'CSD matrix': np.array([0]),
+                      'Coherence pair subsets': None,
+                      'Coherence pairs': None,
+                      'Coherence pair subset index': None,
+                      }
 
     def __init__(s, erostack_obj, batch_id='erostack1', csv_or_df=None, trial_thresh=15,
-                    cond_stack=False):
+                 cond_stack=False):
 
         s.stack = erostack_obj
         s.cond_stack = cond_stack
         if s.cond_stack and 'cond_lst' not in dir(s.stack):
             s.stack.survey_conds()
-        
+
         s.get_params(batch_id)
         s.init_filedf()
         s.add_rejinfo()
@@ -696,7 +692,7 @@ class ResultsFromEROStack(Results):
 
         # condition dimension is singleton at first
         # later, ero stacks can be ero "arrays" with a condition dimension
-        
+
         # measures is just ero at first
 
         # TF scales info can be supplanted by freq vector
@@ -714,10 +710,10 @@ class ResultsFromEROStack(Results):
         # data_df should already have trials
 
         # interpchans is always 0 here
-        s.file_df['# of interpolated channels'] = [0]*s.file_df.shape[0]
+        s.file_df['# of interpolated channels'] = [0] * s.file_df.shape[0]
 
     def make_tfscales_erostack(s):
-        
+
         s.time = s.stack.params['Times'][0]
         s.time_tf = s.stack.params['Times'][0]
         s.freq = s.stack.params['Frequencies'][0]

@@ -8,7 +8,7 @@ import pandas as pd
 
 from .utils.compilation import ID_nan_strint
 from .utils.dates import calc_date_w_Qs
-from .utils.filenames import site_fromIDstr
+from .utils.filename_parsing import site_fromIDstr
 
 master_path = '/processed_data/master-file/old/EEG-master-file-21.csv'
 

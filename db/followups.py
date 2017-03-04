@@ -5,8 +5,8 @@ from collections import defaultdict
 import pandas as pd
 
 from .compilation import get_sessiondatedf
-from .utils.math import robust_datemean
 from .utils.dates import my_strptime
+from .utils.math import robust_datemean
 
 p123_master_path = '/processed_data/zork/zork-phase123/subject/master/master.sas7bdat.csv'
 p4_master_path = '/processed_data/zork/zork-phase4-72/subject/master/master4_30nov2016.sas7bdat.csv'
