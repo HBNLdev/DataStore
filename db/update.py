@@ -71,6 +71,30 @@ def neuropsych_from_sfups():
                                  sfup_coll='followups', date_col='testdate')
 
 
+def internalizing_from_ssaga():
+    ''' adds date and session fields to internalizing followup docs, using the ssaga collection '''
+
+    int_query = {}
+    int_proj = {'_id': 1}
+    int_docs = Mdb['internalizing'].find(int_query, int_proj)
+    int_df5 = buildframe_fromdocs(int_docs, inds=['ID', 'questname', 'followup'])
+
+    IDs = list(set(int_df5.index.get_level_values('ID')))
+
+    ssaga_query = {'questname': {'$in': ['ssaga', 'cssaga']}, 'ID': {'$in': IDs}}
+    ssaga_proj = {'ID': 1, 'session': 1, 'followup': 1, 'questname': 1, 'date': 1, '_id': 0}
+
+    ssaga_docs = Mdb['ssaga'].find(ssaga_query, ssaga_proj)
+    ssaga_df = buildframe_fromdocs(ssaga_docs, inds=['ID', 'questname', 'followup'])
+
+    comb_df = int_df5.join(ssaga_df, lsuffix='_int')
+
+    for ID, row in tqdm(comb_df.iterrows()):
+        Mdb['internalizing'].update_one({'_id': row['_id']},
+                                        {'$set': {'session': row['session'],
+                                                  'date': row['date'], }, })
+
+
 def clear_field(coll, field):
     ''' clear collection coll of field (delete the key-value pair from all docs) '''
 
@@ -145,28 +169,3 @@ def match_fups_sessions_flex(match_coll, assessment_col, assessment_val,
                                     {'$set': {sfup_index: qrow['nearest_sfup'],
                                               sfup_index + '_datediff': datediff_days}
                                      })
-
-# graveyard
-
-# def internalizing_from_ssaga():
-#     ''' adds date and session fields to internalizing followup docs, using the ssaga collection '''
-
-#     int_query = {}
-#     int_proj = {'_id': 1}
-#     int_docs = Mdb['internalizing'].find(int_query, int_proj)
-#     int_df4 = buildframe_fromdocs(int_docs, inds=['ID', 'questname', 'followup'])
-
-#     IDs = list(set(int_df4.index.get_level_values('ID')))
-
-#     ssaga_query = {'questname': {'$in': ['ssaga', 'cssaga']}, 'ID': {'$in': IDs}}
-#     ssaga_proj = {'ID': 1, 'session': 1, 'followup': 1, 'questname': 1, 'date': 1, '_id': 0}
-
-#     ssaga_docs = Mdb['ssaga'].find(ssaga_query, ssaga_proj)
-#     ssaga_df = buildframe_fromdocs(ssaga_docs, inds=['ID', 'questname', 'followup'])
-
-#     comb_df = int_df4.join(ssaga_df, lsuffix='_int')
-
-#     for ID, row in tqdm(comb_df.iterrows()):
-#         Mdb['internalizing'].update_one({'_id': row['_id']},
-#             {'$set': {'session': row['session'],
-#                       'date': row['date'],} ,} )

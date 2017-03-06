@@ -9,7 +9,6 @@ import pandas as pd
 import pymongo
 from tqdm import tqdm
 
-from .compilation import buildframe_fromdocs
 from .file_handling import (MT_File, CNTH1_File, AVGH1_File, RestingDAT, Neuropsych_XML,
                             TOLT_Summary_File, CBST_Summary_File, ERO_CSV)
 from .followups import preparefupdfs_forbuild
@@ -23,7 +22,7 @@ from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
                            match_fups2sessions_fast_multi, match_fups_sessions_generic)
 from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup, ID_nan_strintfloat_COGA,
                                 build_parentID, df_fromcsv)
-from .utils.filenames import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
+from .utils.filename_parsing import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
 from .utils.files import identify_files, verify_files
 from .utils.text import get_toc, txt_tolines, find_lines
 
@@ -242,20 +241,6 @@ def core():
 
 
 def internalizing():
-    # fast
-    folder = '/processed_data/zork/zork-phase4-69/subject/internalizing/'
-    file = 'INT_Scale_JK_Scores_n11271.csv'
-    path = folder + file
-    datemod = datetime.fromtimestamp(os.path.getmtime(path))
-    df = df_fromcsv(path, 'IND_ID')
-    for drec in tqdm(df.to_dict(orient='records')):
-        ro = Internalizing(drec)
-        ro.store()
-    sourceO = SourceInfo(Internalizing.collection, (path, datemod))
-    sourceO.store()
-
-
-def internalizing2():
     ''' build only after ssaga has been built and updated '''
 
     def convert_internalizing_columns(cols):
@@ -313,17 +298,8 @@ def internalizing2():
     int_df5 = int_df4.reset_index().set_index('ID')
     for col in score_cols:
         int_df5[col + '_fupmax'] = g[col].max()
-    int_df5.set_index(['questname', 'followup'], append=True, inplace=True)
 
-    # retrieve date and session association from ssaga collection
-    IDs = list(set(int_df5.index.get_level_values('ID')))
-    ssaga_query = {'questname': {'$in': ['ssaga', 'cssaga']}, 'ID': {'$in': IDs}}
-    ssaga_proj = {'ID': 1, 'session': 1, 'followup': 1, 'questname': 1, 'date': 1, '_id': 0}
-    docs = Mdb['ssaga'].find(ssaga_query, ssaga_proj)
-    ssaga_df = buildframe_fromdocs(docs, inds=['ID', 'questname', 'followup'])
-    comb_df = int_df5.join(ssaga_df, lsuffix='_int')
-
-    for drec in tqdm(comb_df.reset_index().to_dict(orient='records')):
+    for drec in tqdm(int_df5.reset_index().to_dict(orient='records')):
         ro = Internalizing(drec)
         ro.store()
 

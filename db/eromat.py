@@ -701,7 +701,6 @@ class EROMat:
 
     def prepare_row(s):
         ''' get info for row in dataframe from database '''
-        s.retrieve_csvdoc()
         s.info.update({'_id': s._id,
                        'path': s.filepath,
                        'matpath': s.params['Mat file']})
@@ -742,27 +741,6 @@ class EROMat:
                                columns=[s.filepath[-10:]])
         return mean_df
 
-    def retrieve_csvdoc(s, just_id=True):
-        ''' retrieve matching CSV document from the EROpheno collection '''
-
-        uID = '_'.join([s.info['ID'], s.info['session'], s.info['experiment']])
-        if just_id:
-            c = Mdb['EROpheno'].find({'uID': uID}, {'_id': 1})
-        else:
-            c = Mdb['EROpheno'].find({'uID': uID})
-
-        if c.count() == 0:
-            print(uID, 'not found in collection')
-            s.csv_doc = None
-            s._id = None
-            return
-        elif c.count() > 1:
-            print(uID, 'had more than one matching doc')
-
-        s.csv_doc = next(c)
-        s._id = s.csv_doc['_id']
-        # extract _id and store in dataframe?
-
 
 # Post processing tools to manage output and compare with old compilations
 
@@ -785,12 +763,6 @@ def find_column_groups(column_list, exclusions=['trial', 'age'], var_ind=-1):
 
     return col_groups
 
-
-# i dont like declaring module-global variables with vague, common names
-# especially when it's done at line ~800
-# it runs every time the module is imported which is also wasteful
-# i've done a refactor here
-# sorry if it break anything
 
 # Representational class to parse and produce labels
 
@@ -1040,36 +1012,3 @@ def PR_get_tfmeans(erostack, tf_windows, electrodes):
 
 
 PR_get_tfmeans.store_name = 'db/eromat.get_tfmeans'
-
-
-# graveyard
-
-# def gen_path_stdf(rec, power_type):
-#     ''' apply function designed to operate on a dataframe indexed by ID and session.
-#         given processing version, parameter string, number of channels in the raw data, experiment,
-#         case, power type, ID, and session, generate the path to the expected st mat '''
-#
-#     try:
-#         ID = rec.name[0]
-#         session = rec.name[1]
-#
-#         parent_dir = version_info[rec['prc_ver']]['storage path']
-#
-#         # handle the expected number of channels
-#         if '-s9-' in rec['param_string']:
-#             n_chans = '20'
-#         else:
-#             n_chans = chan_mapping[rec['n_chans']]
-#
-#         path_start = os.path.join(parent_dir, rec['param_string'], n_chans, rec['experiment'])
-#         fname = '_'.join([ID, session, rec['experiment'], rec['case'], powertype_mapping[power_type]])
-#         ext = '.mat'
-#
-#         path = os.path.join(path_start, fname + ext)
-#
-#         return path
-#     except KeyError:
-#         print(ID, session, 'had a key missing')
-#         return None
-#     except IndexError:
-#         print(ID, 'had an index missing')

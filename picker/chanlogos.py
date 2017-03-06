@@ -3,6 +3,7 @@
     uses PIL to shrink them to 32 x 32 '''
 
 import os
+
 import matplotlib.pyplot as plt
 from PIL import Image
 
@@ -32,31 +33,34 @@ for row in layout:
         if chan:
             chans.append(chan)
 
+
 def make_logo(txt, folder):
     width = 1.08
     height = 1.08
     f = plt.figure(figsize=(width, height))
     ax = f.add_axes([0, 0, 1, 1])
     ax.set_axis_bgcolor('black')
-    #ax.set_axis_off()
+    # ax.set_axis_off()
     ax.text(0.5, 0.5, txt,
-           color='white',
-           family='monospace',
-           ha='center',
-           va='center',
-           weight='bold',
-           size=32)
+            color='white',
+            family='monospace',
+            ha='center',
+            va='center',
+            weight='bold',
+            size=32)
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
-    outpath = os.path.join(folder, txt+'.png')
+    outpath = os.path.join(folder, txt + '.png')
     plt.savefig(outpath, bbox_inches='tight', dpi=100)
+
 
 def make_smaller(file, size):
     im = Image.open(file)
     im.thumbnail(size, Image.ANTIALIAS)
     im.save(file, 'PNG')
 
-def __main__():    
+
+def __main__():
     for chan in chans:
         make_logo(chan, folder)
-        make_smaller(folder+chan+'.png', (20, 20))
+        make_smaller(folder + chan + '.png', (20, 20))

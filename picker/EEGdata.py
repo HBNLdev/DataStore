@@ -1,25 +1,24 @@
 '''reading and handling EEG data
 '''
 
+import os
 from collections import OrderedDict
 
 import h5py
 import numpy as np
-from scipy.signal import argrelextrema
-import os
 import pandas as pd
 from bokeh.palettes import brewer
+from scipy.signal import argrelextrema
 
 from db import file_handling as FH
 
 
 class avgh1:
-
-    save_elec_order = ['FP1','FP2','F7','F8','AF1','AF2','FZ','F4','F3','FC6','FC5','FC2',
-                    'FC1','T8','T7','CZ','C3','C4','CP5','CP6','CP1','CP2','P3','P4','PZ',
-                    'P8','P7','PO2','PO1','O2','O1','AF7','AF8','F5','F6','FT7','FT8',
-                    'FPZ','FC4','FC3','C6','C5','F2','F1','TP8','TP7','AFZ','CP3','CP4',
-                    'P5','P6','C1','C2','PO7','PO8','FCZ','POZ','OZ','P2','P1','CPZ']
+    save_elec_order = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ', 'F4', 'F3', 'FC6', 'FC5', 'FC2',
+                       'FC1', 'T8', 'T7', 'CZ', 'C3', 'C4', 'CP5', 'CP6', 'CP1', 'CP2', 'P3', 'P4', 'PZ',
+                       'P8', 'P7', 'PO2', 'PO1', 'O2', 'O1', 'AF7', 'AF8', 'F5', 'F6', 'FT7', 'FT8',
+                       'FPZ', 'FC4', 'FC3', 'C6', 'C5', 'F2', 'F1', 'TP8', 'TP7', 'AFZ', 'CP3', 'CP4',
+                       'P5', 'P6', 'C1', 'C2', 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ', 'P2', 'P1', 'CPZ']
 
     def __init__(s, filepath):
 
@@ -79,7 +78,7 @@ class avgh1:
             s.case_num_map = {}
             s.case_ind_map = {}
             s.case_list = []
-            for c_ind,vals in enumerate(case_info.value):
+            for c_ind, vals in enumerate(case_info.value):
                 dvals = [v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in vals]
                 caseD = {n: v for n, v in zip(case_info.dtype.names, dvals)}
                 s.cases[caseD['case_num']] = caseD
@@ -137,15 +136,15 @@ class avgh1:
         df = pd.DataFrame(data, index=index)
 
         dfR = df.reset_index()
-        elecIndex = dict(zip(s.save_elec_order,range(len(s.save_elec_order))))
+        elecIndex = dict(zip(s.save_elec_order, range(len(s.save_elec_order))))
         dfR['elec_rank'] = dfR['electrode'].map(elecIndex)
-        dfR.sort(['case_num','elec_rank','peak'], inplace=True)
-        dfR.drop('elec_rank',1,inplace=True)
+        dfR.sort(['case_num', 'elec_rank', 'peak'], inplace=True)
+        dfR.drop('elec_rank', 1, inplace=True)
 
         dfR.dropna(inplace=True)
-        mt_string = dfR.to_string(buf=None,header=False,na_rep='NaN',
-                                float_format='%.3f', index=False,
-                                formatters={'mean_rt':lambda x:'%.1f'%x} )
+        mt_string = dfR.to_string(buf=None, header=False, na_rep='NaN',
+                                  float_format='%.3f', index=False,
+                                  formatters={'mean_rt': lambda x: '%.1f' % x})
 
         s.mt_body = mt_string
 
@@ -184,7 +183,7 @@ class avgh1:
                 comparator = np.less
                 fallback_func = np.argmin
             local_extreme_inds = argrelextrema(erp_array, comparator)[0]
-            if local_extreme_inds.shape[0] == 0: # no local extremum
+            if local_extreme_inds.shape[0] == 0:  # no local extremum
                 ext_lmi = fallback_func(erp_array)
             else:
                 local_extreme_vals = erp_array[local_extreme_inds]
@@ -274,7 +273,7 @@ class avgh1:
 
         return peak_val, peak_ms
 
-    def case_letter_from_number(s,number):
+    def case_letter_from_number(s, number):
         return s.cases[int(number)]['case_type']
 
     def get_yscale(s, potentials=None, channels=None):

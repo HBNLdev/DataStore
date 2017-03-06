@@ -43,3 +43,16 @@ def remove_NaTs(rec):
         typ = type(v)
         if typ != dict and typ == pd.tslib.NaTType:
             rec[k] = None
+
+
+def show_dict_hierarchy(d, init_space='', total=0):
+    for k, v in d.items():
+        space = init_space
+        print(space + k)
+        if isinstance(v, dict):
+            space += '   '
+            total = show_dict_hierarchy(v, space, total)
+        elif isinstance(v, list):
+            print(space + str(len(v)))
+            total += len(v)
+    return total

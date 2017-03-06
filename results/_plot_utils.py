@@ -3,9 +3,9 @@
 import collections
 import colorsys
 
-import numpy as np
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Arc
 
@@ -23,7 +23,6 @@ layout = np.array(layout)
 ordered_chans = []
 for row in layout:
     ordered_chans.extend([chan for chan in row if chan])
-
 
 ''' dictionary mapping measures to their object info '''
 measure_pps = {'erp': {'data': 'erp', 'd_dims': 'erp_dims',
@@ -79,6 +78,7 @@ def freq_tick_heuristic(freq_vec):
     suggested_ticks = 10
     suggested_space = round(n_freqs / suggested_ticks)
     return suggested_space
+
 
 def subplot_heuristic(n):
     ''' for n subplots, determine best grid layout dimensions '''

@@ -1,8 +1,8 @@
 ''' utils for manipulating and slicing arrays '''
 
-import numpy as np
-
 import itertools
+
+import numpy as np
 
 
 def get_data(r, measure):
@@ -18,7 +18,7 @@ def get_data(r, measure):
 
     return data, d_dims, d_dimlvls
 
-    
+
 # array functions
 def permute_data(a, a_dimnames, out_dimnames):
     ''' given array a and a_dimnames, a tuple naming its dimensions,
@@ -62,8 +62,8 @@ def convert_ms(time_array, ms):
 
 
 def drop_na(a):
-
     return a[~np.isnan(a)]
+
 
 def compound_take(a, dimval_tups):
     ''' given array, apply multiple indexing operations '''
@@ -129,6 +129,7 @@ def unpack_dimvaltups(in_dimval_tups):
 
     return dimval_tups
 
+
 def basic_slice(a, in_dimval_tups):
     ''' given array a and list of (dim, val) tuples, basic-slice a '''
     slicer = [slice(None)] * len(a.shape)  # initialize slicer
@@ -166,7 +167,7 @@ def subject_slice(vec, in_dimval_tups):
 
     subject_dimval_tups = []
     for d, v in dimval_tups:
-        if d == 0: # subject dimension (dedicated)
+        if d == 0:  # subject dimension (dedicated)
             subject_dimval_tups.append(v)
 
     if len(subject_dimval_tups) is 1:

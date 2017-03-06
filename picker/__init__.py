@@ -1,1 +1,1 @@
-__all__= ['EEGdata','PeakPickerQ']
+__all__ = ['EEGdata', 'PeakPickerQ']

@@ -35,3 +35,25 @@ def reject_outliers(data, m=2.5):
     mdev = np.median(d)
     s = d / mdev if mdev else 0.
     return data[s < m]
+
+
+def largest_prime_factor(n):
+    i = 2
+    while i * i <= n:
+        if n % i:
+            i += 1
+        else:
+            n //= i
+    return n
+
+
+def fix_ratio(ratio, n=50, k=10):
+    ''' given a ratio measurement stemming from n observations,
+        return a version in which none of the values are exactly 0 or 1. '''
+
+    if ratio == 0:
+        return 1 / (n * k)
+    elif ratio == 1:
+        return 1 - (1 / (n * k))
+    else:
+        return ratio

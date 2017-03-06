@@ -3,16 +3,15 @@
 
 import os
 
-import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import scipy.stats as ss
-
 import mne
+import numpy as np
+import scipy.stats as ss
 from mne.viz import plot_connectivity_circle
 
 from ._array_utils import (get_data, basic_slice, subject_slice,
-                            compound_take, handle_by, handle_pairs, drop_na)
+                           compound_take, handle_by, handle_pairs)
 from ._plot_utils import (subplot_heuristic, figsize_heuristic,
                           is_nonstr_sequence, nested_strjoin,
                           MidpointNormalize,
@@ -31,6 +30,7 @@ titlefont_sz = 16
 titlefont_wt = 'bold'
 stitlefont_sz = 12
 stitlefont_wt = 'medium'
+
 
 def get_plotparams(r, measure, lims=None, cmap_override=None):
     ''' given a measure, retrieve default plotting info '''
@@ -230,7 +230,7 @@ def tf(r, measure='power',
                     rect = rect.mean(axis=0)
                 else:
                     print('Trying nasafe for ', fval, spval)
-                    rect = np.nanmean(rect,axis=0)
+                    rect = np.nanmean(rect, axis=0)
                 print(rect.shape)
             ''' contour '''
             c = axarr[spi].contourf(rect, 8, cmap=cmap)
@@ -761,8 +761,7 @@ def boxplot(r, measure, figure_by=None, subplot_by=None, set_by=None,
 
 
 def scatter(r, measure, variate=None, figure_by=None, subplot_by=None, set_by=None,
-                        figsize_override=None, lbl_override=None, savedir=None):
-
+            figsize_override=None, lbl_override=None, savedir=None):
     # variate should be a column of demog_df
 
     ptype = 'scatter'
@@ -787,7 +786,7 @@ def scatter(r, measure, variate=None, figure_by=None, subplot_by=None, set_by=No
     sp_dim, sp_vals, sp_lbls = handle_by(r, subplot_by, d_dims, d_dimlvls)
     s_dim, s_vals, s_lbls = handle_by(r, set_by, d_dims, d_dimlvls)
 
-    ld = {'f_lbls': f_lbls, 'sp_lbls': sp_lbls, 's_lbls': s_lbls,}
+    ld = {'f_lbls': f_lbls, 'sp_lbls': sp_lbls, 's_lbls': s_lbls, }
     if lbl_override:
         for var_name, new_vals in lbl_override.items():
             if var_name in ld:
@@ -832,14 +831,14 @@ def scatter(r, measure, variate=None, figure_by=None, subplot_by=None, set_by=No
                 mean_dims = np.where([d != final_dim for d in d_dims])
                 yvals = yvals.mean(axis=tuple(mean_dims[0]))
                 h = axarr[spi].scatter(xvals, yvals, s=size, c=colors[si], marker='o',
-                                   alpha=alpha)
+                                       alpha=alpha)
                 # do regression, if applicable
                 x_pred, y_pred, coef, r2 = regress_linear(xvals, yvals)
                 axarr[spi].plot(x_pred, y_pred, color=colors[si], linewidth=3,
-                                   alpha=alpha)
+                                alpha=alpha)
                 regr_text = '{} | b: {:.2f}, r^2: {:.2f}'.format(s_lbls[si], coef, r2)
                 axarr[spi].text(0.05, text_y, regr_text, color=colors[si],
-                    transform=axarr[spi].transAxes, fontsize=14, fontweight='bold', va='bottom')
+                                transform=axarr[spi].transAxes, fontsize=14, fontweight='bold', va='bottom')
                 text_y -= .1
                 h_lst.append(h)
             axarr[spi].set_title(ld['sp_lbls'][spi], fontweight=stitlefont_wt)

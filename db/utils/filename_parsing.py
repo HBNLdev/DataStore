@@ -2,7 +2,6 @@
 
 import os
 
-import h5py
 import numpy as np
 
 site_hash = {'a': 'uconn',
@@ -464,4 +463,3 @@ def parse_avgh1_path(filepath):
               'rec_type': rec_type}
 
     return output
-

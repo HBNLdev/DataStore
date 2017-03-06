@@ -3,17 +3,12 @@
     of clustering those test-statistics given a threshold '''
 
 import numpy as np
+from mne.stats import (permutation_cluster_test,
+                       spatio_temporal_cluster_test)
 from sklearn import linear_model
 
-import mne
-from mne.stats import (permutation_cluster_1samp_test,
-                       permutation_cluster_test,
-                       spatio_temporal_cluster_1samp_test,
-                       spatio_temporal_cluster_test)
-
-from ._plot_utils import measure_pps
 from ._array_utils import get_data, permute_data
-
+from ._plot_utils import measure_pps
 
 
 def regress_linear(xvals, yvals):
