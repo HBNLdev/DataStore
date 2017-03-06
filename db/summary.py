@@ -79,10 +79,11 @@ def swarm_groups(df,group_prop,info_prop,ax=None):
     plot = sns.swarmplot(y=group_prop,x=info_prop,data=df,ax=ax)
     return plot
 
-def violin_distributions(df,group_prop,dist_prop,split_prop=None,ax=None):
+def violin_distributions(df,group_prop,dist_prop,split_prop=None,ax=None,
+                    order=None):
 
     plot = sns.violinplot(x=group_prop,y=dist_prop,hue=split_prop,data=df,
-              ax=ax,split=True)
+              ax=ax,split=True, order=order)
     return plot
 
 def prop_hists_by_group(df,group_prop,hist_prop,Nbins=20):
@@ -139,20 +140,22 @@ def sessions_info(df,folder,name):
     table(sp,ses_count_table,loc='center')
     fig.savefig( os.path.join(folder,name+'_sesHist.png') )
 
-    # age distributions by session with sex
+    # age distributions by followup with sex
     fig = plt.figure(figsize = [8,5]); ax = fig.gca()
-    plot = violin_distributions(df,'session','session_age','sex',ax=ax)
-    plot = update_tick_labels(plot,'x',nums_for_labels,{'property':'session',
-                        'dataframe':df} ) 
-    fig.savefig( os.path.join(folder,name+'_sessions_ages_sex.png') )
+    plot = violin_distributions(df,'followup','session_age','sex',ax=ax,
+                order = ['p1','p2','p3','-1.0','0','1','2','3','4','5'])
+    plot = update_tick_labels(plot,'x',nums_for_labels,{'property':'followup',
+                        'dataframe':df} )
+    plot.set_ylim([0,60])
+    fig.savefig( os.path.join(folder,name+'_followups_ages_sex.png') )
 
 
     # race + ethnicity table_breakdown
-    fig = plt.figure(figsize=[8,12])
-    ax = fig.gca()
-    sg = swarm_groups(df,'self-reported','session_age',ax=ax)
-    update_tick_labels(sg,'y',expand_RE_aliases,{'race_type':'self-reported'})
-    fig.savefig( os.path.join(folder,name+'_sessions_ethnicity.png'), 
-                    bbox_inches='tight' )
+    # fig = plt.figure(figsize=[8,12])
+    # ax = fig.gca()
+    # sg = swarm_groups(df,'self-reported','session_age',ax=ax)
+    # update_tick_labels(sg,'y',expand_RE_aliases,{'race_type':'self-reported'})
+    # fig.savefig( os.path.join(folder,name+'_sessions_ethnicity.png'), 
+    #                 bbox_inches='tight' )
 
     #
