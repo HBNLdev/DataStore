@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -16,6 +17,38 @@ RaceEthnicityDefs = {'hispanic':{'h':'hispanic','n':'non-hispanic','u':'unknown'
          'self-reported':{'1':'Indigeneous American','2':'Asian',
                         '3':'Pacific Islander',
                          '4':'Black','6':'White','8':'Unknown','9':'mixed'}}
+
+DiagSymp = {'ssa_ALD4D1':'Tolerance',
+            'ssa_ALD4D2':'Withdrawal ',
+            'ssa_ALD4D3':'More than intended ',
+            'ssa_ALD4D4':'desire to cut down ',
+            'ssa_ALD4D5':'Excessive time used ',
+            'ssa_ALD4D6':'Use dominates life ',
+            'ssa_ALD4D7':'physical/psych. probs'}
+
+QtyVars = {'ssa_AL4a': 'Weeks drank \n last 6 mo',
+            'ssa_AL8d': 'Consecutive \n "heavy week"',
+            'ssa_AL6':  'Max drinks (24-hour) \n lifetime',
+            'ssa_AL6a': 'Max drinks (24-hour) \n 6 months',
+            'ssa_AL8a': 'Max daily drinks \n in "heavy week"',
+            'ssa_AL3_ws':   'Drinks wk \n before interview',
+            'ssa_AL4_ws':   'Drinks typical wk \n last 6 mo',
+            'ssa_AL4_p6ms': 'Total drinks \n last 6 mo',
+            'ssa_AL3_da':   'Av drinks/day \n in prev wk',
+            'ssa_AL4_da':   'Av drinks/day \n in last 6 mo',
+            'cor_max_dpw':  'drinks in typical wk \n (all ints)',
+            'cor_max_dpw_pwk':  'drinks in prev wk \n (all ints)',
+            'cor_max_drinks':   'Max drinks \n (24-hour): life',
+            'ssa_AL16b':    'Number of binges',
+            'ssa_AL17b':    'Number of \n blackouts',
+            'ssa_AL43A':    'Number of \n 3 mo abstinence',
+            'ssa_AL1':  'Ever drank \n (at int)',
+            'ssa_AL8':  'Ever \n "heavy drinking wk"',
+            'cor_ever_drink':   'Ever drank \n (all ints)',
+            'cor_ever_got_drunk':   'Ever been drunk',
+            'cor_regular_drinking': 'Ever drank 1/mo \n for 6 mo'}
+DrinkingVars = DiagSymp.copy()
+DrinkingVars.update(QtyVars)
 
 # Utilities
 def expand_RE_aliases(aliases,race_type):
@@ -85,6 +118,15 @@ def violin_distributions(df,group_prop,dist_prop,split_prop=None,ax=None,
               ax=ax,split=True, order=order)
     return plot
 
+def numbered_violins(df,group_prop,dist_prop,split_prop=None,ax=None,order=None):
+
+    plot = violin_distributions(df,group_prop,dist_prop,
+                        split_prop=split_prop,ax=ax,order=order)
+
+    plot = update_tick_labels(plot,'x',nums_for_labels,{'property':group_prop,
+                        'dataframe':df} )
+    return plot
+
 
 def prop_hists_by_group(df, group_prop, hist_prop, Nbins=20):
     fig = plt.figure(figsize=(10, 3))
@@ -123,9 +165,12 @@ def table_breakdown(df_in, prop, bd_prop, cnt_prop, int_prop=False, prop_count_l
 
 
 # Standard groups
-def sessions_info(df,folder,name):
+def sessions_info(df,folder,name,fup_order=None):
     if not os.path.exists(folder):
         os.makedirs(folder,exist_ok=True)
+
+    print( len(df['ID'].unique()), 'subjects, ',
+            len(df), 'sessions' )
 
     # Sessions histogram    
     ses_counts = session_counts(df)
@@ -142,9 +187,14 @@ def sessions_info(df,folder,name):
     fig.savefig( os.path.join(folder,name+'_sesHist.png') )
 
     # age distributions by followup with sex
+    if fup_order:
+        order = fup_order
+    else:
+        order_template = ['p1','p2','p3','-1.0','0','1','2','3','4','5']
+        order = [ g for g in order_template if g in df['followup'].unique() ]
     fig = plt.figure(figsize = [8,5]); ax = fig.gca()
     plot = violin_distributions(df,'followup','session_age','sex',ax=ax,
-                order = ['p1','p2','p3','-1.0','0','1','2','3','4','5'])
+                order=order )
     plot = update_tick_labels(plot,'x',nums_for_labels,{'property':'followup',
                         'dataframe':df} )
     plot.set_ylim([0,60])
