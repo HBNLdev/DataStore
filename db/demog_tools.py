@@ -333,6 +333,57 @@ class Family:
 
         return D
 
+    def indiv_subset(s, indiv_ID):
+
+        if 'ID_rels_dict_conv' not in dir(s):
+            s.define_rels()
+
+        indiv_reldict = s.ID_rels_dict_conv[indiv_ID]
+
+        indiv_rels = {indiv_ID}
+        for rel_cat, cat_set in indiv_reldict.items():
+            for rel in cat_set:
+                try:  # fast test for nan
+                    rel + '1'
+                except TypeError:
+                    continue
+                indiv_rels.add(rel)
+
+        return indiv_rels
+
+    def build_graph_gv_indiv(s, indiv_ID):
+        ''' builds the graph in graphviz (for plotting) '''
+
+        indiv_rels = s.indiv_subset(indiv_ID)
+        indiv_df = s.df.loc[indiv_rels, :]
+
+        D = gv.Digraph(format='svg')
+
+        for ID, fID, mID, sex in indiv_df[['ID', 'fID', 'mID', 'sex']].values:
+            try:
+                fill_color = dx_fillcolor[s.dx_dict[ID]]
+                word_color = dx_wordcolor[s.dx_dict[ID]]
+                style = 'filled'
+            except KeyError:
+                fill_color = '#808080'
+                word_color = '#000000'
+                style = 'filled,dashed'
+            D.node(ID, label=ID, shape=sex_shape[sex], fontcolor=word_color,
+                   fillcolor=fill_color, style=style)
+            # D.node(ID, label='', shape=sex_shape[sex], fontcolor=word_color,
+            # fillcolor=fill_color, style=style)
+            try:
+                # D.node(fID, label=fID, shape='square')
+                # D.node(mID, label=mID, shape='circle')
+                # D.node(fID, label='', shape='square')
+                # D.node(mID, label='', shape='square')
+                D.edge(fID, ID)
+                D.edge(mID, ID)
+            except AttributeError:
+                pass
+
+        return D
+
     def define_rels(s):
         ''' builds a dict of dicts of sets in which:
                 - outer keys are IDs
