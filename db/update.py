@@ -1,15 +1,49 @@
 ''' performing updates on documents '''
 
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
+from .assessment_matching import match_assessments
 from .compilation import buildframe_fromdocs
+from .knowledge.questionnaires import max_fups
 from .organization import Mdb
 
 
+# utils
+
+
+def clear_field(coll, field):
+    ''' clear collection coll of field (delete the key-value pair from all docs) '''
+
+    query = {field: {'$exists': True}}
+    updater = {'$unset': {field: ''}}
+
+    Mdb[coll].update_many(query, updater)
+
+
+# main functions
+
+
+def followups_from_sessions():
+    p123_fups = ['p1', 'p2', 'p3', ]
+    p4_fups = ['p4f' + str(f) for f in range(max_fups + 1)]
+    fups = p123_fups + p4_fups
+    for fup in fups:
+        match_assessments('followups', to_coll='sessions',
+                          fup_field='followup', fup_val=fup,
+                          match_datefield='date')
+
+
+def sessions_from_followups():
+    fups = list(map(chr, range(97, 100+max_fups)))
+    for fup in fups:
+        match_assessments('sessions', to_coll='followups',
+                          fup_field='session', fup_val=fup,
+                          match_datefield='date')
+
+
 def subjects_from_followups():
-    fup_query = {'session': {'$ne': np.nan}}
+    fup_query = {'session': {'$exists': True}}
     fup_fields = ['ID', 'session', 'followup', 'date']
     fup_proj = {f: 1 for f in fup_fields}
     fup_proj['_id'] = 0
@@ -34,138 +68,67 @@ def subjects_from_followups():
                                              date_field: row['date']}})
 
 
-def sessions_from_followups():
-    fup_query = {'session': {'$ne': np.nan}}
-    fup_fields = ['ID', 'session', 'followup', 'date']
-    fup_proj = {f: 1 for f in fup_fields}
-    fup_proj['_id'] = 0
-    fup_docs = Mdb['followups'].find(fup_query, fup_proj)
-    fupsession_df = buildframe_fromdocs(fup_docs, inds=['ID', 'session'])
-    fup_IDs = list(set(fupsession_df.index.get_level_values('ID').tolist()))
+def ssaga_from_sessions():
+    ssaga_subcolls = ['ssaga', 'cssaga', 'pssaga', 'dx_ssaga', 'dx_cssaga', 'dx_pssaga']
+    p4_fups = ['p4f' + str(f) for f in range(max_fups + 1)]
+    ssaga_fups = ['p1', 'p2', 'p3', ] + p4_fups
+    for ssaga_subcoll in ssaga_subcolls:
+        for fup in ssaga_fups:
+            subcoll_query = {'questname': ssaga_subcoll}
+            match_assessments('ssaga', to_coll='sessions',
+                              fup_field='followup', fup_val=fup,
+                              match_datefield='date',
+                              add_match_query=subcoll_query)
 
-    session_query = {'ID': {'$in': fup_IDs}}
-    session_fields = ['ID', 'session']
-    session_proj = {f: 1 for f in session_fields}
-    session_docs = Mdb['sessions'].find(session_query, session_proj)
-    session_df = buildframe_fromdocs(session_docs, inds=['ID', 'session'])
 
-    combsession_df = session_df.join(fupsession_df)
-    combsession_df.dropna(subset=['date'], inplace=True)
-
-    for ID, row in tqdm(combsession_df.iterrows()):
-        fup_field = 'followup'
-        date_field = 'followup-date'
-        Mdb['sessions'].update_one({'_id': row['_id']},
-                                   {'$set': {fup_field: row['followup'],
-                                             date_field: row['date']}})
+def questionnaires_from_sessions():
+    quest_subcolls = ['dependence', 'craving', 'sre', 'daily', 'neo', 'sensation', 'aeq', 'bis', 'achenbach']
+    p4_fups = ['p4f' + str(f) for f in range(max_fups + 1)]
+    quest_fups = ['p2', 'p3', ] + p4_fups
+    for quest_subcoll in quest_subcolls:
+        for fup in quest_fups:
+            subcoll_query = {'questname': quest_subcoll}
+            match_assessments('questionnaires', to_coll='sessions',
+                              fup_field='followup', fup_val=fup,
+                              match_datefield='date',
+                              add_match_query=subcoll_query)
 
 
 def neuropsych_from_sfups():
-    max_fups = max(Mdb['neuropsych'].distinct('np_followup'))
-    for fup in range(max_fups + 1):
+    max_npsych_fups = max(Mdb['neuropsych'].distinct('np_followup'))
+    for fup in range(max_npsych_fups + 1):
         # match sessions
-        match_fups_sessions_flex('neuropsych', assessment_col='np_followup', assessment_val=fup,
-                                 sfup_coll='sessions', date_col='testdate')
+        match_assessments('neuropsych', to_coll='sessions',
+                          fup_field='np_followup', fup_val=fup,
+                          match_datefield='date')
         # match followups
-        match_fups_sessions_flex('neuropsych', assessment_col='np_followup', assessment_val=fup,
-                                 sfup_coll='followups', date_col='testdate')
+        match_assessments('neuropsych', to_coll='followups',
+                          fup_field='np_followup', fup_val=fup,
+                          match_datefield='date')
 
 
 def internalizing_from_ssaga():
     ''' adds date and session fields to internalizing followup docs, using the ssaga collection '''
 
     int_query = {}
-    int_proj = {'_id': 1}
+    int_proj = {'ID': 1, 'questname': 1, 'followup': 1, '_id': 1}
     int_docs = Mdb['internalizing'].find(int_query, int_proj)
-    int_df5 = buildframe_fromdocs(int_docs, inds=['ID', 'questname', 'followup'])
+    int_df = buildframe_fromdocs(int_docs, inds=['ID', 'questname', 'followup'])
 
-    IDs = list(set(int_df5.index.get_level_values('ID')))
+    IDs = list(set(int_df.index.get_level_values('ID')))
 
-    ssaga_query = {'questname': {'$in': ['ssaga', 'cssaga']}, 'ID': {'$in': IDs}}
-    ssaga_proj = {'ID': 1, 'session': 1, 'followup': 1, 'questname': 1, 'date': 1, '_id': 0}
+    ssaga_query = {'questname': {'$in': ['ssaga', 'cssaga']}, 'ID': {'$in': IDs}, 'session': {'$exists': True}}
+    ssaga_proj = {'ID': 1, 'session': 1, 'date_diff_session': 1, 'followup': 1, 'questname': 1, 'date': 1, '_id': 0}
 
     ssaga_docs = Mdb['ssaga'].find(ssaga_query, ssaga_proj)
     ssaga_df = buildframe_fromdocs(ssaga_docs, inds=['ID', 'questname', 'followup'])
 
-    comb_df = int_df5.join(ssaga_df, lsuffix='_int')
+    comb_df = int_df.join(ssaga_df).dropna(subset=['date'])
+    print(int_df.shape[0] - comb_df.shape[0], 'internalizing docs could not be matched')
 
     for ID, row in tqdm(comb_df.iterrows()):
         Mdb['internalizing'].update_one({'_id': row['_id']},
                                         {'$set': {'session': row['session'],
-                                                  'date': row['date'], }, })
-
-
-def clear_field(coll, field):
-    ''' clear collection coll of field (delete the key-value pair from all docs) '''
-
-    query = {field: {'$exists': True}}
-    updater = {'$unset': {field: ''}}
-
-    Mdb[coll].update_many(query, updater)
-
-
-def match_fups_sessions_flex(match_coll, assessment_col, assessment_val,
-                             sfup_coll='sessions', date_col='date'):
-    print('matching', match_coll, 'assessments to', sfup_coll, 'for',
-          assessment_col, assessment_val, 'using', date_col)
-
-    match_collection = Mdb[match_coll]
-    match_query = {assessment_col: assessment_val}
-    match_proj = {'_id': 1, 'ID': 1, date_col: 1, }
-    match_docs = match_collection.find(match_query, match_proj)
-    match_df = buildframe_fromdocs(match_docs, inds=['ID'])
-    if match_df.empty:
-        print('no assessment docs of this kind found')
-        return
-    if date_col not in match_df.columns:
-        print('no date info available for these assessment docs')
-        return
-    match_df.rename(columns={date_col: 'match_date', '_id': 'match__id'}, inplace=True)
-    IDs = match_df.index.tolist()
-
-    sfup_proj = {'_id': 1, 'ID': 1, 'session': 1, 'date': 1, 'followup': 1}
-    sfup_docs = Mdb[sfup_coll].find({'ID': {'$in': IDs}}, sfup_proj)
-    sfup_df = buildframe_fromdocs(sfup_docs, inds=['ID'])
-    if sfup_df.empty:
-        print('no session docs of this kind found')
-        return
-    sfup_df.rename(columns={'date': 'sfup_date', '_id': 'session__id'}, inplace=True)
-
-    resolve_df = sfup_df.join(match_df)
-    resolve_df['date_diff'] = (resolve_df['sfup_date'] - resolve_df['match_date']).abs()
-    sfup_index = sfup_coll[:-1]  # i.e. session for sessions, followup for followup
-    resolve_df.set_index(sfup_index, append=True, inplace=True)
-
-    ID_sfup_map = dict()
-    ID_datediff_map = dict()
-    for ID in IDs:
-        ID_df = resolve_df.ix[resolve_df.index.get_level_values('ID') == ID, :]
-        if ID_df.empty:
-            continue
-        try:
-            best_index = ID_df['date_diff'].argmin()
-            best_sfup = best_index[1]
-            best_datediff = ID_df.loc[best_index, 'date_diff']
-        except TypeError:  # trying to subscript a nan
-            best_sfup = None
-            best_datediff = None
-        ID_sfup_map[ID] = best_sfup
-        ID_datediff_map[ID] = best_datediff
-
-    ID_sfup_series = pd.Series(ID_sfup_map, name='nearest_sfup')
-    ID_sfup_series.index.name = 'ID'
-    ID_datediff_series = pd.Series(ID_datediff_map, name='date_diff')
-    ID_datediff_series.index.name = 'ID'
-
-    match_df_forupdate = match_df.join(ID_sfup_series)
-    match_df_forupdate = match_df_forupdate.join(ID_datediff_series)
-
-    for ind, qrow in tqdm(match_df_forupdate.iterrows()):
-        try:
-            datediff_days = qrow['date_diff'].days
-        except AttributeError:
-            datediff_days = None
-        match_collection.update_one({'_id': qrow['match__id']},
-                                    {'$set': {sfup_index: qrow['nearest_sfup'],
-                                              sfup_index + '_datediff': datediff_days}
-                                     })
+                                                  'date_diff_session': row['date_diff_session'],
+                                                  'date': row['date'], }
+                                         })

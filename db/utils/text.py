@@ -1,7 +1,6 @@
 ''' working with text files '''
 
 import os
-from glob import glob
 
 
 def txt2list(path):
@@ -23,15 +22,6 @@ def list2txt(lst, filename, replace=False):
     return
 
 
-def get_toc(target_dir, toc_str):
-    ''' given dir containing toc files and string to be found in one,
-        find the path of the most recently modified one matching the string '''
-    pd_tocfiles = [f for f in glob(target_dir + '*.toc') if toc_str in f]
-    pd_tocfiles.sort(key=os.path.getmtime)
-    latest = pd_tocfiles[-1]
-    return latest
-
-
 def txt_tolines(path):
     ''' given path to text file, return its lines as list '''
     with open(path, 'r') as f:
@@ -43,3 +33,13 @@ def find_lines(lines, start, end):
     ''' find lines that match start and end exressions '''
     tmp_lines = [l for l in lines if l[:len(start)] == start and l[-len(end):] == end]
     return tmp_lines
+
+
+def multi_filter(flist, ins=[], outs=[]):
+    ''' filter list of string including ins and excluding outs'''
+
+    for i in ins:
+        flist = [f for f in flist if i in f]
+    for o in outs:
+        flist = [f for f in flist if o not in f]
+    return flist

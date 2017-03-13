@@ -56,7 +56,8 @@ def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
     if all(col in df.columns for col in check_cols):
         print('df has all requisite columns')
     else:
-        print('df missing requisite columns')
+        missing_cols = [col for col in check_cols if col not in df.columns]
+        print(missing_cols, 'are missing')
         return
 
     for col in extra_cols:
@@ -76,7 +77,7 @@ def prepare_dfs(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rena
         in_fDF = in_fDF.rename(columns=rename_dict)
 
     sDF = prepare_for_fhd(in_sDF)
-    fDF = prepare_for_fhd(in_fDF, [aff_col], do_conv_159)
+    fDF = prepare_for_fhd(in_fDF, extra_cols=[aff_col], do_conv_159=do_conv_159)
 
     return sDF, fDF
 
