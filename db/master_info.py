@@ -72,8 +72,7 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
             master['alc_dep_dx_' + pcol[0]] = jDF['alc_dep_dx']
 
     # check date modified on master file
-    master_mtime = datetime.fromtimestamp(
-        os.path.getmtime(master_path_use))
+    master_mtime = datetime.fromtimestamp(os.path.getmtime(master_path_use))
 
     return master, master_mtime
 

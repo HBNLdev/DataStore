@@ -63,7 +63,7 @@ subjects_sparser_add = \
     ['ID', 'sex', 'handedness', 'Self-reported-race', 'alc_dep_dx',
      'alc_dep_ons', 'a-age', 'b-age', 'c-age', 'd-age', 'e-age',
      'f-age', 'g-age', 'h-age', 'i-age', 'j-age', 'k-age',
-     'famID', 'mID', 'fID', 'POP', 'alc_dep_dx_f', 'alc_dep_dx_m']
+     'famID', 'mID', 'fID', 'POP', 'alc_dep_dx_f', 'alc_dep_dx_m', 'twin']
 
 session_sadd = [field for field in subjects_sparser_add if 'age' not in field]
 session_sadd.extend(['session', 'followup', 'age', 'date'])

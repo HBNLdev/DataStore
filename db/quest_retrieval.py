@@ -1,4 +1,4 @@
-''' tools for downloading questionnaire data onto the HBNL filesystem '''
+''' tools for downloading questionnaire data from the zork website onto the HBNL filesystem '''
 
 import os
 import shutil
@@ -8,8 +8,9 @@ from time import sleep
 
 import pandas as pd
 import requests
+from sas7bdat import SAS7BDAT
 
-from .quest_import import sasdir_tocsv, map_ph4, map_ph4_ssaga, map_subject, ach_url
+from .knowledge.questionnaires import base_url, map_ph4, map_ph4_ssaga, map_subject, ach_url
 
 # combine maps for future usage
 all_kmap = map_ph4.copy()
@@ -24,6 +25,17 @@ ach_url_parts = ach_url.split(os.path.sep)
 ach_currentname = os.path.splitext(ach_url_parts[-1])[0]
 ach_currentname_spaces = ach_currentname.replace('%20', ' ')
 ach_currentname_nospaces = ach_currentname.replace('%20', '')
+
+
+def sasdir_tocsv(target_dir):
+    ''' convert a directory filled with *.sas7bdat files to *.csv '''
+
+    sas_files = glob(target_dir + '*.sas7bdat')
+
+    for sf in sas_files:
+        sf_contents = SAS7BDAT(sf)
+        sf_df = sf_contents.to_data_frame()
+        sf_df.to_csv(sf + '.csv', index=False)
 
 
 def recursive_unzip(path):
@@ -73,7 +85,6 @@ def zork_download(target_base_dir, distro_subdir, user_name, password):
     ''' downloads zork zips and places them into appropriate directories'''
 
     # create full urls from dictionary
-    base_url = 'https://zork5.wustl.edu/coganew/data/available_data'
     url_lst = []
     for quest, quest_info in all_kmap.items():
         url_lst.append(base_url + quest_info['zork_url'])

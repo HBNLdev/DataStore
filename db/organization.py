@@ -3,11 +3,20 @@
 
 import datetime
 
+import pandas as pd
 import pymongo
 
-from .utils.records import remove_NaTs, unflatten_dict
+from .utils.records import unflatten_dict
 
 MongoConn = pymongo.MongoClient('/tmp/mongodb-27017.sock')
+
+
+def remove_NaTs(rec):
+    ''' given a record-style dict, convert all NaT vals to None '''
+    for k, v in rec.items():
+        typ = type(v)
+        if typ != dict and typ == pd.tslib.NaTType:
+            rec[k] = None
 
 
 class MongoBacked:
@@ -161,10 +170,10 @@ class Questionnaire(MongoBacked):
 
     collection = 'questionnaires'
 
-    def __init__(s, questname, followup, session=None, info={}):
+    def __init__(s, questname, followup_lbl, session=None, info={}):
         I = s.def_info.copy()
         I.update({'questname': questname})
-        I.update({'followup': followup})
+        I.update({'followup': followup_lbl})
         if session:
             I.update({'session': session})
         I.update(info)
