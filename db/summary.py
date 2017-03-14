@@ -13,10 +13,8 @@ from collections import Counter
 count_field = 'uID'
 
 RaceEthnicityDefs = {'hispanic':{'h':'hispanic','n':'non-hispanic','u':'unknown'},
-          'core':{'2':'Asian','4':'Black','6':'White','8':'unknown','9':'other'},
-         'self-reported':{'1':'Indigeneous American','2':'Asian',
-                        '3':'Pacific Islander',
-                         '4':'Black','6':'White','8':'Unknown','9':'mixed'}}
+          'core':{'1':'Indigeneous American','2':'Asian','3':'Pacific Islander',
+                    '4':'Black','6':'White','8':'unknown','9':'mixed/other'} }
 
 DiagSymp = {'ssa_ALD4D1':'Tolerance',
             'ssa_ALD4D2':'Withdrawal ',
@@ -159,10 +157,19 @@ def table_breakdown(df_in, prop, bd_prop, cnt_prop, int_prop=False, prop_count_l
     if int_prop:
         df[prop] = df[prop].fillna(-1).astype(int)
     cnt_df = pd.DataFrame(df.groupby([prop, bd_prop]).count()[cnt_prop])
-    cnt_df.columns = [prop_count_label + ' counts']
+    level0 = prop_count_label + ' counts'
+    cnt_df.columns = [level0]
+    cnt_dfU = cnt_df.unstack().fillna(0).astype(int)
+    cnt_dfU[level0,'total'] = cnt_dfU[level0].sum(axis=1)
 
-    return cnt_df.unstack().fillna(0).astype(int)
+    return cnt_dfU
 
+def add_REdefs(df,coreRaceCol='core-race'):
+    df.reset_index(inplace=True)
+    df['definition'] = \
+        df[coreRaceCol].apply(lambda x: RaceEthnicityDefs['hispanic'][x[0]]+\
+                                    ' '+RaceEthnicityDefs['core'][x[1]])
+    df.set_index(coreRaceCol,inplace=True)
 
 # Standard groups
 def sessions_info(df,folder,name,fup_order=None):
@@ -202,6 +209,21 @@ def sessions_info(df,folder,name,fup_order=None):
 
 
     # race + ethnicity table_breakdown
+    re_ses = table_breakdown(df,'self-reported',
+                'sex','uID',prop_count_label='session')
+    re_sub = table_breakdown(df.groupby('ID').head(1),'self-reported',
+                'sex','uID',prop_count_label='subject')
+    re_comb = re_sub.join(re_ses)
+    add_REdefs(re_comb,'self-reported')
+    # fig = plt.figure(figsize=[8,12])
+    # ax = fig.gca()
+    # ax.xaxis.set_visible(False)
+    # ax.yaxis.set_visible(False)
+    # table(ax,re_comb,loc='center')
+    with open(os.path.join(folder,name+'_RaceEthnicity_breakdown.html'),'w') as wf:
+        re_comb.to_html(wf)
+
+
     # fig = plt.figure(figsize=[8,12])
     # ax = fig.gca()
     # sg = swarm_groups(df,'self-reported','session_age',ax=ax)
