@@ -6,7 +6,7 @@ from collections import OrderedDict
 import pandas as pd
 from sas7bdat import SAS7BDAT
 
-from .quest_import import map_ph4, map_ph4_ssaga
+from .knowledge.questionnaires import map_ph4, map_ph4_ssaga
 
 map_subject = {'core': {'file_pfixes': []}}
 

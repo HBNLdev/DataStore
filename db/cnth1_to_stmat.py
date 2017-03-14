@@ -99,7 +99,7 @@ def run_calls_cwds(call_edir_lst, proc_lim=10):
 def get_stmat_calls(docs, file_lim=None):
     ''' main function. given a cursor of mongo docs and a file limit, create a list of 2-tuples that are
         (command line call string, current working directory in which to execute it).
-        this list can be passed to run_calls_cwds below '''
+        this list can be passed to run_calls_cwds '''
 
     call_edir_lst = []
 

@@ -104,6 +104,9 @@ def site_fromIDstr(IDstr):
 
 
 def parse_filename(filename, include_full_ID=False):
+    ''' given an HBNL-style filename -- e.g. 'vp3_6_e1_10162024_avg.mt' or 'vp2e0157027.mt',
+        extract important information from it '''
+
     if os.path.sep in filename:
         filename = os.path.split(filename)[1]
 
@@ -185,6 +188,8 @@ def parse_filename(filename, include_full_ID=False):
 
 
 def parse_filename_tester():
+    ''' test function for parse_filename '''
+
     cases = [('vp3_6_e1_10162024_avg.mt', 'neuroscan', 'vp3', 'uconn', 162, 24, 'e', 1),
              ('vp2e0157027.mt', 'masscomp', 'vp3', 'washu', 157, 27, 'a', 1),
              ('aod_5_a1_c0000857_avg.h1', 'neuroscan',
@@ -203,6 +208,8 @@ def parse_filename_tester():
 
 
 def parse_mt_name(file_or_path):
+    ''' parse the filename of a *.mt file -- a text file containing results of ERP peak-picking '''
+
     if os.path.sep in file_or_path:
         name = os.path.split(file_or_path)[1]
     else:
@@ -216,6 +223,9 @@ def parse_mt_name(file_or_path):
 
 
 def parse_STinv_path(path):
+    ''' parse the path of a *.st.mat file -- a MATLAB-produced binary data file containing the inverted result
+        of trial-averaged power values created using the Stockwell Transform '''
+
     path, filename = os.path.split(path)
 
     info = {}
@@ -235,6 +245,8 @@ def parse_STinv_path(path):
 
 
 def parse_rd_path(filepath):
+    ''' parse the path of a *.rd file --  a legacy raw EEG data format from the masscomp system '''
+
     path_parts = filepath.split(os.path.sep)
     full_filename = path_parts[-1]
     filename, ext = os.path.splitext(full_filename)
@@ -288,6 +300,8 @@ def parse_rd_path(filepath):
 
 
 def parse_cnt_path(filepath):
+    ''' parse the path of a *.cnt file -- containing raw continuous EEG data recorded with the Neuroscan system '''
+
     full_filename = os.path.split(filepath)[1]
     filename, ext = os.path.splitext(full_filename)
 
@@ -352,6 +366,9 @@ def parse_cnt_path(filepath):
 
 
 def parse_cnth1_path(filepath):
+    ''' parse the path of a *.cnt.h1 file -- containing resampled, raw, continuous EEG data as well as lots of useful
+        metadata regarding the recording '''
+
     full_dir, full_filename = os.path.split(filepath)
 
     dir_pieces = full_dir.split(os.path.sep)
@@ -411,6 +428,9 @@ def parse_cnth1_path(filepath):
 
 
 def parse_avgh1_path(filepath):
+    ''' parse the path of a *.avg.h1 file -- containing ERP data, which are trial-averaged amplitudes after
+        filtering, trial rejection, and baselining procedures '''
+
     full_dir, full_filename = os.path.split(filepath)
 
     dir_pieces = full_dir.split(os.path.sep)

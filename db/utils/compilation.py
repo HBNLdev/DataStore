@@ -14,6 +14,9 @@ from .filename_parsing import site_hash
 
 
 def readcsv_uID(csv_path, inds=['ID', 'session']):
+    ''' read a CSV in as a pandas dataframe, convert the ID column to string, and
+        (defaultly) set ID and sessions as indices '''
+
     df = pd.read_csv(csv_path)
     df['ID'] = df['ID'].apply(int).apply(str)
     df.set_index(inds, inplace=True)
@@ -142,7 +145,10 @@ def reorder_columns(df, beginning_order):
 
     cols = df.columns.tolist()
     for col in reversed(beginning_order):
-        cols.insert(0, cols.pop(cols.index(col)))
+        try:
+            cols.insert(0, cols.pop(cols.index(col)))
+        except ValueError:
+            print(col, 'was missing, will not be re-ordered')
     return df[cols]
 
 
@@ -392,12 +398,15 @@ def drop_frivcols(df):
 
 
 def first_session(df):
-    df_latest = df.copy()
-    df_latest['session'] = df_latest.index.get_level_values('session')
-    g = df_latest.groupby(level=df_latest.index.names[0])
-    df_latest = g.first()
-    df_latest.set_index('session', append=True, inplace=True)
-    return df_latest
+    ''' given a datframe with an (ID, session) index, return a version in which
+        only the first sessions is kept for each '''
+
+    out_df = df.copy()
+    out_df['session'] = out_df.index.get_level_values('session')
+    g = out_df.groupby(level=out_df.index.names[0])
+    out_df = g.first()
+    out_df.set_index('session', append=True, inplace=True)
+    return out_df
 
 
 def latest_session(in_df):

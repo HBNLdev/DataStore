@@ -7,15 +7,34 @@ import numpy as np
 
 def calc_currentage(dob):
     ''' given a DOB, calculate current age '''
+
     return (datetime.now() - dob).days / 365.25
 
 
 def convert_date(datestr, dateform='%m/%d/%Y'):
     ''' convert a date string with a given format '''
+
     try:
         return datetime.strptime(datestr, dateform)
     except:
         return np.nan
+
+
+def convert_date_fallback(dstr, dateform):
+    ''' parse date, falling back on a default date format if it fails '''
+
+    dstr = str(dstr)
+
+    if dstr != 'nan':
+        try:
+            return datetime.strptime(dstr, dateform)
+        except ValueError:
+            try:
+                return datetime.strptime(dstr, '%Y-%m-%d')
+            except ValueError:
+                return None
+    else:
+        return None
 
 
 def calc_date_w_Qs(dstr):
@@ -41,53 +60,6 @@ def calc_date_w_Qs(dstr):
         return datetime.strptime(dstr, '%m/%d/%Y')
     except:
         print('problem with date: ' + dstr)
-        return np.nan
-
-
-def parse_date(dstr, dateform):
-    ''' parse date column '''
-
-    dstr = str(dstr)
-
-    if dstr != 'nan':
-        return datetime.strptime(dstr, dateform)
-    else:
-        return None
-
-
-def parse_date2_apply(dstr, dateform):
-    dstr = str(dstr)
-
-    if dstr != 'nan':
-        try:
-            return datetime.strptime(dstr, dateform)
-        except ValueError:
-            return None
-    else:
-        return None
-
-
-def parse_date_apply_pd(dstr, dateform):
-    dstr = str(dstr)
-
-    if dstr != 'nan':
-        try:
-            return datetime.strptime(dstr, dateform)
-        except ValueError:
-            try:
-                return datetime.strptime(dstr, '%Y-%m-%d')
-            except ValueError:
-                return None
-    else:
-        return None
-
-
-def my_strptime(v, dateform='%Y-%m-%d'):
-    ''' applymap function to convert all dataframe elements based on a date format '''
-
-    try:
-        return datetime.strptime(v, dateform)
-    except:
         return np.nan
 
 

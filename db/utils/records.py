@@ -37,15 +37,9 @@ def unflatten_dict(D, delimiter='_', do_skip=True, skipkeys=set()):
     return resultDict
 
 
-def remove_NaTs(rec):
-    ''' given a record-style dict, convert all NaT vals to None '''
-    for k, v in rec.items():
-        typ = type(v)
-        if typ != dict and typ == pd.tslib.NaTType:
-            rec[k] = None
-
-
 def show_dict_hierarchy(d, init_space='', total=0):
+    ''' given a potentially nested dictionary, print its contents in a formatted fashion '''
+
     for k, v in d.items():
         space = init_space
         print(space + k)

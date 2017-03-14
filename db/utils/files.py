@@ -1,9 +1,13 @@
 ''' finding files, walking directories, etc. '''
 
 import os
+from glob import glob
 
 
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):
+    ''' given a starting directory, and a glob-style filter pattern,
+        recursively find all files that match the filter pattern '''
+
     file_list = []
     date_list = []
 
@@ -45,6 +49,7 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
 
 def verify_files(files):
     ''' given a list of paths, return the ones that exist '''
+
     existent_files = []
     for f in files:
         if os.path.isfile(f):
@@ -56,6 +61,7 @@ def verify_files(files):
 
 def get_dates(files):
     ''' given a list of paths, return a matching list of modified times '''
+
     return [os.path.getmtime(f) for f in files]
 
 
@@ -64,3 +70,12 @@ def get_dir(fp, depth=3):
         e.g. get_dir('/usr/local/bin/file.py', 2) returns '/usr/local/' '''
 
     return '/'.join(fp.split('/')[:depth + 1])
+
+
+def get_toc(target_dir, toc_str):
+    ''' given dir containing toc files and string to be found in one,
+        find the path of the most recently modified one matching the string '''
+    pd_tocfiles = [f for f in glob(target_dir + '*.toc') if toc_str in f]
+    pd_tocfiles.sort(key=os.path.getmtime)
+    latest = pd_tocfiles[-1]
+    return latest

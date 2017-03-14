@@ -6,6 +6,7 @@ from statsmodels.robust.scale import huber
 
 def convert_scale(scale_array, scale_val):
     ''' given array, find index nearest to given value '''
+
     return np.argmin(np.fabs(scale_array - scale_val))
 
 
@@ -31,6 +32,7 @@ def robust_datemean(row):
 
 def reject_outliers(data, m=2.5):
     ''' return version of data only containing points inside arbitrary scaled absolute distance from the median '''
+
     d = np.abs(data - np.median(data))
     mdev = np.median(d)
     s = d / mdev if mdev else 0.
@@ -38,6 +40,8 @@ def reject_outliers(data, m=2.5):
 
 
 def largest_prime_factor(n):
+    ''' return the largest prime factor of n '''
+
     i = 2
     while i * i <= n:
         if n % i:

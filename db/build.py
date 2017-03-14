@@ -12,19 +12,30 @@ from tqdm import tqdm
 from .file_handling import (MT_File, CNTH1_File, AVGH1_File, RestingDAT, Neuropsych_XML,
                             TOLT_Summary_File, CBST_Summary_File, ERO_CSV)
 from .followups import preparefupdfs_forbuild
+from .knowledge.questionnaires import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
+                                       zork_p123_path, zork_p4_path,
+                                       internalizing_dir, internalizing_file, externalizing_dir, externalizing_file,
+                                       allrels_file, fham_file, )
 from .master_info import load_master, master_path
-from .organization import (Subject, SourceInfo, Session, FollowUp, ERPPeak, Neuropsych, Questionnaire, Core,
+from .organization import (Subject, SourceInfo, Session, FollowUp, ERPPeak, Neuropsych, Core,
                            Internalizing, Externalizing, FHAM, AllRels, RawEEGData, EEGData, ERPData, RestingPower,
-                           STransformInverseMats, EEGBehavior, SSAGA, Mdb, EROcsv, EROcsvresults)
-from .quest_import import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
-                           import_questfolder_ph4, import_questfolder_ssaga_ph4, import_questfolder_ph123,
-                           import_questfolder_ssaga_ph123,
-                           match_fups2sessions_fast_multi, match_fups_sessions_generic)
+                           STransformInverseMats, EEGBehavior, Mdb, EROcsv, EROcsvresults)
+from .quest_import import (import_questfolder_ph4, import_questfolder_ssaga_ph4, import_questfolder_ph123,
+                           import_questfolder_ssaga_ph123, )
 from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup, ID_nan_strintfloat_COGA,
                                 build_parentID, df_fromcsv)
 from .utils.filename_parsing import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
-from .utils.files import identify_files, verify_files
-from .utils.text import get_toc, txt_tolines, find_lines
+from .utils.files import identify_files, verify_files, get_toc
+from .utils.text import txt_tolines, find_lines
+
+# special file / directory definitions
+
+restingpower_dir = '/processed_data/eeg/complete_result_09_16.d/results/'
+restingpower_ns_file = 'ns_all_tests.dat'
+restingpower_mc_fileA = 'mc_1st_test.dat'
+restingpower_mc_fileB = 'mc_2nd_test.dat'
+
+stinv_dir_base = '/processed_data/mat-files-v'
 
 buildAssociations = {
     'Core': 'core',
@@ -36,11 +47,12 @@ buildAssociations = {
     'ERPPeak': 'erp_peaks',
     'Externalizing': 'externalizing',
     'FHAM': 'fham',
+    'FollowUp': 'followups',
     'Internalizing': 'internalizing',
-    'Neuropsych': ['multiple', 'neuropsych_TOLT', 'neuropsych_CBST'],
-    'Questionnaire': 'questionnaires_ph4',  # questionnaires_ph123
+    'Neuropsych': 'neuropsych',
+    'Questionnaire': 'questionnaires',
     'RawEEGData': 'raw_eegdata',
-    'SSAGA': 'questionnaires_ssaga',
+    'SSAGA': 'ssaga',
     'STransformInverseMats': 'mat_st_inv_walk',
     'Session': 'sessions',
     'Subject': 'subjects'
@@ -65,9 +77,6 @@ def builderEngine(which='all'):
     return funcs
 
 
-zork_path = '/processed_data/zork/zork-phase4-72/'
-
-
 # build functions
 #   each builds a collection, usually named after the function
 
@@ -85,7 +94,8 @@ def subjects():
 def sessions():
     # fast
     master, master_mtime = load_master()
-    for char in 'abcdefghijk':
+    run_letters = [col[0] for col in master.columns if col[-4:] == '-run']
+    for char in run_letters:
         sessionDF = master[master[char + '-run'].notnull()]
         if sessionDF.empty:
             continue
@@ -149,38 +159,23 @@ def erp_peaks():
         erpO.store()
 
 
-def neuropsych_xmls():
+def neuropsych():
     # 10 minutes
     xml_files, datemods = identify_files('/raw_data/neuropsych/', '*.xml')
     for fp in tqdm(xml_files):
         xmlO = Neuropsych_XML(fp)
         xmlO.assure_quality()
-        # xmlO.data['date'] = xmlO.data['testdate']
+        xmlO.data['date'] = xmlO.data['testdate']
         nsO = Neuropsych(xmlO.data)
         nsO.store()
 
 
 def questionnaires_ph123():
     kmap = map_ph123
-    path = '/processed_data/zork/zork-phase123/session/'
-    fups = ['p2', 'p3']
+    path = zork_p123_path + 'session/'
     for qname in kmap.keys():
         print(qname)
         import_questfolder_ph123(qname, kmap, path)
-        for fup in fups:
-            match_fups_sessions_generic(Questionnaire.collection, fup, qname)
-
-
-def questionnaires_ph123_ssaga():
-    kmap = map_ph123_ssaga
-    path = '/processed_data/zork/zork-phase123/session/'
-    fups = ['p1', 'p2', 'p3']
-    for qname in kmap.keys():
-        print(qname)
-        import_questfolder_ssaga_ph123(qname, kmap, path)
-        for fup in fups:
-            match_fups_sessions_generic(SSAGA.collection, fup, qname)
-            match_fups_sessions_generic(SSAGA.collection, fup, 'dx_' + qname)
 
 
 def questionnaires_ph4():
@@ -188,45 +183,42 @@ def questionnaires_ph4():
     # phase 4 non-SSAGA
     kmap = map_ph4.copy()
     del kmap['cal']
-    path = zork_path + 'session/'
-    fups = list(range(7))
+    path = zork_p4_path + 'session/'
     for qname in kmap.keys():
         print(qname)
         import_questfolder_ph4(qname, kmap, path)
-        for fup in fups:
-            match_fups_sessions_generic(Questionnaire.collection, fup, qname)
 
 
-def questionnaires_ph4_ssaga():
-    ''' import all session-based questionnaire info related to SSAGA '''
+def questionnaires():
+    questionnaires_ph123()
+    questionnaires_ph4()
+
+
+def ssaga_ph123():
+    kmap = map_ph123_ssaga
+    path = zork_p123_path + 'session/'
+    for qname in kmap.keys():
+        print(qname)
+        import_questfolder_ssaga_ph123(qname, kmap, path)
+
+
+def ssaga_ph4():
     # SSAGA
     kmap = map_ph4_ssaga.copy()
-    path = zork_path + 'session/'
-    fups = list(range(7))
+    path = zork_p4_path + 'session/'
     for qname in kmap.keys():
         print(qname)
         import_questfolder_ssaga_ph4(qname, kmap, path)
-        for fup in fups:
-            match_fups_sessions_generic(SSAGA.collection, fup, qname)
-            match_fups_sessions_generic(SSAGA.collection, fup, 'dx_' + qname)
 
 
-def ssaga_all():
-    ph123_path = '/processed_data/zork/zork-phase123/session/'
-    ph4_path = zork_path + 'session/'
-    match_followups = ['p2', 'p3', 0, 1, 2, 3, 4, 5, 6]
-    for qname in map_ph123_ssaga.keys():
-        print(qname)
-        import_questfolder_ssaga_ph123(qname, map_ph123_ssaga, ph123_path)
-    for qname in map_ph4_ssaga.keys():
-        print(qname)
-        import_questfolder_ssaga_ph4(qname, map_ph4_ssaga, ph4_path)
-    match_fups2sessions_fast_multi(SSAGA.collection, followups=match_followups)
+def ssaga():
+    ssaga_ph123()
+    ssaga_ph4()
 
 
 def core():
     # fast
-    folder = zork_path + 'subject/core/'
+    folder = zork_p4_path + 'subject/core/'
     csv_files = glob(folder + '*.csv')
     if len(csv_files) != 1:
         print(len(csv_files), 'csvs found, aborting')
@@ -256,10 +248,11 @@ def internalizing():
         return pd.MultiIndex.from_tuples(col_tups, names=('', 'followup'))
 
     def convert_intfup(fup):
-        if fup[:2] == 's2':
-            fup_rn = 'p2'
+
+        if int(fup[1]) < 4:
+            fup_rn = 'p' + fup[1]
         else:
-            fup_rn = int(fup[-1])
+            fup_rn = 'p' + fup[1] + fup[-2:]
 
         return fup_rn
 
@@ -269,9 +262,7 @@ def internalizing():
         elif v[0] == 's':
             return 'ssaga'
 
-    folder = '/processed_data/zork/zork-phase4-69/subject/internalizing/'
-    file = 'INT_Scale_All-Total-Scores_n11281.csv'
-    int_path = folder + file
+    int_path = internalizing_dir + internalizing_file
 
     int_df = pd.read_csv(int_path, na_values=' ')
     int_df['ID'] = int_df['ID'].apply(int).apply(str)
@@ -306,9 +297,7 @@ def internalizing():
 
 def externalizing():
     # fast
-    folder = '/processed_data/zork/zork-phase4-69/subject/vcuext/'
-    file = 'vcu_ext_all_121112.sas7bdat.csv'
-    path = folder + file
+    path = externalizing_dir + externalizing_file
     datemod = datetime.fromtimestamp(os.path.getmtime(path))
     df = df_fromcsv(path, 'IND_ID')
     for drec in tqdm(df.to_dict(orient='records')):
@@ -319,9 +308,8 @@ def externalizing():
 
 
 def allrels():
-    folder = zork_path + 'subject/rels/'
-    file = 'allrels_30nov2016.sas7bdat.csv'
-    path = folder + file
+    folder = zork_p4_path + 'subject/rels/'
+    path = folder + allrels_file
     datemod = datetime.fromtimestamp(os.path.getmtime(path))
 
     import_convcols = ['IND_ID', 'FAM_ID', 'F_ID', 'M_ID']
@@ -342,9 +330,8 @@ def allrels():
 
 def fham():
     # fast
-    folder = zork_path + 'subject/fham/'
-    file = 'bigfham4.sas7bdat.csv'
-    path = folder + file
+    folder = zork_p4_path + 'subject/fham/'
+    path = folder + fham_file
     datemod = datetime.fromtimestamp(os.path.getmtime(path))
     df = df_fromcsv(path, 'IND_ID')
     for drec in tqdm(df.to_dict(orient='records')):
@@ -426,20 +413,16 @@ def erp_data():
 
 def resting_power():
     # fast
-    start_dir = '/processed_data/eeg/complete_result_09_16.d/results/'
-    ns_file = 'ns_all_tests.dat'
-    mc_fileA = 'mc_1st_test.dat'
-    mc_fileB = 'mc_2nd_test.dat'
 
-    nsO = RestingDAT(start_dir + ns_file)
+    nsO = RestingDAT(restingpower_dir + restingpower_ns_file)
     nsO.ns_to_dataframe()
     rec_lst = nsO.file_df.to_dict(orient='records')
 
-    mcO_A = RestingDAT(start_dir + mc_fileA)
+    mcO_A = RestingDAT(restingpower_dir + restingpower_mc_fileA)
     mcO_A.mc_to_dataframe(session='a')
     rec_lst.extend(mcO_A.file_df.to_dict(orient='records'))
 
-    mcO_B = RestingDAT(start_dir + mc_fileB)
+    mcO_B = RestingDAT(restingpower_dir + restingpower_mc_fileB)
     mcO_B.mc_to_dataframe(session='b')
     rec_lst.extend(mcO_B.file_df.to_dict(orient='records'))
 
@@ -453,13 +436,12 @@ def resting_power():
 def mat_st_inv_walk(check_update=False, mat_files=None):
     # can take a while depending on network traffic
     if mat_files is None:
-        start_base = '/processed_data/mat-files-v'
         start_fins = ['40', '60']
         glob_expr = '*st.mat'
         mat_files = []
         dates = []
         for fin in start_fins:
-            f_mats, f_dates = identify_files(start_base + fin, glob_expr)
+            f_mats, f_dates = identify_files(stinv_dir_base + fin, glob_expr)
             mat_files.extend(f_mats)
             dates.extend(f_dates)
     for f in tqdm(mat_files):
@@ -483,6 +465,7 @@ def mat_st_inv_walk(check_update=False, mat_files=None):
 def eeg_behavior(files_dms=None):
     ''' unlike others, this build does an "update".
         if used, files_dms should be a list of file/datemodifed tuples '''
+
     # ~8 hours total to parse all *.avg.h1's for behavior
     # files_dms = pickle.load( open(
     #    '/active_projects/mike/pickles/avgh1s_dates.p', 'rb')  )

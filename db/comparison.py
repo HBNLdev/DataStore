@@ -93,7 +93,8 @@ def contents_eq(df1_in, df2_in, join_how='inner', lsuffix='_larry', rsuffix='_ri
     nonmatch_cols = [col for col in dfj.columns if
                      col[-lsl:] != lsuffix and col[-rsl:] != rsuffix]
     df1_cols = [col for col in dfj.columns if col[-lsl:] == lsuffix]
-    df2_cols = [col for col in dfj.columns if col[-rsl:] == rsuffix]
+    # df2_cols = [col for col in dfj.columns if col[-rsl:] == rsuffix]
+    df2_cols = [col[:-lsl] + rsuffix for col in df1_cols]
 
     df1, df2 = dfj[df1_cols + nonmatch_cols], dfj[df2_cols + nonmatch_cols]
 

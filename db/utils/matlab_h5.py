@@ -5,6 +5,8 @@ import numpy as np
 
 
 def show_file_hierarchy(h5_path):
+    ''' given a path to an HDF-compatible file, show the hierarchy of its contents '''
+
     def disp_node(name, node):
         print(name)
         indent = name.count('/') * 5 * ' '
