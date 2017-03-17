@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 
 from .compilation import prepare_joindata, get_colldocs, prepare_indices
-from .utils.records import flatten_dict
 from .knowledge.questionnaires import max_fups
+from .utils.records import flatten_dict
 
 map_allothers = {'neuropsych': {'date_lbl': 'testdate'},
                  'EEGbehavior': {'date_lbl': 'date'}}
@@ -32,7 +32,7 @@ def handle_dupes(join_df_sdate, new_datecol, fup_col, session_datecol):
     # find duplicate indices
     dupe_inds = join_df_sdate[join_df_sdate.index.duplicated()]. \
         index.values
-    print('{} duplicates found'.format(len(dupe_inds)))
+    print(len(dupe_inds), 'uID duplicates found for requested IDs and assessments, keeping only nearest matching')
 
     # generate date_diff dataframe
     join_df_sdate['date_diff'] = join_df_sdate[new_datecol] - \
@@ -63,8 +63,7 @@ def handle_dupes(join_df_sdate, new_datecol, fup_col, session_datecol):
 
 
 def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
-                            diff_thresh=True, days_thresh=1330,
-                            min_age=-np.inf, max_age=np.inf):
+                            days_thresh=1330, min_age=-np.inf, max_age=np.inf):
     ''' given: 1) a compilation df that has had new info columns joined to it,
         2) the date column name from that new info,
         3) the follow-up column from that new info, and
@@ -77,13 +76,12 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
     # maps ID-session tuples that lack follow-up information to the
     # ID-session tuple that is nearest in time
     uID_tup_dict = dict()
-    iter_df = comp_dfj.copy()
 
-    ID_index = iter_df.index.get_level_values('ID')
+    ID_index = comp_dfj.index.get_level_values('ID')
     ID_set = set(ID_index)
     needed_cols = [new_datecol, fup_col, 'date', 'age']
     for ID in ID_set:
-        ID_df = iter_df.ix[ID_index == ID, needed_cols]
+        ID_df = comp_dfj.ix[ID_index == ID, needed_cols]
         if ID_df.shape[0] == 1:
             continue
         fups = ID_df.ix[ID_df[fup_col].notnull(), :]
@@ -100,36 +98,44 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
                 uID_tup_dict[id_i] = best_ind
 
     new_index = []
-    for uID in iter_df.index:
+    for uID in comp_dfj.index:
         try:
             new_index.append(uID_tup_dict[uID])
         except KeyError:
             new_index.append(uID)
     new_index = pd.MultiIndex.from_tuples(new_index, names=['ID', 'session'])
-    new_df_joincols = iter_df.loc[new_index, joined_cols]
-    new_df_nonjoincols = iter_df.drop(joined_cols, axis=1)
+    new_df_joincols = comp_dfj.loc[new_index, joined_cols]
+    new_df_nonjoincols = comp_dfj.drop(joined_cols, axis=1)
     new_df_nonjoincols.index = new_index
 
     new_df = pd.concat([new_df_nonjoincols, new_df_joincols], axis=1)
-    new_df.index = iter_df.index
+    new_df.index = comp_dfj.index
 
-    new_filldiff_col = fup_col[:3] + '_date_diff_fill'
-    new_df[new_filldiff_col] = (new_df[new_datecol] - new_df['date']).abs()
+    fill_uIDs = list(uID_tup_dict.keys())
+    print(len(fill_uIDs), 'uIDs were filled')
+
+    wasfilled_col = fup_col[:3] + '_wasfilled'
+    filldiff_col = fup_col[:3] + '_date_diff_fill'
+    new_df[wasfilled_col] = np.nan
+
+    new_df.loc[fill_uIDs, wasfilled_col] = 'x'
+    new_df[filldiff_col] = np.nan
+    new_df.loc[fill_uIDs, filldiff_col] = (new_df.loc[fill_uIDs, new_datecol] - new_df.loc[fill_uIDs, 'date']).abs()
 
     return new_df
 
 
 # main function (for now)
 
-default_fups = ['p2', 'p3'] + ['p4f'+str(f) for f in max_fups]
+default_fups = ['p2', 'p3'] + ['p4f' + str(f) for f in range(max_fups+1)]
 default_proj = {'_id': 0, 'ID': 1, 'session': 1, 'followup': 1, 'date': 1,
-                        'date_diff_session': 1, 'date_diff_followup': 1}
+                'date_diff_session': 1, 'date_diff_followup': 1}
 
 
 def careful_join(comp_df, collection, subcoll=None,
                  add_query={}, add_proj={}, followups=None,
                  left_datecolumn='date', join_thresh=600,
-                 do_fill=False, days_thresh=1330, min_age=-np.inf, max_age=np.inf):
+                 do_fill=False, fill_thresh=1330, min_age=-np.inf, max_age=np.inf):
     ''' given a compilation dataframe indexed by ID and some assessment column (e.g. session or followup)
         and with a session date column named by left_datecolumn,
         join a collection / subcollection while handling:
@@ -174,13 +180,8 @@ def careful_join(comp_df, collection, subcoll=None,
     n_docs = join_df.shape[0]
     print(n_docs, 'docs found for requested IDs and followups')
 
-    # drop rows with missing session letters
-    # join_df_nomaroonedsessions = join_df.reset_index().dropna(subset=['session'])
-    # n_docs_nomaroonedsessions = join_df_nomaroonedsessions.shape[0]
-    # print(n_docs - n_docs_nomaroonedsessions, 'docs dropped for lacking a session association')
-
     # drop ID+followup duplicates
-    join_df_noIDfupdupes = join_df.reset_index().drop_duplicates(['ID', fup_col])
+    join_df_noIDfupdupes = join_df.reset_index().drop_duplicates(['ID', fup_col]).set_index(['ID', 'session'])
     n_docs_noIDfupdupes = join_df_noIDfupdupes.shape[0]
     print(n_docs - n_docs_noIDfupdupes, 'docs dropped for being erroneous ID+fup dupes')
 
@@ -202,11 +203,11 @@ def careful_join(comp_df, collection, subcoll=None,
 
     # fill sessions in a "nearest in time" manner within IDs
     # assess info coverage before and after
-    joined_cols = [col for col in comp_dfj.columns if subcoll_safe_prefix + '_' in col]
+    joined_cols = [col for col in comp_dfj.columns if col[:4] == subcoll_safe_prefix + '_']
     if do_fill:
         prefill_cvg = comp_dfj[joined_cols].count() / comp_dfj.shape[0]
         comp_dfj_out = time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
-                                               days_thresh=days_thresh, min_age=min_age, max_age=max_age)
+                                               days_thresh=fill_thresh, min_age=min_age, max_age=max_age)
         postfill_cvg = comp_dfj_out[joined_cols].count() / comp_dfj_out.shape[0]
         fill_factor = postfill_cvg / prefill_cvg
         print('coverage after filling is up to {:.1f} times higher'.format(
@@ -222,16 +223,16 @@ def careful_join(comp_df, collection, subcoll=None,
     return comp_dfj_out
 
 
-def careful_join_ssaga(comp_df, raw=False, do_fill=False, days_thresh=1330,
-                       min_age=-np.inf, max_age=np.inf,
-                       session_datecol_in='date',
-                       add_query={}, add_proj={}, followups=None):
+def careful_join_ssaga(comp_df, raw=False,
+                       add_query={}, add_proj={}, followups=None,
+                       left_datecolumn='date', join_thresh=600,
+                       do_fill=False, fill_thresh=1330, min_age=-np.inf, max_age=np.inf):
     ''' given a compilation dataframe indexed by ID/session (comp_df) with an age column,
         and with a session date column named by session_datecol_in,
         carefully join the SSAGA and CSSAGA info '''
 
     coll = 'ssaga'
-    prefix = 'ssa_'
+    subcoll_safe_prefix = 'ssa'
 
     if raw:
         ssaga_subcoll = 'ssaga'
@@ -241,7 +242,7 @@ def careful_join_ssaga(comp_df, raw=False, do_fill=False, days_thresh=1330,
         cssaga_subcoll = 'dx_cssaga'
 
     if not followups:
-        fups = ['p2', 'p3', 0, 1, 2, 3, 4, 5, 6]
+        fups = ['p1'] + default_fups
     else:
         fups = followups
 
@@ -256,13 +257,13 @@ def careful_join_ssaga(comp_df, raw=False, do_fill=False, days_thresh=1330,
     left_join_inds = ['ID', 'session']
 
     query = {id_field: {'$in': list(comp_df.index.get_level_values(id_field))},
-             'followup': {'$in': fups}}
+             'followup': {'$in': fups},
+             'date_diff_session': {'$lt': join_thresh, '$gt': -join_thresh, }}
     if add_query:
         query.update(add_query)
 
     proj = {}
     if add_proj:
-        default_proj = {'_id': 0, 'ID': 1, 'session': 1, 'followup': 1, 'date': 1, 'date_diff_associate': 1}
         proj.update(default_proj)
         proj.update(add_proj)
 
@@ -278,57 +279,50 @@ def careful_join_ssaga(comp_df, raw=False, do_fill=False, days_thresh=1330,
         recs = docs
 
     join_df = pd.DataFrame.from_records(recs)
-    join_df['ID'] = join_df[id_field]
 
     prepare_indices(join_df, left_join_inds)
-    # print('flag1')
-    # index_diagnostics(join_df)
-    join_df.columns = [prefix + c for c in join_df.columns]
+
+    join_df.columns = [subcoll_safe_prefix + '_' + c for c in join_df.columns]
     join_df.dropna(axis=1, how='all', inplace=True)  # drop empty columns
     n_docs = join_df.shape[0]
 
-    # drop rows with missing session letters
-    join_df_nomaroonedsessions = join_df.reset_index().dropna(subset=['session'])
-    n_docs_nomaroonedsessions = join_df_nomaroonedsessions.shape[0]
-    print(n_docs - n_docs_nomaroonedsessions, 'docs dropped for lacking a session association')
+    print(n_docs, 'docs found for requested IDs and followups')
 
     # drop ID+followup duplicates
-    join_df_noIDfupdupes = join_df_nomaroonedsessions.drop_duplicates(['ID', fup_col]).set_index(['ID', 'session'])
+    join_df_noIDfupdupes = join_df.reset_index().drop_duplicates(['ID', fup_col]).set_index(['ID', 'session'])
     n_docs_noIDfupdupes = join_df_noIDfupdupes.shape[0]
-    print(n_docs_nomaroonedsessions - n_docs_noIDfupdupes, 'docs dropped for being erroneous ID+fup dupes')
+    print(n_docs - n_docs_noIDfupdupes, 'docs dropped for being erroneous ID+fup dupes')
 
     # join in session date info from a sessions-collection-based df
-    join_df_sdate = join_df_noIDfupdupes.join(comp_df[session_datecol_in])
-    # print('flag3')
-    # index_diagnostics(join_df_sdate)
+    join_df_sdate = join_df_noIDfupdupes.join(comp_df[left_datecolumn])
     session_datecol = 'session_date'
-    join_df_sdate.rename(columns={session_datecol_in: session_datecol}, inplace=True)
+    join_df_sdate.rename(columns={left_datecolumn: session_datecol}, inplace=True)
 
     # handle follow-ups which were assigned to the same session letter
     if join_df_sdate.index.has_duplicates:
         join_df_nodupes = handle_dupes(join_df_sdate, new_datecol, fup_col,
                                        session_datecol)
-        # print('flag4')
-        # index_diagnostics(join_df_nodupes)
         comp_dfj = comp_df.join(join_df_nodupes)
     else:
         comp_dfj = comp_df.join(join_df_sdate)
 
     # fill sessions in a "nearest in time" manner within IDs
     # assess info coverage before and after
-    joined_cols = [col for col in comp_dfj.columns if prefix in col]
+    joined_cols = [col for col in comp_dfj.columns if col[:4] == subcoll_safe_prefix + '_']
     if do_fill:
         prefill_cvg = comp_dfj[joined_cols].count() / comp_dfj.shape[0]
         comp_dfj_out = time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
-                                               days_thresh=days_thresh, min_age=min_age, max_age=max_age)
+                                               days_thresh=fill_thresh, min_age=min_age, max_age=max_age)
         postfill_cvg = comp_dfj_out[joined_cols].count() / comp_dfj_out.shape[0]
         fill_factor = postfill_cvg / prefill_cvg
-        print('coverage after filling is up to {:.1f} times higher'.format(fill_factor.max()))
+        print('coverage after filling is up to {:.1f} times higher'.format(
+            fill_factor.max()))
     else:
         comp_dfj_out = comp_dfj
 
     comp_dfj_out[joined_cols].dropna(axis=0, how='all')
 
     print('new shape is', comp_dfj_out.shape)
+    print('------------')
 
     return comp_dfj_out

@@ -1,6 +1,5 @@
 ''' performing updates on documents '''
 
-import numpy as np
 from tqdm import tqdm
 
 from .assessment_matching import match_assessments
@@ -35,7 +34,7 @@ def followups_from_sessions():
 
 
 def sessions_from_followups():
-    fups = list(map(chr, range(97, 100+max_fups)))
+    fups = list(map(chr, range(97, 100 + max_fups)))
     for fup in fups:
         match_assessments('sessions', to_coll='followups',
                           fup_field='session', fup_val=fup,
