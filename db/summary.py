@@ -8,6 +8,8 @@ import seaborn as sns
 
 from collections import Counter
 
+from db.utils.text import multi_filter
+
 # Info for labelling, etc
 #Race and ethnicity definitions
 count_field = 'uID'
@@ -63,11 +65,14 @@ def nums_for_labels(labels,property,dataframe):
     countD = dataframe.groupby(property).count()[count_field].to_dict()
     return [ l+'\n('+str(countD[l])+')' for l in labels]
 
-def update_tick_labels(plot,axis,trFun,trIns):
+def update_tick_labels(plot,axis,trFun,trIns=None):
     label_lk = {'x':plot.get_xticklabels,
                 'y':plot.get_yticklabels }
     labels = [ l.get_text() for l in label_lk[axis]() ]
-    updated = trFun(labels,**trIns)
+    if trIns:
+        updated = trFun(labels,**trIns)
+    else:
+        updated = trFun(labels)
 
     ud_lk = {'x':plot.set_xticklabels,
             'y':plot.set_yticklabels }
@@ -81,9 +86,148 @@ def session_counts(df):
     ses_counts = df.groupby(level=0).count()
     return ses_counts
 
+# data cleaning
+def replace_outs(df,Nstds):
+    df[ np.abs(df - df.mean()) > Nstds * df.std()] = np.nan
+    return df
+    
+def clean_df(df,Nstds,numeric_cols):
+    df['group_all'] = 1
+    df.loc[:,numeric_cols] = df.groupby('group_all')\
+                    .transform(lambda g: replace_outs(g, Nstds) )
+
+def find_num_cols(df):
+    num_types = [np.float64,float,int]
+    col_ck_types = {}
+    for c in df.columns:
+        vals = df[c].tolist()
+        try:
+            typ = type(vals[-1] - vals[0])
+        except:
+            typ = None
+        col_ck_types[c] = typ
+
+    num_cols = [ c for c,t in col_ck_types.items() if t in num_types ]
+    return num_cols
+
+# groupwise utils
+def categorize_cols(cols,delim='_'):
+    delim_cols = [c for c in cols if delim in c]
+    delim_pre = set([ c.split(delim)[0] for c in delim_cols ])
+    col_groups = {}
+    for pre in delim_pre:
+        st_len = len(pre)+1
+        pre_cols = [c for c in delim_cols if c[:st_len] == pre+delim]
+        col_groups[pre] = pre_cols
+    col_groups['misc'] = [c for c in cols if c not in delim_cols]
+    return col_groups
+
+def clean_float_bins(st):
+    return float(st.replace('(','').replace(')','').replace('[','').replace(']',''))
+
+def first_el_num_labels(sttups):
+    return [ '{:.1f}'.format(float(stt.split('(')[1].split(',')[0])) for stt in sttups ]
+
+def plot_cols_across_bins(gr_summ,cols,stat,bin_var):
+    ''' for a given set of cols, and a statistic in the grouped summary frame,
+        plot the trajectory for each available subgroup across the first
+        grouping level, which is expected to be quantile bins
+    '''
+    ix_names = gr_summ.index.names
+    sub_groups = sorted(set(gr_summ.reset_index().set_index(ix_names[1:]).\
+                            index.get_values()))
+    age_cents_rep = { rg:np.mean([clean_float_bins(v) for v in rg.split(',')]) \
+                 for rg in gr_summ.index.levels[0] }
+    
+    for col in cols:
+        #try:
+        fig = plt.figure(figsize=[8,4])
+        ax = fig.gca()
+        for sg in sub_groups:
+            sgDF = gr_summ.loc[ pd.IndexSlice[:,sg[0],sg[1]],: ]
+            pDF = sgDF[(col,stat)]
+            pDF.index = pDF.index.set_levels(pDF.index.levels[0].map(age_cents_rep.get),
+                                             pDF.index.names[0])
+            pDF.plot(label=sg)
+        ax.legend()
+        ax.set_title(col)
+        update_tick_labels(ax,'x',first_el_num_labels)
+        ax.set_xlabel(bin_var + ' bin centers')
+        #except:
+        #    print( 'fail for',col )
+        
+def first_char(st):
+    if pd.notnull(st):
+        return st[0]
+    else: return None
+
+def groups_for_column(df,col,max_groups=6, num_groups = 2, group_labelsF=False):
+    u_vals = df[col].unique()
+    if len(u_vals) <= max_groups:
+        groups = u_vals
+        gcol = col
+    else:
+        gcol = 'groups_'+col
+        val_type = type(u_vals[0])
+        #print(val_type, np.isreal(u_vals[0]))
+        if val_type == str: #use first letter
+            groups = set([ first_char(u_val) for u_val in u_vals])
+            df[gcol] = df[col].apply(first_char)
+            
+        elif np.isreal(u_vals[0]):
+            df[gcol] = pd.qcut(df[col],num_groups,labels=group_labelsF)
+            groups = df[gcol].unique()
+    print(Counter(df[gcol]))
+    return gcol,groups
+
+class GroupwiseAnalysis:
+    
+    def __init__(s,data,group_cols_Ns):
+        s.dataO = data
+        s.group_columns_Ns = group_cols_Ns
+        
+        s.column_categories = categorize_cols(s.dataO.columns)
+        s.numeric_cols = find_num_cols(s.dataO)
+        s.clean_outliers()
+        s.create_groups()
+        s.aggregate()
+        
+    def clean_outliers(s,Nstd=4):
+        
+        s.dataC = s.dataO.copy()
+        clean_df(s.dataC, Nstd, s.numeric_cols)
+        
+    def create_groups(s):
+        s.group_columns_use = []
+        for c_N in s.group_columns_Ns:
+            if type(c_N) == str:
+                s.group_columns_use.append(c_N)
+            else:
+                gr_lab_in = False
+                if c_N[0][-4:] == '_age':
+                    gr_lab_in=None
+                if type(c_N[1]) == int:
+                    groups_for_column(s.dataC,c_N[0],num_groups=c_N[1],group_labelsF=gr_lab_in)
+                    s.group_columns_use.append('groups_'+c_N[0])
+                else:
+                    groups_for_column(s.dataC,c_N[0])
+                    s.group_columns_use.append('groups_'+c_N[0],group_labelsF=gr_lab_in)
+        
+        s.groupedC = s.dataC.groupby(s.group_columns_use)
+        
+    def aggregate(s):
+        s.group_summary = s.groupedC.agg(['count',np.sum,np.mean,np.std])
+        
+    def trajectories_for_category(s,cat,stat='mean',outs=['DT','fup','followup','date']):
+        plot_cols_across_bins(s.group_summary,
+                    multi_filter(s.column_categories[cat], outs=outs), 
+                    stat, bin_var = s.group_columns_use[0].replace('groups_',''))
+                    
+
+
+
+
 # Elements
-
-
 def histogram(df, property, bins='auto', type='plot', continuous=False, ax=None):
     vc = df[property].value_counts()
     if len(vc) < 11 and not continuous:  # use continuous distribution
