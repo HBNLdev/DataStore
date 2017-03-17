@@ -8,7 +8,6 @@ from .organization import Mdb
 def match_assessments(match_coll, to_coll,
                       fup_field, fup_val, match_datefield='date',
                       add_match_query=None):
-
     ''' modify match_coll docs to reflect their optimal date-matching with to_coll.
 
         match_coll is a collection with multiple assessments
@@ -75,12 +74,12 @@ def match_assessments(match_coll, to_coll,
             best_diff = ID_df.loc[smallest_ind, 'date_diff'].days
             best_date = ID_df.loc[smallest_ind, 'sfup_date']
         except TypeError:
-            te_dummy += 1   # the best sfup is a nan because there was no minimum date difference.
-                            # this situation occurs when no date information in the match_coll was found for
-            continue        # an individual who was found in the to_coll
+            te_dummy += 1  # the best sfup is a nan because there was no minimum date difference.
+            # this situation occurs when no date information in the match_coll was found for
+            continue  # an individual who was found in the to_coll
         except AttributeError:
             ae_dummy += 1
-            continue        # ???
+            continue  # ???
 
         info_dict = {'ID': ID,
                      'nearest_sfup': best_sfup,
@@ -100,4 +99,3 @@ def match_assessments(match_coll, to_coll,
                                               'date_diff_' + sfup_index: irow['date_diff_sfup'],
                                               'date_' + sfup_index: irow['date_sfup']}
                                      })
-

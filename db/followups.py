@@ -1,6 +1,5 @@
 ''' extracting information about COGA followups from their master files '''
 
-from collections import defaultdict
 from datetime import datetime
 
 import numpy as np
