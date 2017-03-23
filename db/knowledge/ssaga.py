@@ -373,4 +373,20 @@ core_aud_dx_cols = ['alc_dep_dx',
                     'ald5sx_cnt',
                     'ald5sx_max_cnt',
                     'ald5dx_sev',
-                    'ald5dx_max_sev', ]
+                    'ald5dx_max_sev',
+                    'age_last_intvw',
+                    'aldp_maxsx_whint',
+                    'ald5_max_whint',
+                    ]
+
+core_dsm5_sx_cols = ['alc_dep_max_sx1',
+                    'alc_dep_max_sx2',
+                    'alc_dep_max_sx3',
+                    'alc_dep_max_sx4',
+                    'alc_dep_max_sx5',
+                    'alc_dep_max_sx6',
+                    'alc_dep_max_sx7',
+                    'alc_abuse_max_sx1',
+                    'alc_abuse_max_sx2',
+                    'alc_abuse_max_sx4',]
+

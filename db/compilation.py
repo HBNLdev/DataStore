@@ -325,6 +325,76 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
     return jDF
 
 
+def join_ssaga(keyDF_in, raw=False, add_query={}, add_proj={},
+                left_join_inds=['ID'], right_join_inds=['ID'],
+                id_field='ID', flatten=True, prefix=None,
+                drop_empty=True, how='left'):
+    ''' given a "key" dataframe and target collection,
+        join corresponding info '''
+
+    keyDF = keyDF_in.copy()
+
+    newDF = prepare_ssagadata(keyDF_in, raw, add_query, add_proj,
+                             left_join_inds, right_join_inds,
+                             id_field, flatten, prefix)
+
+    prepare_indices(keyDF, right_join_inds)
+
+    jDF = keyDF.join(newDF, how=how)
+
+    if drop_empty:  # remove duplicate & empty rows, empty columns
+        # jDF.drop_duplicates(inplace=True)
+        jDF.dropna(axis=0, how='all', inplace=True)
+        jDF.dropna(axis=1, how='all', inplace=True)
+
+    return jDF
+    
+
+def prepare_ssagadata(keyDF, raw, add_query, add_proj,
+                         left_join_inds, right_join_inds,
+                         id_field, flatten, prefix):
+    
+    if raw:
+        ssaga_subcoll = 'ssaga'
+        cssaga_subcoll = 'cssaga'
+    else:
+        ssaga_subcoll = 'dx_ssaga'
+        cssaga_subcoll = 'dx_cssaga'
+
+    if not prefix and prefix != '':
+        prefix = 'ssa_'
+
+    query = {id_field: {'$in': list(
+        keyDF.index.get_level_values(right_join_inds[0]))}}
+    query.update(add_query)
+    proj = {}
+    if add_proj:
+        proj.update(add_proj)
+        for ind in right_join_inds:
+            proj.update({ind: 1})
+    proj.update({'_id': 0})
+
+    ssaga_docs = get_colldocs('ssaga', ssaga_subcoll, query, proj)
+    cssaga_docs = get_colldocs('ssaga', cssaga_subcoll, query, proj)
+    docs = list(ssaga_docs) + list(cssaga_docs)
+    del ssaga_docs
+    del cssaga_docs
+
+    if flatten:
+        recs = [flatten_dict(r) for r in list(docs)]
+    else:
+        recs = [r for r in list(docs)]
+
+    newDF = pd.DataFrame.from_records(recs)
+    newDF['ID'] = newDF[id_field]  # should be more general
+
+    prepare_indices(newDF, left_join_inds)
+    newDF.columns = [prefix + c for c in newDF.columns]
+    newDF.dropna(axis=1, how='all', inplace=True)  # drop empty columns
+    newDF.sort_index(inplace=True)  # sort
+
+    return newDF
+
 def prepare_indices(df, join_inds):
     ''' make certain a dataframe has certain indices '''
     for ji in join_inds:

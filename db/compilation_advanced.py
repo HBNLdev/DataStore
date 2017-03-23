@@ -127,7 +127,7 @@ def time_proximal_fill_fast(comp_dfj, new_datecol, fup_col, joined_cols,
 
 # main function (for now)
 
-default_fups = ['p2', 'p3'] + ['p4f' + str(f) for f in range(max_fups+1)]
+default_fups = ['p2', 'p3'] + ['p4f' + str(f) for f in range(max_fups + 1)]
 default_proj = {'_id': 0, 'ID': 1, 'session': 1, 'followup': 1, 'date': 1,
                 'date_diff_session': 1, 'date_diff_followup': 1}
 

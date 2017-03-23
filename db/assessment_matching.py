@@ -1,3 +1,5 @@
+''' optimally matching assessments by date '''
+
 import pandas as pd
 from tqdm import tqdm
 

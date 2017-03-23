@@ -1,4 +1,4 @@
-''' sas tools '''
+''' tools for working with .sas7bdat files '''
 
 import os
 from collections import OrderedDict

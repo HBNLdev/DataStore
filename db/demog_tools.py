@@ -646,7 +646,7 @@ class Family:
                         known_count += 1
                     except KeyError:
                         continue
-            
+
             if known_count > 0:
                 return 0
             else:
@@ -655,9 +655,8 @@ class Family:
         ph_dict = dict()
 
         for ID, cat_dict in s.ID_rels_dict_conv.items():
-
             ph_dict[ID] = any_rel_aff(cat_dict, thresh)
-            
+
         return ph_dict
 
 
