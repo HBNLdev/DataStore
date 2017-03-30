@@ -11,16 +11,10 @@ import pandas as pd
 from .utils.compilation import conv_159
 
 default_field_eponyms = {'ID', 'famID', 'mID', 'fID', 'sex', 'twin'}
-# default_dx_sxc = {'cor_alc_dep_dx_fam': 'fam_dx4',
-#                   'cor_alc_dep_dx': 'dx4',
-#                   'cor_ald5dx': 'dx5',
-#                   'cor_alc_dep_max_sx_cnt': 'sxc4',
-#                   'cor_ald5sx_max_cnt': 'sxc5'}
-
 def_fields = {f: f for f in default_field_eponyms}
-# def_fields.update(default_dx_sxc)
 
 sex_to_parentfield = {'m': 'fID', 'f': 'mID', 'M': 'fID', 'F': 'mID'}
+
 indscore_map = {'self': 1, 'twin': 1,
                 'mother': 0.5, 'father': 0.5, 'fullsib': 0.5, 'child': 0.5,
                 'mgm': 0.25, 'mgf': 0.25, 'fgm': 0.25, 'fgf': 0.25,
@@ -34,6 +28,11 @@ famscore_map = {'Mpred': 0.5, 'Fpred': 0.5, 'sibs': 0.5,
                 'FpredFpred': 0.25, 'FpredMpred': 0.25,
                 'Mpredsibs': 0.25, 'Fpredsibs': 0.25,
                 'hsibs': 0.25}
+
+# attributes for the graphviz pedigree figures
+sex_shape = {'M': 'square', 'F': 'circle', '?': 'polygon'}
+dx_fillcolor = {0: '#FFFFFF', 1: '#000000'}
+dx_wordcolor = {0: '#000000', 1: '#FFFFFF'}
 
 
 def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
@@ -82,49 +81,38 @@ def prepare_dfs(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rena
     return sDF, fDF
 
 
-def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
-             degrees=[1, 2], descend=False, cat_norm=True, rename_cols=None):
+def calc_ph(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
     '''
 
-    inputs:
-
-    in_sDF:     a dataframe indexed by ID or ID + session, including the individuals for whom you want to calculate FHD
-    in_fDF:     a dataframe indexed by ID, including the whole family of the individuals in in_sDF. must include
-                    'ID', 'famID', 'mID', 'fID', 'sex', and aff_col
-    aff_col:    the affectedness column for which to calculate density
-    conv_159:   if True, convert aff_col from a (1, 5, 9) to a (0, 1, nan) coding
-    degrees:    the degrees of relatives to include in density calculations. 1 = primary, 2 = secondary
-    descend:    if True, include descendants in density calculations (i.e. children)
-    cat_norm:   if True, normalize the score from potentially large categories to not exceed its maximum
-                    (this mainly refers to sibling categories)
-    rename_cols: a dict mapping old column names to new column names if the DFs use a different naming scheme
-
-    outputs:
-
-    sDF:        a copy of in_sDF with 3 columns added:
-                    fhd_dx4_ratio   ratio of family history density
-                    fhd_dx4_sum     sum of family history density
-                    n_rels          number of relatives for whom affectedness was known
+    version of calc_fhd that calculates three "parental history" style measures of FHD.
+    namely, FHD = 1 if affectedness is present in the father, parent, or first-degree relative,
+    and FHD = 0 if no affectedness is present in the same.
 
     '''
 
     sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
-    # drop missing data of affectedness column from fDF
-    # don't do this because they tell us about family structure even if they lack affectedness info
-    # fDF = fDF.dropna(subset=[aff_col])
+    father, parent, first = fam_ph(fDF, aff_col)
 
-    sDF['fhd_dx4_ratio'], sDF['fhd_dx4_sum'], sDF['n_rels'] = \
-        zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF, aff_col, degrees, descend, cat_norm]))
+    father_col = 'father_' + aff_col
+    parent_col = 'parent_' + aff_col
+    first_col = 'first_' + aff_col
+
+    father_series = pd.Series(father, name=father_col)
+    parent_series = pd.Series(parent, name=parent_col)
+    first_series = pd.Series(first, name=first_col)
+
+    sDF[father_col] = father_series
+    sDF[parent_col] = parent_series
+    sDF[first_col] = first_series
 
     return sDF
 
 
-def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
+def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
     '''
 
-    fast version of calc_fhd that always uses only primary and secondary forebears,
-    and normalizes the score within each sibling category
+    fast FHD calculation algorithm that always uses only primary and secondary forebears
 
     inputs:
 
@@ -165,11 +153,10 @@ def calc_fhd_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, re
     return sDF
 
 
-def calc_ph_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
+def calc_fhd_catnorm(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
     '''
 
-    fast version of calc_fhd that always uses only primary and secondary forebears,
-    and normalizes the score within each sibling category
+    version of calc_fhd that normalizes the score within each sibling category
 
     inputs:
 
@@ -183,75 +170,64 @@ def calc_ph_fast(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, ren
     outputs:
 
     sDF:        a copy of in_sDF with 3 columns added:
-                    'father_' + aff_col     ratio of family history density
-                    'parent_' + aff_col     sum of family history density
-                    'first_' + aff_col      number of relatives for whom affectedness was known
+                    'nrels_' + aff_col      ratio of family history density
+                    'fhdsum_' + aff_col     sum of family history density
+                    'fhdratio_' + aff_col   number of relatives for whom affectedness was known
 
     '''
 
     sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
-    father, parent, first = fam_ph(fDF, aff_col)
+    all_counts, all_sums, all_ratios = fam_fhd_catnorm(fDF, aff_col)
 
-    father_col = 'father_' + aff_col
-    parent_col = 'parent_' + aff_col
-    first_col = 'first_' + aff_col
+    rels_col = 'nrelsc_' + aff_col
+    sum_col = 'fhdsumc_' + aff_col
+    ratio_col = 'fhdratioc_' + aff_col
 
-    father_series = pd.Series(father, name=father_col)
-    parent_series = pd.Series(parent, name=parent_col)
-    first_series = pd.Series(first, name=first_col)
+    count_series = pd.Series(all_counts, name=rels_col)
+    sum_series = pd.Series(all_sums, name=sum_col)
+    ratio_series = pd.Series(all_ratios, name=ratio_col)
 
-    sDF[father_col] = father_series
-    sDF[parent_col] = parent_series
-    sDF[first_col] = first_series
+    sDF[ratio_col] = ratio_series
+    sDF[sum_col] = sum_series
+    sDF[rels_col] = count_series
+
+    sDF.ix[sDF[rels_col].isnull(), rels_col] = 0
 
     return sDF
 
 
-def calc_fhd_fast2(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
+def calc_fhd_pathlen(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None, base_constant=2):
     '''
 
-    second version of calc_fhd_fast that uses a different algorithm
+    second version of calc_fhd that uses a different algorithm,
+    in which each individual's FHD is determined by ALL relatives for whom affectedness is known,
+    and each relatives contribution is weighted by 1 / (base_constant ** degree),
+    where degree is the relatedness degree (primary = 1, secondary = 2, tertiary = 3, etc.)
+    determined by the shortest path length in a modified relatedness graph
+    in which edges are between predecessors and offspring as well as between full siblings
 
     '''
 
     sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
-    all_counts, all_sums, all_ratios = fam_fhd2(fDF, aff_col)
+    all_counts, all_sums, all_ratios = fam_fhd_pathlen(fDF, aff_col, base_constant)
 
-    count_series = pd.Series(all_counts, name='n_rels')
-    sum_series = pd.Series(all_sums, name='fhd_dx4_sum')
-    ratio_series = pd.Series(all_ratios, name='fhd_dx4_ratio')
+    rels_col = 'nrels' + str(base_constant) + '_' + aff_col
+    sum_col = 'fhdsum' + str(base_constant) + '_' + aff_col
+    ratio_col = 'fhdratio' + str(base_constant) + '_' + aff_col
 
-    sDF['fhd_dx4_ratio'] = ratio_series
-    sDF['fhd_dx4_sum'] = sum_series
-    sDF['n_rels'] = count_series
+    count_series = pd.Series(all_counts, name=rels_col)
+    sum_series = pd.Series(all_sums, name=sum_col)
+    ratio_series = pd.Series(all_ratios, name=ratio_col)
 
-    sDF.ix[sDF['n_rels'].isnull(), 'n_rels'] = 0
+    sDF[ratio_col] = ratio_series
+    sDF[sum_col] = sum_series
+    sDF[rels_col] = count_series
+
+    sDF.ix[sDF[rels_col].isnull(), rels_col] = 0
 
     return sDF
-
-
-def fam_fhd(fDF, aff_col):
-    ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
-        affectedness is known, the FHD sum scores, and the FHD ratio scores '''
-
-    all_counts = dict()
-    all_sums = dict()
-    all_ratios = dict()
-
-    fams = fDF['famID'].unique()
-
-    for fam in fams:
-        famDF = fDF[fDF['famID'] == fam]
-        famO = Family(famDF, aff_col)
-        famO.define_rels()
-        famO.calc_famfhd()
-        all_counts.update(famO.count_dict)
-        all_sums.update(famO.fhdsum_dict)
-        all_ratios.update(famO.fhdratio_dict)
-
-    return all_counts, all_sums, all_ratios
 
 
 def fam_ph(fDF, aff_col):
@@ -280,7 +256,7 @@ def fam_ph(fDF, aff_col):
     return father, parent, first
 
 
-def fam_fhd2(fDF, aff_col):
+def fam_fhd(fDF, aff_col):
     ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
         affectedness is known, the FHD sum scores, and the FHD ratio scores '''
 
@@ -293,8 +269,8 @@ def fam_fhd2(fDF, aff_col):
     for fam in fams:
         famDF = fDF[fDF['famID'] == fam]
         famO = Family(famDF, aff_col)
-        famO.G2 = famO.build_graph2()
-        famO.calc_famfhd2()
+        famO.define_rels()
+        famO.calc_famfhd()
         all_counts.update(famO.count_dict)
         all_sums.update(famO.fhdsum_dict)
         all_ratios.update(famO.fhdratio_dict)
@@ -302,25 +278,48 @@ def fam_fhd2(fDF, aff_col):
     return all_counts, all_sums, all_ratios
 
 
-def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
-    ''' row-wise apply function for calc_fhd '''
-    famDF = df[df['famID'] == row['famID']]
-    I = Individual(row, famDF)
-    if 0 in degrees:
-        I.zeroth_degree()  # 1
-    if 1 in degrees:
-        I.first_degree(descend)  # 0.5
-    if 2 in degrees:
-        I.second_degree(descend)  # 0.25
-    print('.', end='')
-    I.count(aff)
-    return I.ratio_score(aff, 1, cat_norm), I.sum_score(aff, 1, cat_norm), I.n_rels
+def fam_fhd_catnorm(fDF, aff_col):
+    ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
+        affectedness is known, the FHD sum scores, and the FHD ratio scores '''
+
+    all_counts = dict()
+    all_sums = dict()
+    all_ratios = dict()
+
+    fams = fDF['famID'].unique()
+
+    for fam in fams:
+        famDF = fDF[fDF['famID'] == fam]
+        famO = Family(famDF, aff_col)
+        famO.define_rels()
+        famO.calc_famfhd_catnorm()
+        all_counts.update(famO.count_dict)
+        all_sums.update(famO.fhdsum_dict)
+        all_ratios.update(famO.fhdratio_dict)
+
+    return all_counts, all_sums, all_ratios
 
 
-# attributes for the graphviz pedigree figures
-sex_shape = {'M': 'square', 'F': 'circle', '?': 'polygon'}
-dx_fillcolor = {0: '#FFFFFF', 1: '#000000'}
-dx_wordcolor = {0: '#000000', 1: '#FFFFFF'}
+def fam_fhd_pathlen(fDF, aff_col, base_constant=2):
+    ''' given a family DF, return dictionaries mapping the IDs of its members to the number of relatives for whom
+        affectedness is known, the FHD sum scores, and the FHD ratio scores '''
+
+    all_counts = dict()
+    all_sums = dict()
+    all_ratios = dict()
+
+    fams = fDF['famID'].unique()
+
+    for fam in fams:
+        famDF = fDF[fDF['famID'] == fam]
+        famO = Family(famDF, aff_col)
+        famO.G2 = famO.build_graph_pathlen()
+        famO.calc_famfhd_pathlen(base_constant)
+        all_counts.update(famO.count_dict)
+        all_sums.update(famO.fhdsum_dict)
+        all_ratios.update(famO.fhdratio_dict)
+
+    return all_counts, all_sums, all_ratios
 
 
 class Family:
@@ -361,14 +360,15 @@ class Family:
 
         s.sire_dams = sire_dams
 
-    def build_graph2(s):
+    def build_graph_pathlen(s):
+        ''' builds the graph such that path length indicates degree '''
 
         s.calc_sires_dams()
 
         G = nx.Graph()
 
-        for ID, affectedness in s.df[['ID', 'cor_alc_dep_dx']].values:
-            G.add_node(ID, a=affectedness)
+        for ID in s.df['ID'].values:
+            G.add_node(ID)
 
         for sd, sib_lst in s.sire_dams.items():
             sire, dam = sd
@@ -411,6 +411,8 @@ class Family:
 
     def indiv_subset(s, indiv_ID):
 
+        ''' returns the set of individuals who are indiv_ID or his/her primary and secondary forebears '''
+
         if 'ID_rels_dict_conv' not in dir(s):
             s.define_rels()
 
@@ -428,9 +430,44 @@ class Family:
         return indiv_rels
 
     def build_graph_gv_indiv(s, indiv_ID):
-        ''' builds the graph in graphviz (for plotting) '''
+        ''' builds the graph in graphviz (for plotting),
+            using only indiv_ID and his/her primary and secondary forebears '''
 
         indiv_rels = s.indiv_subset(indiv_ID)
+        indiv_df = s.df.loc[indiv_rels, :]
+
+        D = gv.Digraph(format='svg')
+
+        for ID, fID, mID, sex in indiv_df[['ID', 'fID', 'mID', 'sex']].values:
+            try:
+                fill_color = dx_fillcolor[s.dx_dict[ID]]
+                word_color = dx_wordcolor[s.dx_dict[ID]]
+                style = 'filled'
+            except KeyError:
+                fill_color = '#808080'
+                word_color = '#000000'
+                style = 'filled,dashed'
+            D.node(ID, label=ID, shape=sex_shape[sex], fontcolor=word_color,
+                   fillcolor=fill_color, style=style)
+            # D.node(ID, label='', shape=sex_shape[sex], fontcolor=word_color,
+            # fillcolor=fill_color, style=style)
+            try:
+                # D.node(fID, label=fID, shape='square')
+                # D.node(mID, label=mID, shape='circle')
+                # D.node(fID, label='', shape='square')
+                # D.node(mID, label='', shape='square')
+                D.edge(fID, ID)
+                D.edge(mID, ID)
+            except AttributeError:
+                pass
+
+        return D
+
+    def build_graph_gv_known(s):
+        ''' builds the graph in graphviz (for plotting),
+            using only the individuals for whom the affectedness is known '''
+
+        indiv_rels = set(s.dx_dict.keys())
         indiv_df = s.df.loc[indiv_rels, :]
 
         D = gv.Digraph(format='svg')
@@ -561,6 +598,46 @@ class Family:
                     weight = famscore_map[cat]
                 except KeyError:
                     continue
+                for pred in pred_set:
+                    try:
+                        fhd_num += s.dx_dict[pred] * weight
+                        fhd_denom += weight
+                        rel_count += 1
+                    except KeyError:
+                        continue
+
+            count_dict[ID] = rel_count
+            try:
+                fhdratio_dict[ID] = fhd_num / fhd_denom
+                fhdsum_dict[ID] = fhd_num
+            except ZeroDivisionError:
+                pass
+
+        s.fhdratio_dict = fhdratio_dict
+        s.fhdsum_dict = fhdsum_dict
+        s.count_dict = count_dict
+
+    def calc_famfhd_catnorm(s):
+
+        ''' using converted rels dict, calculate FHD creating 3 dicts which contain the results '''
+
+        fhdratio_dict = dict()
+        fhdsum_dict = dict()
+        count_dict = dict()
+
+        for ID, cat_dict in s.ID_rels_dict_conv.items():
+
+            fhd_num = 0
+            fhd_denom = 0
+            rel_count = 0
+
+            for cat, pred_set in cat_dict.items():
+                if not pred_set:
+                    continue
+                try:
+                    weight = famscore_map[cat]
+                except KeyError:
+                    continue
                 tmp_fhd_num = 0
                 tmp_count = 0
                 for pred in pred_set:
@@ -587,7 +664,7 @@ class Family:
         s.fhdsum_dict = fhdsum_dict
         s.count_dict = count_dict
 
-    def calc_famfhd2(s):
+    def calc_famfhd_pathlen(s, base_constant=2):
 
         ''' using converted rels dict, calculate FHD creating 3 dicts which contain the results '''
 
@@ -607,7 +684,7 @@ class Family:
                     distance = nx.shortest_path_length(s.G2, source=ID, target=rel)
                 except nx.NetworkXNoPath:
                     continue
-                weight = 1 / (2 ** distance)
+                weight = 1 / (base_constant ** distance)
                 val = weight * dx
                 # print(rel, distance, dx, weight, val)
 
@@ -658,6 +735,62 @@ class Family:
             ph_dict[ID] = any_rel_aff(cat_dict, thresh)
 
         return ph_dict
+
+
+# old (slow) code
+
+
+def calc_fhd_slow(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
+                  degrees=[1, 2], descend=False, cat_norm=True, rename_cols=None):
+    '''
+
+    inputs:
+
+    in_sDF:     a dataframe indexed by ID or ID + session, including the individuals for whom you want to calculate FHD
+    in_fDF:     a dataframe indexed by ID, including the whole family of the individuals in in_sDF. must include
+                    'ID', 'famID', 'mID', 'fID', 'sex', and aff_col
+    aff_col:    the affectedness column for which to calculate density
+    conv_159:   if True, convert aff_col from a (1, 5, 9) to a (0, 1, nan) coding
+    degrees:    the degrees of relatives to include in density calculations. 1 = primary, 2 = secondary
+    descend:    if True, include descendants in density calculations (i.e. children)
+    cat_norm:   if True, normalize the score from potentially large categories to not exceed its maximum
+                    (this mainly refers to sibling categories)
+    rename_cols: a dict mapping old column names to new column names if the DFs use a different naming scheme
+
+    outputs:
+
+    sDF:        a copy of in_sDF with 3 columns added:
+                    fhd_dx4_ratio   ratio of family history density
+                    fhd_dx4_sum     sum of family history density
+                    n_rels          number of relatives for whom affectedness was known
+
+    '''
+
+    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
+
+    # drop missing data of affectedness column from fDF
+    # don't do this because they tell us about family structure even if they lack affectedness info
+    # fDF = fDF.dropna(subset=[aff_col])
+
+    sDF['fhd_dx4_ratio'], sDF['fhd_dx4_sum'], sDF['n_rels'] = \
+        zip(*sDF.apply(calc_fhd_row, axis=1, args=[fDF, aff_col, degrees, descend, cat_norm]))
+
+    return sDF
+
+
+def calc_fhd_row(row, df, aff, degrees=[1, 2], descend=False, cat_norm=True):
+    ''' row-wise apply function for calc_fhd '''
+    famDF = df[df['famID'] == row['famID']]
+    I = Individual(row, famDF)
+    if 0 in degrees:
+        I.zeroth_degree()  # 1
+    if 1 in degrees:
+        I.first_degree(descend)  # 0.5
+    if 2 in degrees:
+        I.second_degree(descend)  # 0.25
+    print('.', end='')
+    I.count(aff)
+    return I.ratio_score(aff, 1, cat_norm), I.sum_score(aff, 1, cat_norm), I.n_rels
 
 
 class Individual:

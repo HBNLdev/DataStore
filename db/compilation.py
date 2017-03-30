@@ -48,7 +48,7 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
 subjects_sparser_sub = \
     ['famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP',
      'DOB', 'twin', 'EEG', 'System', 'Wave12', 'Wave12-fam',
-     'fMRI subject', 'Wave3', 'Phase4-session', 'Phase4-testdate',
+     'fMRI subject', 'Wave3', 'Phase4-testdate',
      'Phase4-age', '4500', 'ccGWAS', 'AAfamGWAS', 'ExomeSeq',
      'EAfamGWAS', 'EAfamGWAS-fam', 'wave12-race', '4500-race',
      'ccGWAS-race', 'core-race', 'COGA11k-fam', 'COGA11k-race',
@@ -63,7 +63,7 @@ subjects_sparser_add = \
     ['ID', 'sex', 'handedness', 'Self-reported-race', 'alc_dep_dx',
      'alc_dep_ons', 'a-age', 'b-age', 'c-age', 'd-age', 'e-age',
      'f-age', 'g-age', 'h-age', 'i-age', 'j-age', 'k-age',
-     'famID', 'mID', 'fID', 'POP', 'alc_dep_dx_f', 'alc_dep_dx_m', 'twin']
+     'famID', 'mID', 'fID', 'POP', 'alc_dep_dx_f', 'alc_dep_dx_m', 'twin', 'Phase4-session']
 
 session_sadd = [field for field in subjects_sparser_add if 'age' not in field]
 session_sadd.extend(['session', 'followup', 'age', 'date'])
