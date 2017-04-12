@@ -1,7 +1,11 @@
 ''' finding files, walking directories, etc. '''
 
 import os
+import shutil
 from glob import glob
+from datetime import datetime
+
+from .filename_parsing import parse_filename
 
 
 def identify_files(starting_directory, filter_pattern='*', file_parameters={}, filter_list=[], time_range=()):

@@ -412,12 +412,26 @@ def first_session(df):
 def latest_session(in_df):
     ''' given a datframe with an (ID, session) index, return a version in which
         only the latest sessions is kept for each '''
+
     out_df = in_df.copy()
     out_df['session'] = out_df.index.get_level_values('session')
     g = out_df.groupby(level=out_df.index.names[0])  # ID
     out_df = g.last()
     out_df.set_index('session', append=True, inplace=True)
     return out_df
+
+
+def idealage_session(in_df, ideal_age=18, age_col='session_age'):
+    ''' given a datframe with an (ID, session) index, return a version in which
+        the session with age_col nearest to a given age is kept. '''
+
+    best_sessions = []
+    IDs = list(set(in_df.index.get_level_values('ID')))
+    for ID in IDs:
+        sages = in_df.loc[ID, age_col]
+        best_match = (sages - ideal_age).abs().argmin()
+        best_sessions.append((ID, best_match))
+    return in_df.loc[best_sessions, :]
 
 
 def mark_latest(in_df):
@@ -487,7 +501,7 @@ def groupby_followup(df):
 
 
 def groupby_session(df):
-    ''' given ID+followup-indexed dataframe, create a groupby object, grouping by followup '''
+    ''' given ID+session-indexed dataframe, create a groupby object, grouping by session '''
 
     df['session'] = df.index.get_level_values('session')
     g = df.groupby(level=df.index.names[0])  # ID
