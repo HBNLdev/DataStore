@@ -234,14 +234,10 @@ class AVGH1_File(CNTH1_File):
                 results[nm + '_accwithrespwithlate'] = np.sum(correct_late) / \
                                                        (np.sum(stmevs) - np.sum(noresp))
 
-                resp_codes = list(s.ev_df['resp_seq'].unique())
-                try:
-                    resp_codes.remove(0)
-                except ValueError:
-                    pass
+                
                 # this part logs the median reaction time for each type of response
                 # (i.e. both for correct and incorrect responses)
-                for rc in resp_codes:
+                for rc in s.acceptable_resps:
                     tmp_df = s.ev_df[(s.ev_df['resp_seq'] == rc) &
                                      ~(s.ev_df['early']) & ~(s.ev_df['errant'])]
                     results[nm + str(rc) + '_medianrtwithlate'] = \
@@ -272,6 +268,7 @@ class AVGH1_File(CNTH1_File):
                                                'descriptor': column[-2][0].decode(),
                                                'corr_resp': column[4][0],
                                                'resp_win': column[9][0]}})
+        s.acceptable_resps = set(v['corr_resp'] for v in s.case_dict.values())
         s.type_seq = np.array([col[1][0] for col in f['file/run/event/event']])
         s.resp_seq = np.array([col[2][0] for col in f['file/run/event/event']])
         s.time_seq = np.array([col[-1][0] for col in f['file/run/event/event']])
@@ -300,6 +297,7 @@ class AVGH1_File(CNTH1_File):
             the event table '''
 
         bad_respcodes = ~np.in1d(s.resp_seq, list(range(0, 9)))
+        # bad_respcodes = ~np.in1d(s.resp_seq, [0, 1, 8])  # if strict about acceptable responses
         if np.any(bad_respcodes):
             s.resp_seq[bad_respcodes] = 0
         nonresp_respcodes = (s.resp_seq != 0) & (s.type_seq != 0)
