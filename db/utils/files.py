@@ -83,3 +83,25 @@ def get_toc(target_dir, toc_str):
     pd_tocfiles.sort(key=os.path.getmtime)
     latest = pd_tocfiles[-1]
     return latest
+
+def next_file_with_base(directory,base,ext):
+    ''' given a directory and base name for a file, determine any files with
+        that base are present and if so, return a numbered name using an
+        undersore separator, completed with the input extension'''
+    files = [ f for f in os.listdir(directory) if base in f and '.'+ext in f ]
+    if files:
+        numbers = [ int(os.path.splitext(f)[0].split('_')[-1]) for f in files]
+        next_num = max(numbers)+1
+    else: next_num = 1
+    next_file = base+'_'+str(next_num)+'.'+ext
+    return next_file
+    
+def list_to_file( lst, filename, replace=False ):
+    ''' write the contents of a python list to a file with each entry on a
+        separate line'''
+    if not os.path.exists(filename) or replace:
+        of = open(filename,'w')
+        for item in lst:
+            of.write( str(item)+'\n' )
+        of.close()
+    return
