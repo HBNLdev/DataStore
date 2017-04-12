@@ -92,17 +92,20 @@ def calc_ph(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_c
 
     sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
-    father, parent, first = fam_ph(fDF, aff_col)
+    father, mother, parent, first = fam_ph(fDF, aff_col)
 
     father_col = 'father_' + aff_col
+    mother_col = 'mother_' + aff_col
     parent_col = 'parent_' + aff_col
     first_col = 'first_' + aff_col
 
     father_series = pd.Series(father, name=father_col)
+    mother_series = pd.Series(mother, name=mother_col)
     parent_series = pd.Series(parent, name=parent_col)
     first_series = pd.Series(first, name=first_col)
 
     sDF[father_col] = father_series
+    sDF[mother_col] = mother_series
     sDF[parent_col] = parent_series
     sDF[first_col] = first_series
 
@@ -235,6 +238,7 @@ def fam_ph(fDF, aff_col):
         affectedness is known, the FHD sum scores, and the FHD ratio scores '''
 
     father = dict()
+    mother = dict()
     parent = dict()
     first = dict()
 
@@ -246,14 +250,16 @@ def fam_ph(fDF, aff_col):
         famO.define_rels()
 
         fam_father = famO.calc_famPH(use_rels=('Mpred',), thresh=0)
+        fam_mother = famO.calc_famPH(use_rels=('Fpred',), thresh=0)
         fam_parent = famO.calc_famPH(use_rels=('Mpred', 'Fpred',), thresh=0)
         fam_first = famO.calc_famPH(use_rels=('Mpred', 'Fpred', 'sibs',), thresh=0)
 
         father.update(fam_father)
+        mother.update(fam_mother)
         parent.update(fam_parent)
         first.update(fam_first)
 
-    return father, parent, first
+    return father, mother, parent, first
 
 
 def fam_fhd(fDF, aff_col):
@@ -361,7 +367,7 @@ class Family:
         s.sire_dams = sire_dams
 
     def build_graph_pathlen(s):
-        ''' builds the graph such that path length indicates degree '''
+        ''' builds the graph such that path length indicates degree of relatedness '''
 
         s.calc_sires_dams()
 
