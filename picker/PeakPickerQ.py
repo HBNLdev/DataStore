@@ -622,6 +622,7 @@ class Picker(QtGui.QMainWindow):
         ylim = [-4, 12]
         yticks = [0, 10]
         arrow_size = 4.5
+        linewidth = 0.5
 
         ccns = [ [v/255 for v in cc] for cc in s.plot_props['line colors'] ]
 
@@ -672,7 +673,8 @@ class Picker(QtGui.QMainWindow):
                         ccn = ccns[caseN] #[v / 255 for v in case_color]
                         ax.plot(s.current_data['times'],
                                 s.current_data[elec + '_' + case],
-                                color=ccn, clip_on=False)
+                                color=ccn, clip_on=False,
+                                linewidth=linewidth )
 
                         peak_keys = [k for k in s.peak_data.keys() if k[0] == elec and k[1] == case]
                         for pk in peak_keys:
@@ -682,7 +684,7 @@ class Picker(QtGui.QMainWindow):
                                 arrow_len = -arrow_size
                             amp, lat = s.peak_data[pk]
                             ax.annotate('', (lat, amp), (lat, amp + arrow_len),
-                                        size=7,
+                                        size=7, clip_on=False, annotation_clip=False,
                                         arrowprops=dict(arrowstyle='-|>',
                                                         fc=ccn, ec=ccn))
         # info row on bottom
@@ -708,23 +710,30 @@ class Picker(QtGui.QMainWindow):
         desc_ax.set_xlim([0,10])
         desc_ax.set_ylim([0,10])
         desc_ax.text( 0,0,filename +'\n' + \
-                      ' '.join([ str(subD['age'])[:5],subD['gender'],subD['handedness'],
-                                 '  ','artf thresh',str(expD['threshold_value']) ])+'\n'+ \
+                      ' '.join([ str(round(subD['age']*100)/100)[:5],' ',subD['gender'],
+                                 ' ',subD['handedness'],'  ','artf thresh',
+                                 str(expD['threshold_value']) ])+' uV \n'+ \
                           runD['run_date_time'],
                             fontsize=9 )
 
-        trials_table_ax = plt.subplot(nrows+1,ncols,spNum+3)
+        trials_table_rows_ax = plt.subplot(nrows+1,ncols,spNum+3)
+        trials_table_rows_ax.set_frame_on(False)
+        trials_table_rows_ax.set_xticks([])
+        trials_table_rows_ax.set_yticks([])
+        trials_table_rows_ax.set_ylim([0,10])
+        trials_table_rows_ax.set_xlim([0,10])
+
+        trials_table_ax = plt.subplot(nrows+1,ncols,spNum+4)
         trials_table_ax.set_frame_on(False)
         trials_table_ax.set_xticks([])
         trials_table_ax.set_yticks([])
         trials_table_ax.set_ylim([0,10])
-        tt_indent = 8*' '
-        trials_table_ax.text(0,8,tt_indent+'trials  resps',fontsize=9)
+        trials_table_ax.text(0,8,'trials     resps',fontsize=9)
 
 
         rx_time_ax = plt.subplot(nrows+1,ncols,spNum+5)
         rx_time_ax.set_ylim([0,1])
-        rx_time_ax.text(0,0.6,'Response Times', fontsize=8)
+        rx_time_ax.text(0,0.8,'Response Times', fontsize=8)
         rx_time_ax.set_frame_on(False)
         rx_time_ax.set_xticks(xticks)
         rx_time_ax.set_xticklabels(xticks, fontsize=6)
@@ -736,13 +745,20 @@ class Picker(QtGui.QMainWindow):
         for caseN, case in enumerate(s.app_data['current cases']):
             ccn = ccns[caseN]
             cD = casesD[case]
-
-            trials_table_ax.text(0,6-2*caseN,case+tt_indent[len(case):]+ \
-                                 str(cD['n_trials'])+'     '+str(cD['n_responses']),
+            trials_table_rows_ax.text( 9,6-2*caseN, cD['descriptor'],
+                                horizontalalignment='right',
+                                fontsize=9, color=ccn )
+            n_trials = str(cD['n_trials_accepted'])
+            n_resp = str( min([cD['n_responses'],cD['n_trials_accepted'] ]) )
+            trials_table_ax.text(0,6-2*caseN,' '+n_trials+ \
+                                ' '*(3-len(n_trials)) +'       ' \
+                                +n_resp,
                                  fontsize=9, color=ccn)
 
             rx_tm = cD['mean_resp_time']
-            rx_time_ax.plot(2*[rx_tm],[0.1,0.45],color=ccn)
+            rx_time_ax.plot(2*[rx_tm],[0.15,0.5],color=ccn)
+            rx_time_ax.text(rx_tm,0.55,str(round(rx_tm*100)/100),fontsize=7,color=ccn)
+
 
         fig.tight_layout()
 
@@ -944,6 +960,7 @@ class Picker(QtGui.QMainWindow):
                     if s.any_casepeak_edges(case, cp[1]):
                         state_string += '*'
                     state_string += ','
+            state_string = state_string[:-1] # drop trailing comma
             state_string += '] '
 
         s.stateInfo.setText(state_string)
