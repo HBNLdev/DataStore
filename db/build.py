@@ -136,9 +136,10 @@ def erp_peaks():
     mt_files, datemods = identify_files('/processed_data/mt-files/', '*.mt')
     add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
                 'ant_phase4_peaks_2016',
+                'vp3_peak_master',
                 'vp3_phase4__peaks_2015', 'vp3_phase4__peaks_2016',
                 'aod_phase4__peaks_2015', 'aod_phase4__peaks_2016',
-                'cpt_h1_peaks_may_2016',
+                'cpt_h1_peaks_may_2016', 
                 # 'non_coga_vp3',
                 # 'aod_bis_18-25controls',
                 # 'nki_ppick', 'phase4_redo',
@@ -154,7 +155,11 @@ def erp_peaks():
         if '/waves/' in fp or fp in bad_files:
             continue
         mtO = MT_File(fp)
-        mtO.parse_fileDB()
+        try:
+            mtO.parse_fileDB()
+        except:
+            print(fp, 'failed')
+            continue
         erpO = ERPPeak(mtO.data)
         erpO.store()
 
@@ -482,7 +487,7 @@ def eeg_behavior(files_dms=None):
             if fO.file_info['experiment'] == 'err':
                 continue
 
-                # simply check if the ID-session-experiment already exists
+            # simply check if the ID-session-experiment already exists
             erpbeh_obj_ck = EEGBehavior(fO.data)
             erpbeh_obj_ck.compare()  # populates s.new with bool
 
