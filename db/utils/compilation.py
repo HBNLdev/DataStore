@@ -44,8 +44,6 @@ def df_fromcsv(fullpath, id_lbl='ind_id', na_val=''):
 # single value or column apply functions
 
 
-
-
 def ID_nan_strintfloat_COGA(v):
     ''' convert a COGA ID (fully numeric) to string '''
 

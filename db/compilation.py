@@ -222,15 +222,15 @@ def format_sparseproj(coll, subcoll=None):
     return proj
 
 
-def format_ERPprojection(conds_peaks, chans, measures=['amp', 'lat']):
+def format_ERPprojection(experiment, conds_peaks, chans, measures=['amp', 'lat']):
     ''' format a projection to retrieve specific ERP peak information '''
     proj = default_ERPfields.copy()
-    proj.update({'.'.join(['data', cp, chan, m]): 1
+    proj.update({'.'.join([experiment, cp, chan, m]): 1
                  for cp in conds_peaks for chan in chans for m in measures})
     return proj
 
 
-def format_ERPprojection_tups(cond_peak_chans_lst, measures=['amp', 'lat']):
+def format_ERPprojection_tups(experiment, cond_peak_chans_lst, measures=['amp', 'lat']):
     ''' format a projection to retrieve specific ERP peak information '''
     proj = default_ERPfields.copy()
 
@@ -238,7 +238,7 @@ def format_ERPprojection_tups(cond_peak_chans_lst, measures=['amp', 'lat']):
         cond, peak, chans = cond_peak_chans
         for chan in chans:
             for measure in measures:
-                key = 'data.' + cond + '_' + peak + '.' + chan + '.' + measure
+                key = experiment + '.' + cond + '_' + peak + '.' + chan + '.' + measure
                 proj[key] = 1
 
     return proj

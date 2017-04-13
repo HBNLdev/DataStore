@@ -154,14 +154,36 @@ def erp_peaks():
     for fp in tqdm(mt_files):
         if '/waves/' in fp or fp in bad_files:
             continue
-        mtO = MT_File(fp)
-        try:
-            mtO.parse_fileDB()
-        except:
-            print(fp, 'failed')
-            continue
-        erpO = ERPPeak(mtO.data)
-        erpO.store()
+
+        mtO_ck = MT_File(fp)  # get file info
+
+        erpO_ck = ERPPeak(mtO_ck.data)
+        erpO_ck.compare()  # populates s.new with bool
+
+        if erpO_ck.new:  # "brand new" get general info
+
+                mtO = MT_File(fp)
+                try:
+                    mtO.parse_fileDB(general_info=True)
+                except:
+                    print(fp, 'failed')
+                    continue
+                erpO = ERPPeak(mtO.data)
+                erpO.store()
+        else:  # if not brand new, check if the experiment is already in the doc
+            try:
+                erpO_ck.doc[mtO.file_info['experiment']]
+            except KeyError:  # only update experiment info if not already in db
+                mtO = MT_File(fp)  # refresh the file obj
+                try:
+                    mtO.parse_fileDB(general_info=False)
+                except:
+                    print(fp, 'failed')
+                    continue
+                mtO.parse_fileDB()
+                erpO = ERPPeak(mtO.data)
+                erpO.compare()  # to get update query
+                erpO.update()
 
 
 def neuropsych():

@@ -65,8 +65,6 @@ class MongoBacked:
 
     def update(s):
         ''' update an existing record '''
-        if 'insert_time' in s.data:
-            del s.data['insert_time']
         s.data['update_time'] = datetime.datetime.now()
         s.Mdb[s.collection].update_one(s.update_query, {'$set': s.data})
 

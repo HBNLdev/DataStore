@@ -494,8 +494,8 @@ class avgh1:
             if os.path.isfile(s.mt_defaultpath):
                 mt = MT_File(s.mt_defaultpath)
                 mt.parse_file()
-                s.mt_data = mt.data
-                s.case_peaks = mt.data.keys()
+                s.mt_data = mt.mt_data
+                s.case_peaks = mt.mt_data.keys()
                 peak_lst = []
                 for c_pk in s.case_peaks:
                     peak_lst.append(c_pk[1])

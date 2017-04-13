@@ -456,6 +456,10 @@ class MT_File:
         s.header = {'cases_peaks': {}}
 
         s.parse_fileinfo()
+
+        s.data = dict()
+        s.data['uID'] = s.file_info['id'] + '_' + s.file_info['session']
+
         if s.file_info['experiment'] == 'ant':
             s.normed_cases_calc()
         s.parse_header()
@@ -500,44 +504,46 @@ class MT_File:
             s.normed_cases = MT_File.ant_case_convD[0]
             s.norm_fail = True
 
-    def parse_fileDB(s):
+    def parse_fileDB(s, general_info=False):
         s.parse_file()
         exp = s.file_info['experiment']
-        ddict = {'data': {}}
-        for k in s.data:
+        ddict = {}
+        for k in s.mt_data:  # for
             case_convdict = s.case_nums2names[exp]
             case = case_convdict[int(k[0])]
             peak = k[1]
             inner_ddict = {}
-            for chan, amp_lat in s.data[k].items():  # chans
+            for chan, amp_lat in s.mt_data[k].items():  # chans
                 if type(amp_lat) is tuple:  # if amp / lat tuple
                     inner_ddict.update(
                         {chan: {'amp': float(amp_lat[0]),
                                 'lat': float(amp_lat[1])}}
                     )
-            ddict['data'].update({case + '_' + peak: inner_ddict})
-        s.data = ddict
-        s.data.update(s.file_info)
-        s.data['ID'] = s.data['id']
-        s.data['uID'] = s.data['ID'] + '_' + s.data['session']
-        s.data['path'] = s.fullpath
+            ddict[case + '_' + peak] = inner_ddict
+        ddict['filepath'] = s.fullpath
+
+        if general_info:
+            s.data.update(s.file_info)
+            s.data['ID'] = s.data['id']
+
+        s.data[exp] = ddict
 
     def parse_file(s):
         of = open(s.fullpath, 'r')
         data_lines = of.readlines()[s.header_lines:]
         of.close()
-        s.data = OrderedDict()
+        s.mt_data = OrderedDict()
         for L in data_lines:
             Ld = {c: v for c, v in zip(s.columns, L.split())}
             if 'normed_cases' in dir(s):
                 Ld['case_num'] = s.normed_cases[int(Ld['case_num'])]
             key = (int(Ld['case_num']), Ld['peak'])
-            if key not in s.data:
-                s.data[key] = OrderedDict()
-            s.data[key][Ld['electrode'].upper()] = (
+            if key not in s.mt_data:
+                s.mt_data[key] = OrderedDict()
+            s.mt_data[key][Ld['electrode'].upper()] = (
                 Ld['amplitude'], Ld['latency'])
-            if 'reaction_time' not in s.data[key]:
-                s.data[key]['reaction_time'] = Ld['reaction_time']
+            if 'reaction_time' not in s.mt_data[key]:
+                s.mt_data[key]['reaction_time'] = Ld['reaction_time']
         return
 
     def parse_fileDF(s):
@@ -601,9 +607,9 @@ class MT_File:
             return high_lat[['case_num', 'electorde', 'peak', 'amplitude', 'latency']]
 
     def build_header(s):
-        if 'data' not in dir(s):
+        if 'mt_data' not in dir(s):
             s.parse_file()
-        cases_peaks = list(s.data.keys())
+        cases_peaks = list(s.mt_data.keys())
         cases_peaks.sort()
         header_data = OrderedDict()
         for cp in cases_peaks:
@@ -613,7 +619,7 @@ class MT_File:
 
         # one less for reaction_time
         s.header_text = '#nchans ' + \
-                        str(len(s.data[cases_peaks[0]]) - 1) + '\n'
+                        str(len(s.mt_data[cases_peaks[0]]) - 1) + '\n'
         for cs, ch_count in header_data.items():
             s.header_text += '#case ' + \
                              str(cs) + '; npeaks ' + str(ch_count) + ';\n'
@@ -638,25 +644,25 @@ class MT_File:
         return True
 
     def check_peak_identities(s):
-        if 'data' not in dir(s):
+        if 'mt_data' not in dir(s):
             s.parse_file()
         for case, peaks in s.cases_peaks_by_experiment[s.file_info['experiment']].items():
-            if (case[0], peaks[0]) not in s.data:
+            if (case[0], peaks[0]) not in s.mt_data:
                 return False, 'case ' + str(case) + ' missing ' + peaks[0] + ' peak'
-            if (case[0], peaks[1]) not in s.data:
+            if (case[0], peaks[1]) not in s.mt_data:
                 return False, 'case ' + str(case) + ' missing ' + peaks[1] + ' peak'
         return True
 
     def check_peak_orderNmax_latency(s, latency_thresh=1000):
-        if 'data' not in dir(s):
+        if 'mt_data' not in dir(s):
             s.parse_file()
         for case, peaks in s.cases_peaks_by_experiment[s.file_info['experiment']].items():
             try:
-                latency1 = float(s.data[(case[0], peaks[0])]['FZ'][1])
-                latency2 = float(s.data[(case[0], peaks[1])]['FZ'][1])
+                latency1 = float(s.mt_data[(case[0], peaks[0])]['FZ'][1])
+                latency2 = float(s.mt_data[(case[0], peaks[1])]['FZ'][1])
             except:
                 print(s.fullpath + ': ' +
-                      str(s.data[(case[0], peaks[0])].keys()))
+                      str(s.mt_data[(case[0], peaks[0])].keys()))
             if latency1 > latency_thresh:
                 return (
                     False,
