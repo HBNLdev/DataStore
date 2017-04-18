@@ -12,6 +12,8 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
     ''' given a starting directory, and a glob-style filter pattern,
         recursively find all files that match the filter pattern '''
 
+    t0 = datetime.now()
+
     file_list = []
     date_list = []
 
@@ -47,6 +49,9 @@ def identify_files(starting_directory, filter_pattern='*', file_parameters={}, f
                             date_mod = datetime.fromtimestamp(
                                 os.path.getmtime(fullpath))
                             date_list.append(date_mod)
+
+    t1 = datetime.now()
+    print('searching {} with pattern {} took {}'.format(starting_directory, filter_pattern, t1-t0))
 
     return file_list, date_list
 
