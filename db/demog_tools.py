@@ -10,7 +10,8 @@ import pandas as pd
 
 from .utils.compilation import conv_159
 
-default_field_eponyms = {'ID', 'famID', 'mID', 'fID', 'sex', 'twin'}
+# default_field_eponyms = {'ID', 'famID', 'mID', 'fID', 'sex', 'twin'}
+default_field_eponyms = {'ID', 'famID', 'mID', 'fID', 'sex'}
 def_fields = {f: f for f in default_field_eponyms}
 
 sex_to_parentfield = {'m': 'fID', 'f': 'mID', 'M': 'fID', 'F': 'mID'}
@@ -137,18 +138,21 @@ def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_
 
     sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
-    all_counts, all_sums, all_ratios = fam_fhd(fDF, aff_col)
+    all_counts, all_sums, all_denoms, all_ratios = fam_fhd(fDF, aff_col)
 
     rels_col = 'nrels_' + aff_col
     sum_col = 'fhdsum_' + aff_col
+    denom_col = 'fhddenom_' + aff_col
     ratio_col = 'fhdratio_' + aff_col
 
     count_series = pd.Series(all_counts, name=rels_col)
     sum_series = pd.Series(all_sums, name=sum_col)
+    denom_series = pd.Series(all_denoms, name=denom_col)
     ratio_series = pd.Series(all_ratios, name=ratio_col)
 
     sDF[ratio_col] = ratio_series
     sDF[sum_col] = sum_series
+    sDF[denom_col] = denom_series
     sDF[rels_col] = count_series
 
     sDF.ix[sDF[rels_col].isnull(), rels_col] = 0
@@ -181,18 +185,21 @@ def calc_fhd_catnorm(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
 
     sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
-    all_counts, all_sums, all_ratios = fam_fhd_catnorm(fDF, aff_col)
+    all_counts, all_sums, all_denoms, all_ratios = fam_fhd_catnorm(fDF, aff_col)
 
     rels_col = 'nrelsc_' + aff_col
     sum_col = 'fhdsumc_' + aff_col
+    denom_col = 'fhddenomc_' + aff_col
     ratio_col = 'fhdratioc_' + aff_col
 
     count_series = pd.Series(all_counts, name=rels_col)
     sum_series = pd.Series(all_sums, name=sum_col)
+    denom_series = pd.Series(all_denoms, name=denom_col)
     ratio_series = pd.Series(all_ratios, name=ratio_col)
 
     sDF[ratio_col] = ratio_series
     sDF[sum_col] = sum_series
+    sDF[denom_col] = denom_series
     sDF[rels_col] = count_series
 
     sDF.ix[sDF[rels_col].isnull(), rels_col] = 0
@@ -214,18 +221,21 @@ def calc_fhd_pathlen(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
 
     sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
 
-    all_counts, all_sums, all_ratios = fam_fhd_pathlen(fDF, aff_col, base_constant)
+    all_counts, all_sums, all_denoms, all_ratios = fam_fhd_pathlen(fDF, aff_col, base_constant)
 
     rels_col = 'nrels' + str(base_constant) + '_' + aff_col
     sum_col = 'fhdsum' + str(base_constant) + '_' + aff_col
+    denom_col = 'fhddenom' + str(base_constant) + '_' + aff_col
     ratio_col = 'fhdratio' + str(base_constant) + '_' + aff_col
 
     count_series = pd.Series(all_counts, name=rels_col)
     sum_series = pd.Series(all_sums, name=sum_col)
+    denom_series = pd.Series(all_denoms, name=denom_col)
     ratio_series = pd.Series(all_ratios, name=ratio_col)
 
     sDF[ratio_col] = ratio_series
     sDF[sum_col] = sum_series
+    sDF[denom_col] = denom_series
     sDF[rels_col] = count_series
 
     sDF.ix[sDF[rels_col].isnull(), rels_col] = 0
@@ -268,6 +278,7 @@ def fam_fhd(fDF, aff_col):
 
     all_counts = dict()
     all_sums = dict()
+    all_denoms = dict()
     all_ratios = dict()
 
     fams = fDF['famID'].unique()
@@ -279,9 +290,10 @@ def fam_fhd(fDF, aff_col):
         famO.calc_famfhd()
         all_counts.update(famO.count_dict)
         all_sums.update(famO.fhdsum_dict)
+        all_denoms.update(famO.fhddenom_dict)
         all_ratios.update(famO.fhdratio_dict)
 
-    return all_counts, all_sums, all_ratios
+    return all_counts, all_sums, all_denoms, all_ratios
 
 
 def fam_fhd_catnorm(fDF, aff_col):
@@ -290,6 +302,7 @@ def fam_fhd_catnorm(fDF, aff_col):
 
     all_counts = dict()
     all_sums = dict()
+    all_denoms = dict()
     all_ratios = dict()
 
     fams = fDF['famID'].unique()
@@ -301,9 +314,10 @@ def fam_fhd_catnorm(fDF, aff_col):
         famO.calc_famfhd_catnorm()
         all_counts.update(famO.count_dict)
         all_sums.update(famO.fhdsum_dict)
+        all_denoms.update(famO.fhddenom_dict)
         all_ratios.update(famO.fhdratio_dict)
 
-    return all_counts, all_sums, all_ratios
+    return all_counts, all_sums, all_denoms, all_ratios
 
 
 def fam_fhd_pathlen(fDF, aff_col, base_constant=2):
@@ -312,6 +326,7 @@ def fam_fhd_pathlen(fDF, aff_col, base_constant=2):
 
     all_counts = dict()
     all_sums = dict()
+    all_denoms = dict()
     all_ratios = dict()
 
     fams = fDF['famID'].unique()
@@ -323,9 +338,10 @@ def fam_fhd_pathlen(fDF, aff_col, base_constant=2):
         famO.calc_famfhd_pathlen(base_constant)
         all_counts.update(famO.count_dict)
         all_sums.update(famO.fhdsum_dict)
+        all_denoms.update(famO.fhddenom_dict)
         all_ratios.update(famO.fhdratio_dict)
 
-    return all_counts, all_sums, all_ratios
+    return all_counts, all_sums, all_denoms, all_ratios
 
 
 class Family:
@@ -589,6 +605,7 @@ class Family:
 
         fhdratio_dict = dict()
         fhdsum_dict = dict()
+        fhddenom_dict = dict()
         count_dict = dict()
 
         for ID, cat_dict in s.ID_rels_dict_conv.items():
@@ -616,11 +633,14 @@ class Family:
             try:
                 fhdratio_dict[ID] = fhd_num / fhd_denom
                 fhdsum_dict[ID] = fhd_num
+                fhddenom_dict[ID] = fhd_denom
+
             except ZeroDivisionError:
                 pass
 
         s.fhdratio_dict = fhdratio_dict
         s.fhdsum_dict = fhdsum_dict
+        s.fhddenom_dict = fhddenom_dict
         s.count_dict = count_dict
 
     def calc_famfhd_catnorm(s):
@@ -629,6 +649,7 @@ class Family:
 
         fhdratio_dict = dict()
         fhdsum_dict = dict()
+        fhddenom_dict = dict()
         count_dict = dict()
 
         for ID, cat_dict in s.ID_rels_dict_conv.items():
@@ -663,11 +684,13 @@ class Family:
             try:
                 fhdratio_dict[ID] = fhd_num / fhd_denom
                 fhdsum_dict[ID] = fhd_num
+                fhddenom_dict[ID] = fhd_denom
             except ZeroDivisionError:
                 pass
 
         s.fhdratio_dict = fhdratio_dict
         s.fhdsum_dict = fhdsum_dict
+        s.fhddenom_dict = fhddenom_dict
         s.count_dict = count_dict
 
     def calc_famfhd_pathlen(s, base_constant=2):
@@ -676,6 +699,7 @@ class Family:
 
         fhdratio_dict = dict()
         fhdsum_dict = dict()
+        fhddenom_dict = dict()
         count_dict = dict()
 
         for ID in s.G2.nodes():
@@ -703,11 +727,13 @@ class Family:
             try:
                 fhdratio_dict[ID] = fhd_num / fhd_denom
                 fhdsum_dict[ID] = fhd_num
+                fhddenom_dict[ID] = fhd_denom
             except ZeroDivisionError:
                 pass
 
         s.fhdratio_dict = fhdratio_dict
         s.fhdsum_dict = fhdsum_dict
+        s.fhddenom_dict = fhddenom_dict
         s.count_dict = count_dict
 
     def calc_famPH(s, use_rels=('Mpred',), thresh=0):
