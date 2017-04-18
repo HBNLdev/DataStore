@@ -234,7 +234,6 @@ class AVGH1_File(CNTH1_File):
                 results[nm + '_accwithrespwithlate'] = np.sum(correct_late) / \
                                                        (np.sum(stmevs) - np.sum(noresp))
 
-                
                 # this part logs the median reaction time for each type of response
                 # (i.e. both for correct and incorrect responses)
                 for rc in s.acceptable_resps:
@@ -252,7 +251,10 @@ class AVGH1_File(CNTH1_File):
         for t, t_attrs in s.case_dict.items():
             nm = t_attrs['code']
             case_trials = s.trial_df[s.trial_df['Stimulus'] == t]
-            results[nm + '_acc'] = sum(case_trials['Correct']) / case_trials.shape[0]
+            try:
+                results[nm + '_acc'] = sum(case_trials['Correct']) / case_trials.shape[0]
+            except ZeroDivisionError:
+                results[nm + '_acc'] = np.nan
             if t_attrs['corr_resp'] != 0:  # response required
                 case_trials.drop(case_trials[~case_trials['Correct']].index, inplace=True)
                 results[nm + '_medianrt'] = case_trials['Reaction Time (ms)'].median()
@@ -521,9 +523,14 @@ class MT_File:
                     )
             ddict[case + '_' + peak] = inner_ddict
         ddict['filepath'] = s.fullpath
+        ddict['run'] = s.file_info['run']
+        ddict['version'] = s.file_info['version']
 
         if general_info:
             s.data.update(s.file_info)
+            del s.data['experiment']
+            del s.data['run']
+            del s.data['version']
             s.data['ID'] = s.data['id']
 
         s.data[exp] = ddict
