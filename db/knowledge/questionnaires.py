@@ -3,15 +3,26 @@
 
 # defining maximum followups
 
+most_recent_distribution = 76
 max_fups = 6
 
 # definitions of zork URLs
 
 base_url = 'https://zork5.wustl.edu/coganew/data/available_data'
-core_url = '/pheno_all/core_pheno_20161129.zip'
-fam_url = '/family_data/allfam_sas_3-20-12.zip'
+
+# updated often!
+core_url = '/pheno_all/core_pheno_20170309.zip'
+allrels_file = 'allrelsweb201703.sas7bdat.csv'
+# allrels_file = 'allrels_30nov2016.sas7bdat.csv'
+
+# updated semi-often
+cal_url = '/Phase_IV/CalFoms01.26.2017_sas.zip'
+# cal_url = '/Phase_IV/CAL%20Forms%20Summer-Fall%202015%20Harvest_sas.zip'
+
+# not updated in a while
 ach_url = '/Phase_IV/Achenbach%20January%202016%20Distribution.zip'
-cal_url = '/Phase_IV/CAL%20Forms%20Summer-Fall%202015%20Harvest_sas.zip'
+fam_url = '/family_data/allfam_sas_3-20-12.zip'
+vcu_url = '/vcu_ext_pheno/vcu_ext_all_121112_sas.zip'
 
 # definitions of locations in filesystem
 
@@ -20,16 +31,15 @@ harmonization_path = '/processed_data/zork/harmonization/harmonization-combined-
 zork_p123_path = '/processed_data/zork/zork-phase123/'
 p123_master_path = zork_p123_path + 'subject/master/master.sas7bdat.csv'
 
-zork_p4_path = '/processed_data/zork/zork-phase4-72/'
-p4_master_path = zork_p4_path + 'subject/master/master4_30nov2016.sas7bdat.csv'
+zork_p4_path = '/processed_data/zork/zork-phase4-' + str(most_recent_distribution) + '/'
+p4_master_path = zork_p4_path + 'subject/master/master4.sas7bdat.csv'
 
+# can stay at 69 if they haven't changed
 internalizing_dir = '/processed_data/zork/zork-phase4-69/subject/internalizing/'
 internalizing_file = 'INT_Scale_All-Total-Scores_n11281.csv'
 
 externalizing_dir = '/processed_data/zork/zork-phase4-69/subject/vcuext/'
 externalizing_file = 'vcu_ext_all_121112.sas7bdat.csv'
-
-allrels_file = 'allrels_30nov2016.sas7bdat.csv'
 
 fham_file = 'bigfham4.sas7bdat.csv'
 
@@ -136,7 +146,7 @@ map_subject = {'core': {'file_pfixes': 'core',
                         'zork_url': '/family_data/allrels_sas.zip'},
                'vcuext': {'file_pfixes': ['vcu'],
                           'zip_name': 'vcu',
-                          'zork_url': '/vcu_ext_pheno/vcu_ext_all_121112_sas.zip'},
+                          'zork_url': vcu_url},
                'master': {'file_pfixes': 'master4',
                           'zip_name': 'master4',
                           'zork_url': '/Phase_IV/master4_sas.zip'}
