@@ -1,7 +1,7 @@
 ''' tools for comparing two dataframes '''
 
 from collections import OrderedDict
-
+import numpy as np
 
 def basic_diagnostics(df):
     ''' given a dataframe, return a string with some basic diagnostics '''
@@ -119,8 +119,8 @@ def contents_eq(df1_in, df2_in, join_how='inner', lsuffix='_larry', rsuffix='_ri
 
     if n_alldiffcols > 0 or n_alldiffrows > 0:
         print(n_alldiffcols, 'columns and', n_alldiffrows, 'rows were totally different')
-        print('the completely differing rows were', df1.index[alldiff_cols])
-        print('the completely differing columns were', df1.columns[alldiff_rows])
+        print('the completely differing rows were', df1.index[alldiff_rows])
+        print('the completely differing columns were', df1.columns[alldiff_cols])
 
     if n_anydiffcols > 0 or n_anydiffrows > 0:
         print(n_anydiffcols, 'columns and', n_anydiffrows, 'rows had differing vals')
@@ -166,13 +166,25 @@ def check_allcoldiffs(diff_df, lsuffix='_larry', rsuffix='_ricky'):
     return diff_dict
 
 
-def print_diffdict(diff_dict):
+def twocol_MSE(df):
+
+    return np.power(df.diff(axis=1).iloc[:, 1], 2).mean()
+
+
+
+def print_diffdict(diff_dict, do_MSE=False):
     ''' given a diff dict, print its contents '''
 
     cdum = 1
     for column, df in diff_dict.items():
         print('______________________________________________________________')
         print(cdum, '|', column)
+        if do_MSE:
+            try:
+                mse = twocol_MSE(df)
+                print('MSE:', mse)
+            except:
+                pass
         print(df)
         print('______________________________________________________________')
         print('')
