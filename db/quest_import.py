@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .knowledge.questionnaires import def_info, harmonization_path
-from .organization import Questionnaire, SSAGA
+from .organization import Questionnaire
 from .utils.compilation import df_fromcsv
 from .utils.dates import convert_date_fallback
 
@@ -64,7 +64,7 @@ def build_inputdict(name, knowledge_dict):
     return idict
 
 
-def import_questfolder_ph4(qname, kmap, path):
+def import_questfolder_ph4(qname, kmap, path, quest_collection_name):
     ''' import all questionnaire data in one folder '''
 
     # build inputs
@@ -124,11 +124,11 @@ def import_questfolder_ph4(qname, kmap, path):
 
         # convert to records and store in mongo coll, noting followup_lbl
         for drec in df.to_dict(orient='records'):
-            ro = Questionnaire(qname, followup_lbl, info=drec)
+            ro = Questionnaire(quest_collection_name, qname, followup_lbl, data=drec)
             ro.storeNaTsafe()
 
 
-def import_questfolder_ssaga_ph4(qname, kmap, path):
+def import_questfolder_ssaga_ph4(qname, kmap, path, ssaga_collection_name):
     ''' import all questionnaire data in one folder,
         joining multiple files of the same type '''
 
@@ -193,15 +193,15 @@ def import_questfolder_ssaga_ph4(qname, kmap, path):
         # and separately for the full questionnaire and diagnoses
 
         for drec in join_df[list(nondx_cols) + ['ID', 'date']].to_dict(orient='records'):
-            ro = SSAGA(qname, followup_lbl, info=drec)
+            ro = Questionnaire(ssaga_collection_name, qname, followup_lbl, data=drec)
             ro.storeNaTsafe()
 
         for drec in join_df[list(dx_cols) + ['ID', 'date', i['date_lbl']]].to_dict(orient='records'):
-            ro = SSAGA('dx_' + qname, followup_lbl, info=drec)
+            ro = Questionnaire(ssaga_collection_name, 'dx_' + qname, followup_lbl, data=drec)
             ro.storeNaTsafe()
 
 
-def import_questfolder_ph123(qname, kmap, path):
+def import_questfolder_ph123(qname, kmap, path, quest_collection_name):
     ''' import all questionnaire data in one folder,
         joining multiple files of the same type '''
 
@@ -248,7 +248,7 @@ def import_questfolder_ph123(qname, kmap, path):
 
         followup_lbl = i['followup'][fpx]
         for drec in df.to_dict(orient='records'):
-            ro = Questionnaire(qname, followup_lbl, info=drec)
+            ro = Questionnaire(quest_collection_name, qname, followup_lbl, data=drec)
             ro.storeNaTsafe()
 
 
@@ -270,7 +270,7 @@ def create_ssagaharm_renamer(ssaga_type, phase):
     return renamer
 
 
-def import_questfolder_ssaga_ph123(qname, kmap, path):
+def import_questfolder_ssaga_ph123(qname, kmap, path, ssaga_collection_name):
     ''' import all questionnaire data in one folder,
         joining multiple files of the same type '''
 
@@ -323,7 +323,7 @@ def import_questfolder_ssaga_ph123(qname, kmap, path):
 
         if fname[:3] == 'dx_':
             for drec in df.to_dict(orient='records'):
-                ro = SSAGA('dx_' + qname, followup_lbl, info=drec)
+                ro = Questionnaire(ssaga_collection_name, 'dx_' + qname, followup_lbl, data=drec)
                 ro.storeNaTsafe()
         else:
 
@@ -332,5 +332,5 @@ def import_questfolder_ssaga_ph123(qname, kmap, path):
             df = df.rename(columns=harm_renamer)
 
             for drec in df.to_dict(orient='records'):
-                ro = SSAGA(qname, followup_lbl, info=drec)
+                ro = Questionnaire(ssaga_collection_name, qname, followup_lbl, data=drec)
                 ro.storeNaTsafe()

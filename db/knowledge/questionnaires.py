@@ -13,11 +13,9 @@ base_url = 'https://zork5.wustl.edu/coganew/data/available_data'
 # updated often!
 core_url = '/pheno_all/core_pheno_20170309.zip'
 allrels_file = 'allrelsweb201703.sas7bdat.csv'
-# allrels_file = 'allrels_30nov2016.sas7bdat.csv'
 
 # updated semi-often
 cal_url = '/Phase_IV/CalFoms01.26.2017_sas.zip'
-# cal_url = '/Phase_IV/CAL%20Forms%20Summer-Fall%202015%20Harvest_sas.zip'
 
 # not updated in a while
 ach_url = '/Phase_IV/Achenbach%20January%202016%20Distribution.zip'

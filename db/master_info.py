@@ -1,11 +1,11 @@
 '''EEGmaster
 '''
 
+import numbers
 import os
 from datetime import datetime
 
 import pandas as pd
-import numbers
 
 from .utils.compilation import ID_nan_strint
 from .utils.dates import calc_date_w_Qs
@@ -57,9 +57,9 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
         master = pd.read_csv(master_path_use,
                              converters={'ID': ID_nan_strint, 'famID': ID_nan_strint,
                                          'mID': ID_nan_strint, 'fID': ID_nan_strint,
-                                         'genoID': ID_nan_strint, 
+                                         'genoID': ID_nan_strint,
                                          'EEfamGWAS-fam': ID_nan_strint,
-                                         'COGA11k-fam': ID_nan_strint },
+                                         'COGA11k-fam': ID_nan_strint},
                              na_values='.', low_memory=False)
         master.set_index('ID', drop=False, inplace=True)
 
@@ -198,7 +198,8 @@ def protect_dates(filepath):
     inf.close()
     outf.close()
 
-#columnn check functions
+
+# columnn check functions
 
 def famID_ck(stck):
     try:
@@ -208,12 +209,14 @@ def famID_ck(stck):
     except AssertionError:
         return False
 
+
 def selfReported_ck(stck):
     try:
         assert stck[0] in 'hnu'
         assert stck[1] in '1234689'
     except AssertionError:
         return False
+
 
 column_guides = {
     'ID': ['start in', '1234567achp'],
@@ -236,11 +239,11 @@ column_guides = {
     'twin': ['in', [0, 1, 2]],
     'EEG': ['in', ['x', 'e', '-']],
     'system': ['in', ['es', 'es-ns', 'mc', 'mc-es', 'mc-ns', 'ns']],
-    'Wave12': ['in', ['P', 'p','x']],
+    'Wave12': ['in', ['P', 'p', 'x']],
     'Wave12-fam': ['in', [1, 2]],
     'fMRI': ['in', ['1a', '1b']],
     'Wave3': ['in', ['x', 'rm']],
-    'Phase4-session': ['in', ['a', 'b', 'c', 'd','p','pa','pb','x']],
+    'Phase4-session': ['in', ['a', 'b', 'c', 'd', 'p', 'pa', 'pb', 'x']],
     'Phase4-testdate': ['date'],
     'Phase4-age': 'numeric',
     '4500': ['in', ['x', 'x-', 'rm']],
@@ -254,7 +257,7 @@ column_guides = {
                            'Mixed-AA', 'PacIs']],
     '4500-race': ['in', ['EA_0', 'OTHER_0', 'EA_1', 'AA_0', 'AA_1', 'AA_.', 'OTHER_1',
                          'EA_.', 'OTHER_.']],
-    'ccGWAS-race': ['in', ['AA', 'EA','other']],
+    'ccGWAS-race': ['in', ['AA', 'EA', 'other']],
     'core-race': ['in', ['n6', 'n9', 'h6', 'n4', 'n2', 'h4', 'h9', 'n8', 'u6', 'h2']],
     'COGA11k-fam': famID_ck,
     'COGA11k-race': ['in', ['AA', 'EA', 'other']],
@@ -269,35 +272,35 @@ column_guides = {
 
 
 def check_column_contents(filepath):
-    M, store_date = load_master(custom_path = filepath)
+    M, store_date = load_master(custom_path=filepath)
     failures = []
 
     for col in M.columns:
         date_col = False
-        vals = [ v for v in M[col].tolist() if not pd.isnull(v) ]
+        vals = [v for v in M[col].tolist() if not pd.isnull(v)]
         if col in column_guides:
             guide = column_guides[col]
             if guide == 'numeric':
                 tests = [isinstance(v, numbers.Number) for v in vals]
             elif guide == 'date':
-                date_col = True   
+                date_col = True
             elif type(guide) == list:
                 if guide[0] == 'start in':
                     start_len = len(guide[1][0])
-                    tests = [ v[0:start_len] in guide[1] for v in vals ]
+                    tests = [v[0:start_len] in guide[1] for v in vals]
                 elif guide[0] == 'in':
-                    tests = [ v in guide[1] for v in vals ]
+                    tests = [v in guide[1] for v in vals]
             elif callable(guide):
                 tests = [guide(v) for v in vals]
 
         else:
-            if '-date' in col or col in ['DOB','Phase4-testdate']:
+            if '-date' in col or col in ['DOB', 'Phase4-testdate']:
                 date_col = True
 
         if date_col:
-            print('date types for '+col, set([type(v) for v in vals]))
+            print('date types for ' + col, set([type(v) for v in vals]))
 
         if False in tests:
-            failures.append( ( col, [ v for v,t in zip(vals,tests) if t==False ] ) )
+            failures.append((col, [v for v, t in zip(vals, tests) if t == False]))
 
     return M, failures

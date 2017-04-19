@@ -5,7 +5,7 @@ import sys
 
 import pandas as pd
 
-from .organization import MongoBacked, MongoConn
+from .organization import MongoDoc, MongoConn
 
 processing_module = sys.modules[__name__]
 
@@ -17,7 +17,7 @@ def characterize(input):
             'size': sys.getsizeof(input)}
 
 
-class ProcessBacked(MongoBacked):
+class ProcessDoc(MongoDoc):
     Mdb = MongoConn['process']
 
     def store(s):  # overloading store method
@@ -31,7 +31,7 @@ class ProcessBacked(MongoBacked):
             # return insert
 
 
-class processingBatch(ProcessBacked):
+class processingBatch(ProcessDoc):
     collection = 'batches'
 
     def __init__(s, group=None, data_func=None):
@@ -54,7 +54,7 @@ class processingBatch(ProcessBacked):
                   'data func': str(s.data_func)}
 
 
-class pipelineStep(ProcessBacked):
+class pipelineStep(ProcessDoc):
     ''' General representation of a processing step
     '''
 
@@ -89,7 +89,7 @@ class pipelineStep(ProcessBacked):
         return s.description['process function'](input, **s.description['named inputs'])
 
 
-class pipe(ProcessBacked):
+class pipe(ProcessDoc):
     collection = 'pipes'
 
     def __init__(s, steps=[], init_fun=None):
@@ -131,7 +131,7 @@ class pipe(ProcessBacked):
             s.data['init function'] = s.init_fun.store_name
 
 
-class workingPipe(ProcessBacked):
+class workingPipe(ProcessDoc):
     collection = 'work'
 
     def __init__(s, pipe, batch):

@@ -383,13 +383,12 @@ core_aud_dx_cols = ['alc_dep_dx',
                     ]
 
 core_dsm5_sx_cols = ['alc_dep_max_sx1',
-                    'alc_dep_max_sx2',
-                    'alc_dep_max_sx3',
-                    'alc_dep_max_sx4',
-                    'alc_dep_max_sx5',
-                    'alc_dep_max_sx6',
-                    'alc_dep_max_sx7',
-                    'alc_abuse_max_sx1',
-                    'alc_abuse_max_sx2',
-                    'alc_abuse_max_sx4',]
-
+                     'alc_dep_max_sx2',
+                     'alc_dep_max_sx3',
+                     'alc_dep_max_sx4',
+                     'alc_dep_max_sx5',
+                     'alc_dep_max_sx6',
+                     'alc_dep_max_sx7',
+                     'alc_abuse_max_sx1',
+                     'alc_abuse_max_sx2',
+                     'alc_abuse_max_sx4', ]

@@ -2,10 +2,11 @@
 
 import pprint
 
+import pymongo
 import numpy as np
 import pandas as pd
 
-from .organization import Mdb
+from .organization import use_db_name, socket_path
 from .utils.records import flatten_dict
 
 pp = pprint.PrettyPrinter(indent=4)
@@ -85,17 +86,30 @@ sparse_addmaps = {'subjects': subjects_sparser_add,
 default_ERPfields = {'ID': 1, 'session': 1, '_id': 0}
 default_EROfields = {'ID': 1, 'session': 1, 'uID': 1, '_id': 0}
 
+subcoll_dict = dict()
+
+use_db_name = use_db_name
+MongoConn = pymongo.MongoClient(socket_path)
+Mdb = MongoConn[use_db_name]
+
+# considering a function that lets you set the module-wide DB
+# not sure this is the best implementation
+
+
+def set_db(db_name):
+    global Mdb
+    Mdb = MongoConn[db_name]
+
 
 def populate_subcolldict():
     ''' make dict whose keys are collections and values are lists of
         subcollections (if they exist) '''
+
+    global subcoll_dict
     subcoll_dict = {coll: Mdb[coll].distinct(subcoll_fnames[coll])
     if coll in subcoll_fnames.keys() else None
                     for coll in Mdb.collection_names()}
     return subcoll_dict
-
-
-subcoll_dict = populate_subcolldict()
 
 
 def display_samples():
@@ -106,6 +120,10 @@ def display_samples():
 
 def display_dbcontents():
     ''' display the contents of the database '''
+
+    global subcoll_dict
+    if not subcoll_dict:
+        subcoll_dict = populate_subcolldict()
     pp.pprint(subcoll_dict)
 
 
@@ -149,6 +167,11 @@ def get_sessiondocs(sample, followups=None, sparsify=False):
 
 def check_collinputs(coll, subcoll=None, mode='program'):
     ''' verify collection / sub-collection is in DB '''
+
+    global subcoll_dict
+    if not subcoll_dict:
+        subcoll_dict = populate_subcolldict()
+
     result = True
     if coll not in subcoll_dict.keys():
         result = False
@@ -326,17 +349,17 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
 
 
 def join_ssaga(keyDF_in, raw=False, add_query={}, add_proj={},
-                left_join_inds=['ID'], right_join_inds=['ID'],
-                id_field='ID', flatten=True, prefix=None,
-                drop_empty=True, how='left'):
+               left_join_inds=['ID'], right_join_inds=['ID'],
+               id_field='ID', flatten=True, prefix=None,
+               drop_empty=True, how='left'):
     ''' given a "key" dataframe and target collection,
         join corresponding info '''
 
     keyDF = keyDF_in.copy()
 
     newDF = prepare_ssagadata(keyDF_in, raw, add_query, add_proj,
-                             left_join_inds, right_join_inds,
-                             id_field, flatten, prefix)
+                              left_join_inds, right_join_inds,
+                              id_field, flatten, prefix)
 
     prepare_indices(keyDF, right_join_inds)
 
@@ -348,12 +371,11 @@ def join_ssaga(keyDF_in, raw=False, add_query={}, add_proj={},
         jDF.dropna(axis=1, how='all', inplace=True)
 
     return jDF
-    
+
 
 def prepare_ssagadata(keyDF, raw, add_query, add_proj,
-                         left_join_inds, right_join_inds,
-                         id_field, flatten, prefix):
-    
+                      left_join_inds, right_join_inds,
+                      id_field, flatten, prefix):
     if raw:
         ssaga_subcoll = 'ssaga'
         cssaga_subcoll = 'cssaga'
@@ -394,6 +416,7 @@ def prepare_ssagadata(keyDF, raw, add_query, add_proj,
     newDF.sort_index(inplace=True)  # sort
 
     return newDF
+
 
 def prepare_indices(df, join_inds):
     ''' make certain a dataframe has certain indices '''

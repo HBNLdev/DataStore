@@ -1,7 +1,9 @@
 ''' tools for comparing two dataframes '''
 
 from collections import OrderedDict
+
 import numpy as np
+
 
 def basic_diagnostics(df):
     ''' given a dataframe, return a string with some basic diagnostics '''
@@ -167,9 +169,7 @@ def check_allcoldiffs(diff_df, lsuffix='_larry', rsuffix='_ricky'):
 
 
 def twocol_MSE(df):
-
     return np.power(df.diff(axis=1).iloc[:, 1], 2).mean()
-
 
 
 def print_diffdict(diff_dict, do_MSE=False):
