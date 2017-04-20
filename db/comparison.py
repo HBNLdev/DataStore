@@ -3,6 +3,7 @@
 from collections import OrderedDict
 
 import numpy as np
+import pandas as pd
 
 
 def basic_diagnostics(df):
@@ -138,6 +139,68 @@ def contents_eq(df1_in, df2_in, join_how='inner', lsuffix='_larry', rsuffix='_ri
     return dfj.loc[df1.index[anydiff_rows], out_cols]
 
 
+def combine(df1_in, df2_in, lsuffix='_larry', rsuffix='_ricky', ind_sort=False):
+    ''' given a two dataframes, match their indices and columns, then combine corresponding info such that:
+            - if both values are present (but different), take the right-hand one
+            - if one value is missing, take the other
+    '''
+
+    print('index diagnostics:')
+    if ind_sort:
+        index_sort(df1_in, df2_in)
+    inds_eq = series_eq(df1_in.index, df2_in.index)
+    if not inds_eq:
+        print('some inds differ, differing inds will be unchanged in the outer combine results')
+    print('~~~')
+
+    print('column diagnostics:')
+    cols_eq = series_eq(df1_in.columns, df2_in.columns)
+    if not cols_eq:
+        print('some columns differ, differing columns will be unchanged in the outer combine results')
+    print('~~~')
+
+    dfji = df1_in.join(df2_in, how='inner', lsuffix=lsuffix, rsuffix=rsuffix)
+    dfjo = df1_in.join(df2_in, how='outer', lsuffix=lsuffix, rsuffix=rsuffix)
+
+    lsl, rsl = len(lsuffix), len(rsuffix)
+    nonmatch_cols = [col for col in dfji.columns if
+                     col[-lsl:] != lsuffix and col[-rsl:] != rsuffix]
+    df1_cols = [col for col in dfji.columns if col[-lsl:] == lsuffix]
+    # df2_cols = [col for col in dfji.columns if col[-rsl:] == rsuffix]
+    df2_cols = [col[:-lsl] + rsuffix for col in df1_cols]
+
+    df1_tmp, df2_tmp = dfji[df1_cols + nonmatch_cols], dfji[df2_cols + nonmatch_cols]
+
+    if df1_tmp.shape != df2_tmp.shape:
+        print('something went wrong')
+
+    df1_tmp.rename(columns={col: col[:-lsl] for col in df1_tmp.columns if col[-lsl:] == lsuffix}, inplace=True)
+    df2_tmp.rename(columns={col: col[:-rsl] for col in df2_tmp.columns if col[-rsl:] == rsuffix}, inplace=True)
+
+    df1_tmp_notnan, df2_tmp_notnan = df1_tmp.notnull(), df2_tmp.notnull()
+
+    df1, df2 = df1_tmp.where(df1_tmp_notnan, other=df2_tmp), df2_tmp.where(df2_tmp_notnan, other=df1_tmp)
+
+    ne_bool = df1 != df2
+
+    df_diffresolved = df1.where(~ne_bool, other=df2)
+
+    df1_uniqinds = set(df1_in.index) - set(df2_in.index)
+    df2_uniqinds = set(df2_in.index) - set(df1_in.index)
+
+    df1_uniqrows = dfjo.loc[df1_uniqinds, df1_cols + nonmatch_cols]
+    df2_uniqrows = dfjo.loc[df2_uniqinds, df2_cols + nonmatch_cols]
+
+    df1_uniqrows.rename(columns={col: col[:-lsl] for col in df1_uniqrows.columns if col[-lsl:] == lsuffix},
+                        inplace=True)
+    df2_uniqrows.rename(columns={col: col[:-rsl] for col in df2_uniqrows.columns if col[-rsl:] == rsuffix},
+                        inplace=True)
+
+    df_altogether = pd.concat([df_diffresolved, df1_uniqrows, df2_uniqrows]).sort_index()
+
+    return df_altogether
+
+
 def check_column(diff_df, col_name, lsuffix='_larry', rsuffix='_ricky'):
     ''' given a diff dataframe, and the name of a column,
         return the subset of the diff dataframe related to that column
@@ -146,6 +209,18 @@ def check_column(diff_df, col_name, lsuffix='_larry', rsuffix='_ricky'):
     lcol_name = col_name + lsuffix
     rcol_name = col_name + rsuffix
     out_subset = diff_df.ix[diff_df[lcol_name] != diff_df[rcol_name], [lcol_name, rcol_name]]
+    return out_subset
+
+
+def take_left(diff_df, col_name, lsuffix='_larry', rsuffix='_ricky'):
+    ''' given a diff dataframe, and the name of a column,
+        return the subset of the diff dataframe related to that column
+        in which differences are present
+        but ONLY the left-hand column '''
+
+    lcol_name = col_name + lsuffix
+    rcol_name = col_name + rsuffix
+    out_subset = diff_df.ix[diff_df[lcol_name] != diff_df[rcol_name], lcol_name]
     return out_subset
 
 
