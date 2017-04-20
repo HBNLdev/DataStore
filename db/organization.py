@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import pymongo
+import pandas as pd
 
 socket_path = '/tmp/mongodb-27017.sock'
 use_db_name = 'HBNL1'
