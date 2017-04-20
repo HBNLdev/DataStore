@@ -8,9 +8,9 @@ import pandas as pd
 from scipy import interpolate
 from tqdm import tqdm
 
+import db.database as D
 from .cnth1_to_stmat import build_paramstr
 from .compilation import join_collection
-from .organization import Mdb
 from .stmat_to_eromat import version_info, chan_mapping, powertype_mapping
 from .utils.compilation import join_allcols
 from .utils.math import convert_scale
@@ -794,9 +794,9 @@ class EROpheno_label_set:
                   'power': ['total']}
     def_order = ['experiment', 'case', 'frequency', 'time', 'power', 'channels']
 
-    experiments = Mdb.STinverseMats.distinct('experiment')
+    experiments = D.Mdb.STinverseMats.distinct('experiment')
     case_name_aliases = {'tt': 'target', 'nv': 'novel', 'nt': 'nontarget'}
-    cases_db = Mdb.STinverseMats.distinct('case')
+    cases_db = D.Mdb.STinverseMats.distinct('case')
     cases = []
     for case in cases_db:
         cases.append(case)

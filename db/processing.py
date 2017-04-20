@@ -5,7 +5,7 @@ import sys
 
 import pandas as pd
 
-from .organization import MongoDoc, MongoConn
+from .database import MongoDoc, MongoConn
 
 processing_module = sys.modules[__name__]
 

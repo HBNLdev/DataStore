@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from .organization import Mdb
+import db.database as D
 from .utils.compilation import join_allcols, extract_session_fromuID, join_ufields, column_split
 from .utils.filename_parsing import parse_filename, system_shorthands
 from .utils.records import unflatten_dict
@@ -446,7 +446,7 @@ class MT_File:
 
     def normAntCase(s):
         query = {k: v for k, v in s.file_info.items() if k in s.query_fields}
-        doc = Mdb['avgh1s'].find_one(query)
+        doc = D.Mdb['avgh1s'].find_one(query)
         avgh1_path = doc['filepath']
         case_tup = extract_case_tuple(avgh1_path)
         case_type = MT_File.ant_cases_types_lk.index(case_tup)

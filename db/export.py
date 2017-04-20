@@ -4,9 +4,9 @@ from datetime import datetime
 
 import numpy as np
 
+import db.database as D
 from .compilation import buildframe_fromdocs
 from .file_handling import Neuropsych_XML
-from .organization import Mdb
 from .utils.compilation import get_bestsession
 
 # neuropsych
@@ -15,7 +15,7 @@ npsych_basepath = '/processed_data/neuropsych/neuropsych_all'
 
 
 def neuropsych(do_export=True):
-    docs = Mdb['neuropsych'].find()
+    docs = D.Mdb['neuropsych'].find()
     npsych_df = buildframe_fromdocs(docs, inds=['ID', 'np_followup'])
     npsych_df = get_bestsession(npsych_df)
     npsych_df_IDdate = npsych_df.reset_index().set_index(['ID', 'testdate'])

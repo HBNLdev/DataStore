@@ -1,7 +1,8 @@
-''' represents Mongo collections, including build functions '''
+''' represents Mongo collections (including build/update functions) as well as
+    Mongo docs (including store/update/compare methods) '''
 
-# note that if you are building the DB, you can set the name of the DB from organization.py
-# OR you can use set_db below
+# note that if you are building the DB, you can set the name of the DB from database.py
+# OR you can import db.database into the same namespace and use its set_db method
 
 import os
 from datetime import datetime
@@ -11,6 +12,7 @@ import pandas as pd
 import pymongo
 from tqdm import tqdm
 
+import db.database as D
 from .assessment_matching import match_assessments
 from .compilation import buildframe_fromdocs
 from .file_handling import (MT_File, AVGH1_File, CNTH1_File, RestingDAT, Neuropsych_XML)
@@ -20,17 +22,12 @@ from .knowledge.questionnaires import (map_ph4, map_ph4_ssaga, map_ph123, map_ph
                                        internalizing_dir, internalizing_file, externalizing_dir, externalizing_file,
                                        allrels_file, fham_file, max_fups)
 from .master_info import load_master
-from .organization import MongoDoc, socket_path, use_db_name
 from .quest_import import (import_questfolder_ph4, import_questfolder_ssaga_ph4, import_questfolder_ph123,
                            import_questfolder_ssaga_ph123, )
 from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup, ID_nan_strintfloat_COGA,
                                 build_parentID, df_fromcsv)
 from .utils.filename_parsing import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
 from .utils.files import identify_files
-
-use_db_name = use_db_name
-MongoConn = pymongo.MongoClient(socket_path)
-Mdb = MongoConn[use_db_name]
 
 # maps collection objects to their collection names
 collection_names = {
@@ -72,16 +69,84 @@ restingpower_mc_fileB = 'mc_2nd_test.dat'
 stinv_dir_base = '/processed_data/mat-files-v'
 
 
-# DB RELATED CODE
+# DOC RELATED CODE
+
+def remove_NaTs(rec):
+    ''' given a record-style dict, convert all NaT vals to None '''
+    for k, v in rec.items():
+        typ = type(v)
+        if typ != dict and typ == pd.tslib.NaTType:
+            rec[k] = None
 
 
-def set_db(db_name):
-    global use_db_name, Mdb
-    use_db_name = db_name
-    Mdb = MongoConn[use_db_name]
+class MongoDoc(object):
+    ''' base class representing record obj to be stored, compared, or updated
+        into a MongoDB collection. classes that inherit specify type
+        of info and target collection '''
+
+    def __init__(s, collection='', data=None):
+        s.collection = collection
+        s.data = data
+
+    def store(s):
+        ''' store the record info (in data attr) into the target collection '''
+        s.data['insert_time'] = datetime.now()
+        D.Mdb[s.collection].insert_one(s.data)
+
+    def store_track(s):
+        ''' same as above but return the insert (for diagnostics) '''
+        s.data['insert_time'] = datetime.now()
+        insert = D.Mdb[s.collection].insert_one(s.data)
+        return insert
+
+    def storeNaTsafe(s):
+        ''' store, removing NaTs from record (incompatible with mongo) '''
+        s.data['insert_time'] = datetime.now()
+        remove_NaTs(s.data)
+        D.Mdb[s.collection].insert_one(s.data)
+
+    def compare(s, field='uID'):
+        ''' based on a key field (usually a uniquely identifying per-record
+            string), determine if a record of that type already exists
+            in the collection, and inform with boolean attr called new.
+            if new is False, the _id of the existing record is kept. '''
+        c = D.Mdb[s.collection].find({field: s.data[field]})
+        if c.count() == 0:
+            s.new = True
+        else:
+            s.new = False
+            s.doc = next(c)
+            s._id = s.doc['_id']
+            s.update_query = {'_id': s._id}
+
+    def update(s):
+        ''' update an existing record '''
+        s.data['update_time'] = datetime.now()
+        D.Mdb[s.collection].update_one(s.update_query, {'$set': s.data})
+
+
+class SourceInfo(MongoDoc):
+    '''  a record containing info about the data source
+        for an obj or a collection build operation '''
+
+    def __init__(s, collection='', data=None, subcoll=None):
+        s.collection = collection
+        s.data = {'_source': data, '_subcoll': subcoll}
+        s.update_query = {'_source': {'$exists': True}}
+
+
+class Questionnaire(MongoDoc):
+    ''' questionnaire info '''
+
+    def __init__(s, collection, questname, followup_lbl, data=None):
+        s.collection = collection
+        s.data = data
+        s.data.update({'questname': questname})
+        s.data.update({'followup': followup_lbl})
 
 
 # COLLECTION RELATED CODE
+
 
 class MongoCollection(object):
     ''' parent class for a Mongo collection '''
@@ -90,11 +155,14 @@ class MongoCollection(object):
 
     def __init__(s):
         s.collection_name = collection_names[s.class_name()]
-        s.collection = Mdb[s.collection_name]
+
+    @staticmethod
+    def db_name():
+        print(D.Mdb.name)
 
     def count(s):
         ''' return count of documents in collection '''
-        return s.collection.count()
+        return D.Mdb[s.collection_name].count()
 
     def drop(s):
         ''' drop collection, with a safety prompt '''
@@ -103,7 +171,7 @@ class MongoCollection(object):
             prompt = '{} contains {} docs, are you sure you want to drop? y/n: '.format(s.collection_name, s.count())
             actually = input(prompt)
             if actually == 'y':
-                s.collection.drop()
+                D.Mdb[s.collection_name].drop()
             else:
                 print('drop aborted')
         else:
@@ -115,7 +183,7 @@ class MongoCollection(object):
         query = {field: {'$exists': True}}
         updater = {'$unset': {field: ''}}
 
-        s.collection.update_many(query, updater)
+        D.Mdb[s.collection_name].update_many(query, updater)
 
     def describe(s):
         ''' print key pieces of info about collection '''
@@ -145,21 +213,21 @@ class Subjects(MongoCollection):
             so = MongoDoc(s.collection_name, rec)
             so.storeNaTsafe()
 
-        s.collection.create_index([('ID', pymongo.ASCENDING)])
+        D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
     def update_from_followups(s):
         fup_query = {'session': {'$exists': True}}
         fup_fields = ['ID', 'session', 'followup', 'date']
         fup_proj = {f: 1 for f in fup_fields}
         fup_proj['_id'] = 0
-        fup_docs = Mdb['followups'].find(fup_query, fup_proj)
+        fup_docs = D.Mdb['followups'].find(fup_query, fup_proj)
         fup_df = buildframe_fromdocs(fup_docs, inds=['ID'])
         fup_IDs = list(set(fup_df.index.get_level_values('ID').tolist()))
 
         subject_query = {'ID': {'$in': fup_IDs}}
         subject_fields = ['ID']
         subject_proj = {f: 1 for f in subject_fields}
-        subject_docs = s.collection.find(subject_query, subject_proj)
+        subject_docs = D.Mdb[s.collection_name].find(subject_query, subject_proj)
         subject_df = buildframe_fromdocs(subject_docs, inds=['ID'])
 
         comb_df = subject_df.join(fup_df)
@@ -168,9 +236,18 @@ class Subjects(MongoCollection):
             session = row['session']
             fup_field = session + '-fup'
             date_field = session + '-fdate'
-            s.collection.update_one({'_id': row['_id']},
-                                    {'$set': {fup_field: row['followup'],
-                                              date_field: row['date']}})
+            D.Mdb[s.collection_name].update_one({'_id': row['_id']},
+                                                {'$set': {fup_field: row['followup'],
+                                                          date_field: row['date']}})
+
+    def reset_update(s):
+
+        session_letters = list(map(chr, range(97, 100 + max_fups)))
+        for sletter in session_letters:
+            fup_field = sletter + '-fup'
+            date_field = sletter + '-fdate'
+            s.clear_field(fup_field)
+            s.clear_field(date_field)
 
 
 class Sessions(MongoCollection):
@@ -200,7 +277,7 @@ class Sessions(MongoCollection):
                     so = MongoDoc(s.collection_name, rec)
                     so.storeNaTsafe()
 
-        s.collection.create_index([('ID', pymongo.ASCENDING)])
+        D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
     def update_from_followups(s):
         session_letters = list(map(chr, range(97, 100 + max_fups)))
@@ -208,6 +285,11 @@ class Sessions(MongoCollection):
             match_assessments(s.collection_name, to_coll='followups',
                               fup_field='session', fup_val=sletter,
                               match_datefield='date')
+
+    def reset_update(s):
+        s.clear_field('followup')
+        s.clear_field('date_followup')
+        s.clear_field('date_diff_followup')
 
 
 class Followups(MongoCollection):
@@ -222,7 +304,7 @@ class Followups(MongoCollection):
                 fupO = MongoDoc(s.collection_name, rec)
                 fupO.storeNaTsafe()
 
-        s.collection.create_index([('ID', pymongo.ASCENDING)])
+        D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
     def update_from_sessions(s):
         p123_fups = ['p1', 'p2', 'p3', ]
@@ -232,6 +314,11 @@ class Followups(MongoCollection):
             match_assessments(s.collection_name, to_coll='sessions',
                               fup_field='followup', fup_val=fup,
                               match_datefield='date')
+
+    def reset_update(s):
+        s.clear_field('session')
+        s.clear_field('date_session')
+        s.clear_field('date_diff_session')
 
 
 class ERPPeaks(MongoCollection):
@@ -306,7 +393,7 @@ class Neuropsych(MongoCollection):
             nsO.store()
 
     def update_from_sfups(s):
-        max_npsych_fups = max(s.collection.distinct('np_followup'))
+        max_npsych_fups = max(D.Mdb[s.collection_name].distinct('np_followup'))
         for fup in range(max_npsych_fups + 1):
             # match sessions
             match_assessments(s.collection_name, to_coll='sessions',
@@ -316,6 +403,15 @@ class Neuropsych(MongoCollection):
             match_assessments(s.collection_name, to_coll='followups',
                               fup_field='np_followup', fup_val=fup,
                               match_datefield='date')
+
+    def reset_update(s):
+        s.clear_field('followup')
+        s.clear_field('date_followup')
+        s.clear_field('date_diff_followup')
+
+        s.clear_field('session')
+        s.clear_field('date_session')
+        s.clear_field('date_diff_session')
 
 
 class Questionnaires(MongoCollection):
@@ -354,6 +450,12 @@ class Questionnaires(MongoCollection):
                                   match_datefield='date',
                                   add_match_query=subcoll_query)
 
+    def reset_update(s):
+
+        s.clear_field('session')
+        s.clear_field('date_session')
+        s.clear_field('date_diff_session')
+
 
 class SSAGAs(MongoCollection):
     ''' SSAGA questionnaire info '''
@@ -388,6 +490,12 @@ class SSAGAs(MongoCollection):
                                   fup_field='followup', fup_val=fup,
                                   match_datefield='date',
                                   add_match_query=subcoll_query)
+
+    def reset_update(s):
+
+        s.clear_field('session')
+        s.clear_field('date_session')
+        s.clear_field('date_diff_session')
 
 
 class Core(MongoCollection):
@@ -473,7 +581,7 @@ class Internalizing(MongoCollection):
 
         int_query = {}
         int_proj = {'ID': 1, 'questname': 1, 'followup': 1, '_id': 1}
-        int_docs = s.collection.find(int_query, int_proj)
+        int_docs = D.Mdb[s.collection_name].find(int_query, int_proj)
         int_df = buildframe_fromdocs(int_docs, inds=['ID', 'questname', 'followup'])
 
         IDs = list(set(int_df.index.get_level_values('ID')))
@@ -481,18 +589,24 @@ class Internalizing(MongoCollection):
         ssaga_query = {'questname': {'$in': ['ssaga', 'cssaga']}, 'ID': {'$in': IDs}, 'session': {'$exists': True}}
         ssaga_proj = {'ID': 1, 'session': 1, 'date_diff_session': 1, 'followup': 1, 'questname': 1, 'date': 1, '_id': 0}
 
-        ssaga_docs = Mdb[collection_names['SSAGAs']].find(ssaga_query, ssaga_proj)
+        ssaga_docs = D.Mdb[collection_names['SSAGAs']].find(ssaga_query, ssaga_proj)
         ssaga_df = buildframe_fromdocs(ssaga_docs, inds=['ID', 'questname', 'followup'])
 
         comb_df = int_df.join(ssaga_df).dropna(subset=['date'])
         print(int_df.shape[0] - comb_df.shape[0], 'internalizing docs could not be matched')
 
         for ID, row in tqdm(comb_df.iterrows()):
-            Mdb['internalizing'].update_one({'_id': row['_id']},
-                                            {'$set': {'session': row['session'],
-                                                      'date_diff_session': row['date_diff_session'],
-                                                      'date': row['date'], }
-                                             })
+            D.Mdb['internalizing'].update_one({'_id': row['_id']},
+                                              {'$set': {'session': row['session'],
+                                                        'date_diff_session': row['date_diff_session'],
+                                                        'date': row['date'], }
+                                               })
+
+    def reset_update(s):
+
+        s.clear_field('session')
+        s.clear_field('date_session')
+        s.clear_field('date_diff_session')
 
 
 class Externalizing(MongoCollection):
@@ -700,10 +814,12 @@ class EEGBehavior(MongoCollection):
                 print(f, 'failed')
         # sourceO = SourceInfo('EEGbehavior', list(zip(avgh1_files, datemods)))
         # sourceO.store()
-        inds = s.collection.list_indexes()
+        inds = D.Mdb[s.collection_name].list_indexes()
         try:
             next(inds)  # returns the _id index
             next(inds)  # check if any other index exists
-            s.collection.reindex()  # if it does, just reindex
+            D.Mdb[s.collection_name].reindex()  # if it does, just reindex
         except StopIteration:  # otherwise, create it
-            s.collection.create_index([('uID', pymongo.ASCENDING)])
+            D.Mdb[s.collection_name].create_index([('uID', pymongo.ASCENDING)])
+
+

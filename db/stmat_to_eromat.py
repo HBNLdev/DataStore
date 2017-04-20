@@ -7,7 +7,7 @@ import subprocess
 import time
 from collections import defaultdict
 
-from .organization import Mdb
+import db.database as D
 
 # processing parameters cheatsheet
 
@@ -186,7 +186,7 @@ def doc_exists(path):
     query = {'ID': ID, 'session': session, 'experiment': experiment,
              'prc_ver': prc_ver, 'param_string': param_string}
 
-    docs = Mdb['STinverseMats'].find(query)
+    docs = D.Mdb['STinverseMats'].find(query)
 
     if docs.count() > 1:
         print('multiple docs matched', path)
