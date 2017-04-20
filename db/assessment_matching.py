@@ -3,8 +3,8 @@
 import pandas as pd
 from tqdm import tqdm
 
+import db.database as D
 from .compilation import buildframe_fromdocs
-from .organization import Mdb
 
 
 def match_assessments(match_coll, to_coll,
@@ -26,7 +26,7 @@ def match_assessments(match_coll, to_coll,
     print('matching', match_coll, 'assessments to', to_coll, 'for',
           fup_field, fup_val, 'using', match_datefield)
 
-    match_collection = Mdb[match_coll]
+    match_collection = D.Mdb[match_coll]
     match_query = {fup_field: fup_val}
     if add_match_query:
         print('with the additional query of', add_match_query)
@@ -45,7 +45,7 @@ def match_assessments(match_coll, to_coll,
 
     sfup_query = {'ID': {'$in': IDs}}
     sfup_proj = {'_id': 1, 'ID': 1, 'session': 1, 'date': 1, 'followup': 1}
-    sfup_docs = Mdb[to_coll].find(sfup_query, sfup_proj)
+    sfup_docs = D.Mdb[to_coll].find(sfup_query, sfup_proj)
     sfup_df = buildframe_fromdocs(sfup_docs, inds=['ID'])
     if sfup_df.empty:
         print('no session docs of this kind found')

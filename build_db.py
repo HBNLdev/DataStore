@@ -1,12 +1,13 @@
 from datetime import datetime
 
-import db.collection as collection_module
+import db.database as D
+import db.collection as CM
 
 db_confirmed = False
 
 while not db_confirmed:
 
-    db_prompt = 'note that you are using the DB named {}, continue? y/n: '.format(collection_module.Mdb.name)
+    db_prompt = 'note that you are using the DB named {}, continue? y/n: '.format(D.Mdb.name)
     go_ahead = input(db_prompt)
 
     if go_ahead == 'y':
@@ -14,16 +15,16 @@ while not db_confirmed:
     else:
         rename_db_prompt = 'enter the name of the DB you would like to use: '
         new_db_name = input(rename_db_prompt)
-        collection_module.set_db(new_db_name)
+        D.set_db(new_db_name)
 
-for class_name in collection_module.build_order:
+for class_name in CM.build_order:
 
-    class_instance = getattr(collection_module, class_name)()
+    class_instance = getattr(CM, class_name)()
     n_docs = class_instance.count()
 
     if n_docs > 0:
 
-        if class_name in collection_module.incremental_collections:
+        if class_name in CM.incremental_collections:
 
             prompt = '{} contains {} docs but is incremental, re-run the build? y/n: '. \
                 format(class_instance.collection_name, n_docs)

@@ -7,8 +7,8 @@ from glob import glob
 import numpy as np
 import pandas as pd
 
+from .database import Questionnaire
 from .knowledge.questionnaires import def_info, harmonization_path
-from .organization import Questionnaire
 from .utils.compilation import df_fromcsv
 from .utils.dates import convert_date_fallback
 

@@ -2,11 +2,10 @@
 
 import pprint
 
-import pymongo
 import numpy as np
 import pandas as pd
 
-from .organization import use_db_name, socket_path
+import db.database as D
 from .utils.records import flatten_dict
 
 pp = pprint.PrettyPrinter(indent=4)
@@ -88,17 +87,9 @@ default_EROfields = {'ID': 1, 'session': 1, 'uID': 1, '_id': 0}
 
 subcoll_dict = dict()
 
-use_db_name = use_db_name
-MongoConn = pymongo.MongoClient(socket_path)
-Mdb = MongoConn[use_db_name]
 
 # considering a function that lets you set the module-wide DB
 # not sure this is the best implementation
-
-
-def set_db(db_name):
-    global Mdb
-    Mdb = MongoConn[db_name]
 
 
 def populate_subcolldict():
@@ -106,9 +97,9 @@ def populate_subcolldict():
         subcollections (if they exist) '''
 
     global subcoll_dict
-    subcoll_dict = {coll: Mdb[coll].distinct(subcoll_fnames[coll])
+    subcoll_dict = {coll: D.Mdb[coll].distinct(subcoll_fnames[coll])
     if coll in subcoll_fnames.keys() else None
-                    for coll in Mdb.collection_names()}
+                    for coll in D.Mdb.collection_names()}
     return subcoll_dict
 
 
@@ -137,9 +128,9 @@ def get_subjectdocs(sample, sparsify=False):
         if sparsify:
             proj = format_sparseproj('subjects')
             proj.update({'_id': 0})
-            docs = Mdb['subjects'].find(subjects_queries[sample], proj)
+            docs = D.Mdb['subjects'].find(subjects_queries[sample], proj)
         else:
-            docs = Mdb['subjects'].find(subjects_queries[sample])
+            docs = D.Mdb['subjects'].find(subjects_queries[sample])
         return docs
 
 
@@ -159,9 +150,9 @@ def get_sessiondocs(sample, followups=None, sparsify=False):
         if sparsify:
             proj = format_sparseproj('sessions')
             proj.update({'_id': 0})
-            docs = Mdb['sessions'].find(subjects_queries[sample], proj)
+            docs = D.Mdb['sessions'].find(subjects_queries[sample], proj)
         else:
-            docs = Mdb['sessions'].find(subjects_queries[sample])
+            docs = D.Mdb['sessions'].find(subjects_queries[sample])
         return docs
 
 
@@ -195,9 +186,9 @@ def display_collcontents(coll, subcoll=None):
     if not ck_res:
         return
     if subcoll is None:
-        doc = Mdb[coll].find_one()
+        doc = D.Mdb[coll].find_one()
     else:
-        doc = Mdb[coll].find_one({subcoll_fnames[coll]: subcoll})
+        doc = D.Mdb[coll].find_one({subcoll_fnames[coll]: subcoll})
     pp.pprint(sorted(list(doc.keys())))
     # pp.pprint(sorted(list(unflatten_dict(doc).keys())))
 
@@ -214,9 +205,9 @@ def get_colldocs(coll, subcoll=None, add_query={}, add_proj={}):
     query.update(add_query)
     proj.update(add_proj)
     if proj:
-        docs = Mdb[coll].find(query, proj)
+        docs = D.Mdb[coll].find(query, proj)
     else:
-        docs = Mdb[coll].find(query)
+        docs = D.Mdb[coll].find(query)
     return docs
 
 
@@ -446,7 +437,7 @@ def get_cnth1s(df):
     df_out = df.copy()
     for exp in exps:
         query = {'experiment': exp}
-        matching_docs = Mdb[coll].find(query)
+        matching_docs = D.Mdb[coll].find(query)
         eegDF = buildframe_fromdocs(matching_docs)
         eegDF[exp + '_cnth1_path'] = eegDF['filepath']
         df_out = df_out.join(eegDF[exp + '_cnth1_path'])
@@ -459,7 +450,7 @@ def get_famdf(df):
         using the allrels collection '''
 
     famIDs = list(set(df['famID'].values.tolist()))
-    docs = Mdb['allrels'].find({'famID': {'$in': famIDs}})
+    docs = D.Mdb['allrels'].find({'famID': {'$in': famIDs}})
     fam_df_allrels = buildframe_fromdocs(docs)
 
     return fam_df_allrels
@@ -474,7 +465,7 @@ def get_sessiondatedf(df):
     session_fields = ['ID', 'session', 'date']
     session_proj = {k: 1 for k in session_fields}
     session_proj['_id'] = 0
-    session_docs = Mdb['sessions'].find(session_query, session_proj)
+    session_docs = D.Mdb['sessions'].find(session_query, session_proj)
     sdate_df = buildframe_fromdocs(session_docs)
     sdate_df.rename(columns={'date': 'session_date'}, inplace=True)
 
