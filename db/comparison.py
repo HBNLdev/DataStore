@@ -212,18 +212,6 @@ def check_column(diff_df, col_name, lsuffix='_larry', rsuffix='_ricky'):
     return out_subset
 
 
-def take_left(diff_df, col_name, lsuffix='_larry', rsuffix='_ricky'):
-    ''' given a diff dataframe, and the name of a column,
-        return the subset of the diff dataframe related to that column
-        in which differences are present
-        but ONLY the left-hand column '''
-
-    lcol_name = col_name + lsuffix
-    rcol_name = col_name + rsuffix
-    out_subset = diff_df.ix[diff_df[lcol_name] != diff_df[rcol_name], lcol_name]
-    return out_subset
-
-
 def check_allcoldiffs(diff_df, lsuffix='_larry', rsuffix='_ricky'):
     ''' given a diff dataframe, create a dictionary whose keys are differing columns,
         and whose values are the differing subsets related to those columns '''
