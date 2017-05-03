@@ -359,7 +359,7 @@ def sessions_info(df, folder, name, fup_order=None):
                                 order=order)
     plot = update_tick_labels(plot, 'x', nums_for_labels, {'property': 'followup',
                                                            'dataframe': df})
-    plot.set_ylim([0, 60])
+    plot.set_ylim([0, 38])
     fig.savefig(os.path.join(folder, name + '_followups_ages_sex.png'))
 
     # race + ethnicity table_breakdown
