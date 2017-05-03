@@ -7,7 +7,7 @@ from glob import glob
 import numpy as np
 import pandas as pd
 
-from .database import Questionnaire
+import db.database as D
 from .knowledge.questionnaires import def_info, harmonization_path
 from .utils.compilation import df_fromcsv
 from .utils.dates import convert_date_fallback
@@ -124,7 +124,7 @@ def import_questfolder_ph4(qname, kmap, path, quest_collection_name):
 
         # convert to records and store in mongo coll, noting followup_lbl
         for drec in df.to_dict(orient='records'):
-            ro = Questionnaire(quest_collection_name, qname, followup_lbl, data=drec)
+            ro = D.Questionnaire(quest_collection_name, qname, followup_lbl, data=drec)
             ro.storeNaTsafe()
 
 
@@ -193,11 +193,11 @@ def import_questfolder_ssaga_ph4(qname, kmap, path, ssaga_collection_name):
         # and separately for the full questionnaire and diagnoses
 
         for drec in join_df[list(nondx_cols) + ['ID', 'date']].to_dict(orient='records'):
-            ro = Questionnaire(ssaga_collection_name, qname, followup_lbl, data=drec)
+            ro = D.Questionnaire(ssaga_collection_name, qname, followup_lbl, data=drec)
             ro.storeNaTsafe()
 
         for drec in join_df[list(dx_cols) + ['ID', 'date', i['date_lbl']]].to_dict(orient='records'):
-            ro = Questionnaire(ssaga_collection_name, 'dx_' + qname, followup_lbl, data=drec)
+            ro = D.Questionnaire(ssaga_collection_name, 'dx_' + qname, followup_lbl, data=drec)
             ro.storeNaTsafe()
 
 
@@ -248,7 +248,7 @@ def import_questfolder_ph123(qname, kmap, path, quest_collection_name):
 
         followup_lbl = i['followup'][fpx]
         for drec in df.to_dict(orient='records'):
-            ro = Questionnaire(quest_collection_name, qname, followup_lbl, data=drec)
+            ro = D.Questionnaire(quest_collection_name, qname, followup_lbl, data=drec)
             ro.storeNaTsafe()
 
 
@@ -323,7 +323,7 @@ def import_questfolder_ssaga_ph123(qname, kmap, path, ssaga_collection_name):
 
         if fname[:3] == 'dx_':
             for drec in df.to_dict(orient='records'):
-                ro = Questionnaire(ssaga_collection_name, 'dx_' + qname, followup_lbl, data=drec)
+                ro = D.Questionnaire(ssaga_collection_name, 'dx_' + qname, followup_lbl, data=drec)
                 ro.storeNaTsafe()
         else:
 
@@ -332,5 +332,5 @@ def import_questfolder_ssaga_ph123(qname, kmap, path, ssaga_collection_name):
             df = df.rename(columns=harm_renamer)
 
             for drec in df.to_dict(orient='records'):
-                ro = Questionnaire(ssaga_collection_name, qname, followup_lbl, data=drec)
+                ro = D.Questionnaire(ssaga_collection_name, qname, followup_lbl, data=drec)
                 ro.storeNaTsafe()

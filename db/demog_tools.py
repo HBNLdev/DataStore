@@ -36,7 +36,7 @@ dx_fillcolor = {0: '#FFFFFF', 1: '#000000'}
 dx_wordcolor = {0: '#000000', 1: '#FFFFFF'}
 
 
-def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
+def prepare_fDF_for_fhd(in_df, extra_cols=[], do_conv_159=True):
     ''' prepare a dataframe for FHD calculation by removing irrelevant columns
         and assuring the necessary columns are present '''
 
@@ -54,7 +54,7 @@ def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
     df = g.last()  # note this means that affectedness data should have been joined on ID, or else it may get dropped
 
     if all(col in df.columns for col in check_cols):
-        print('df has all requisite columns')
+        print('family df has all requisite columns')
     else:
         missing_cols = [col for col in check_cols if col not in df.columns]
         print(missing_cols, 'are missing')
@@ -67,7 +67,7 @@ def prepare_for_fhd(in_df, extra_cols=[], do_conv_159=True):
     return df
 
 
-def prepare_dfs(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
+def prepare_fDF(in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
     ''' prepare the main dataframes used by calc_fhd functions so that they are fit for usage! '''
 
     if rename_cols:
@@ -76,10 +76,9 @@ def prepare_dfs(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rena
         rename_dict = {k: v for k, v in fd.items()}
         in_fDF = in_fDF.rename(columns=rename_dict)
 
-    sDF = prepare_for_fhd(in_sDF)
-    fDF = prepare_for_fhd(in_fDF, extra_cols=[aff_col], do_conv_159=do_conv_159)
+    fDF = prepare_fDF_for_fhd(in_fDF, extra_cols=[aff_col], do_conv_159=do_conv_159)
 
-    return sDF, fDF
+    return fDF
 
 
 def calc_ph(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_cols=None):
@@ -90,8 +89,9 @@ def calc_ph(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_c
     and FHD = 0 if no affectedness is present in the same.
 
     '''
-
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
+    
+    sDF = in_sDF.iloc[:, :0]
+    fDF = prepare_fDF(in_fDF, aff_col, do_conv_159, rename_cols)
 
     father, mother, parent, first = fam_ph(fDF, aff_col)
 
@@ -136,7 +136,8 @@ def calc_fhd(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True, rename_
 
     '''
 
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
+    sDF = in_sDF.iloc[:, :0]
+    fDF = prepare_fDF(in_fDF, aff_col, do_conv_159, rename_cols)
 
     all_counts, all_sums, all_denoms, all_ratios = fam_fhd(fDF, aff_col)
 
@@ -183,7 +184,8 @@ def calc_fhd_catnorm(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
 
     '''
 
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
+    sDF = in_sDF.iloc[:, :0]
+    fDF = prepare_fDF(in_fDF, aff_col, do_conv_159, rename_cols)
 
     all_counts, all_sums, all_denoms, all_ratios = fam_fhd_catnorm(fDF, aff_col)
 
@@ -219,7 +221,8 @@ def calc_fhd_pathlen(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
 
     '''
 
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
+    sDF = in_sDF.iloc[:, :0]
+    fDF = prepare_fDF(in_fDF, aff_col, do_conv_159, rename_cols)
 
     all_counts, all_sums, all_denoms, all_ratios = fam_fhd_pathlen(fDF, aff_col, base_constant)
 
@@ -798,7 +801,8 @@ def calc_fhd_slow(in_sDF, in_fDF, aff_col='cor_alc_dep_dx', do_conv_159=True,
 
     '''
 
-    sDF, fDF = prepare_dfs(in_sDF, in_fDF, aff_col, do_conv_159, rename_cols)
+    sDF = in_sDF.copy()
+    fDF = prepare_fDF(in_fDF, aff_col, do_conv_159, rename_cols)
 
     # drop missing data of affectedness column from fDF
     # don't do this because they tell us about family structure even if they lack affectedness info

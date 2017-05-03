@@ -340,7 +340,7 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
 
 
 def join_ssaga(keyDF_in, raw=False, add_query={}, add_proj={},
-               left_join_inds=['ID'], right_join_inds=['ID'],
+               left_join_inds=['ID', 'followup'], right_join_inds=['ID', 'followup'],
                id_field='ID', flatten=True, prefix=None,
                drop_empty=True, how='left'):
     ''' given a "key" dataframe and target collection,
