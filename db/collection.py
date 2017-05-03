@@ -68,83 +68,6 @@ restingpower_mc_fileB = 'mc_2nd_test.dat'
 
 stinv_dir_base = '/processed_data/mat-files-v'
 
-
-# DOC RELATED CODE
-
-def remove_NaTs(rec):
-    ''' given a record-style dict, convert all NaT vals to None '''
-    for k, v in rec.items():
-        typ = type(v)
-        if typ != dict and typ == pd.tslib.NaTType:
-            rec[k] = None
-
-
-class MongoDoc(object):
-    ''' base class representing record obj to be stored, compared, or updated
-        into a MongoDB collection. classes that inherit specify type
-        of info and target collection '''
-
-    def __init__(s, collection='', data=None):
-        s.collection = collection
-        s.data = data
-
-    def store(s):
-        ''' store the record info (in data attr) into the target collection '''
-        s.data['insert_time'] = datetime.now()
-        D.Mdb[s.collection].insert_one(s.data)
-
-    def store_track(s):
-        ''' same as above but return the insert (for diagnostics) '''
-        s.data['insert_time'] = datetime.now()
-        insert = D.Mdb[s.collection].insert_one(s.data)
-        return insert
-
-    def storeNaTsafe(s):
-        ''' store, removing NaTs from record (incompatible with mongo) '''
-        s.data['insert_time'] = datetime.now()
-        remove_NaTs(s.data)
-        D.Mdb[s.collection].insert_one(s.data)
-
-    def compare(s, field='uID'):
-        ''' based on a key field (usually a uniquely identifying per-record
-            string), determine if a record of that type already exists
-            in the collection, and inform with boolean attr called new.
-            if new is False, the _id of the existing record is kept. '''
-        c = D.Mdb[s.collection].find({field: s.data[field]})
-        if c.count() == 0:
-            s.new = True
-        else:
-            s.new = False
-            s.doc = next(c)
-            s._id = s.doc['_id']
-            s.update_query = {'_id': s._id}
-
-    def update(s):
-        ''' update an existing record '''
-        s.data['update_time'] = datetime.now()
-        D.Mdb[s.collection].update_one(s.update_query, {'$set': s.data})
-
-
-class SourceInfo(MongoDoc):
-    '''  a record containing info about the data source
-        for an obj or a collection build operation '''
-
-    def __init__(s, collection='', data=None, subcoll=None):
-        s.collection = collection
-        s.data = {'_source': data, '_subcoll': subcoll}
-        s.update_query = {'_source': {'$exists': True}}
-
-
-class Questionnaire(MongoDoc):
-    ''' questionnaire info '''
-
-    def __init__(s, collection, questname, followup_lbl, data=None):
-        s.collection = collection
-        s.data = data
-        s.data.update({'questname': questname})
-        s.data.update({'followup': followup_lbl})
-
-
 # COLLECTION RELATED CODE
 
 
@@ -210,7 +133,7 @@ class Subjects(MongoCollection):
         # fast
         master, master_mtime = load_master()
         for rec in tqdm(master.to_dict(orient='records')):
-            so = MongoDoc(s.collection_name, rec)
+            so = D.MongoDoc(s.collection_name, rec)
             so.storeNaTsafe()
 
         D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
@@ -274,7 +197,7 @@ class Sessions(MongoCollection):
                 #   '-date' in col or '-raw' in col or '-run' in col]
                 # sessionDF.drop(drop_cols, axis=1, inplace=True)
                 for rec in tqdm(sessionDF.to_dict(orient='records')):
-                    so = MongoDoc(s.collection_name, rec)
+                    so = D.MongoDoc(s.collection_name, rec)
                     so.storeNaTsafe()
 
         D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
@@ -301,7 +224,7 @@ class Followups(MongoCollection):
         for fup, df in fup_dfs.items():
             print(fup)
             for rec in tqdm(df.reset_index().to_dict(orient='records')):
-                fupO = MongoDoc(s.collection_name, rec)
+                fupO = D.MongoDoc(s.collection_name, rec)
                 fupO.storeNaTsafe()
 
         D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
@@ -350,7 +273,7 @@ class ERPPeaks(MongoCollection):
 
             mtO_ck = MT_File(fp)  # get file info
 
-            erpO_ck = MongoDoc(s.collection_name, mtO_ck.data)
+            erpO_ck = D.MongoDoc(s.collection_name, mtO_ck.data)
             erpO_ck.compare()  # populates s.new with bool
 
             if erpO_ck.new:  # "brand new" get general info
@@ -361,7 +284,7 @@ class ERPPeaks(MongoCollection):
                 except:
                     print(fp, 'failed')
                     continue
-                erpO = MongoDoc(s.collection_name, mtO.data)
+                erpO = D.MongoDoc(s.collection_name, mtO.data)
                 erpO.store()
             else:  # if not brand new, check if the experiment is already in the doc
                 try:
@@ -374,7 +297,7 @@ class ERPPeaks(MongoCollection):
                         print(fp, 'failed')
                         continue
                     mtO.parse_fileDB()
-                    erpO = MongoDoc(s.collection_name, mtO.data)
+                    erpO = D.MongoDoc(s.collection_name, mtO.data)
                     erpO.compare()  # to get update query
                     erpO.update()
 
@@ -389,7 +312,7 @@ class Neuropsych(MongoCollection):
             xmlO = Neuropsych_XML(fp)
             xmlO.assure_quality()
             xmlO.data['date'] = xmlO.data['testdate']
-            nsO = MongoDoc(s.collection_name, xmlO.data)
+            nsO = D.MongoDoc(s.collection_name, xmlO.data)
             nsO.store()
 
     def update_from_sfups(s):
@@ -510,7 +433,7 @@ class Core(MongoCollection):
         path = csv_files[0]
         df = df_fromcsv(path)
         for drec in tqdm(df.to_dict(orient='records')):
-            ro = MongoDoc(s.collection_name, drec)
+            ro = D.MongoDoc(s.collection_name, drec)
             ro.store()
 
 
@@ -574,7 +497,7 @@ class Internalizing(MongoCollection):
             int_df5[col + '_fupmax'] = g[col].max()
 
         for drec in tqdm(int_df5.reset_index().to_dict(orient='records')):
-            ro = MongoDoc(s.collection_name, drec)
+            ro = D.MongoDoc(s.collection_name, drec)
             ro.store()
 
     def update_from_ssaga(s):
@@ -617,7 +540,7 @@ class Externalizing(MongoCollection):
         datemod = datetime.fromtimestamp(os.path.getmtime(path))
         df = df_fromcsv(path, 'IND_ID')
         for drec in tqdm(df.to_dict(orient='records')):
-            ro = MongoDoc(s.collection_name, drec)
+            ro = D.MongoDoc(s.collection_name, drec)
             ro.store()
 
 
@@ -639,7 +562,7 @@ class AllRels(MongoCollection):
         rel_df['mID'] = rel_df[['famID', 'M_ID']].apply(build_parentID, axis=1, args=['famID', 'M_ID'])
 
         for drec in tqdm(rel_df.to_dict(orient='records')):
-            ro = MongoDoc(s.collection_name, drec)
+            ro = D.MongoDoc(s.collection_name, drec)
             ro.store()
 
 
@@ -652,7 +575,7 @@ class FHAM(MongoCollection):
         datemod = datetime.fromtimestamp(os.path.getmtime(path))
         df = df_fromcsv(path, 'IND_ID')
         for drec in tqdm(df.to_dict(orient='records')):
-            ro = MongoDoc(s.collection_name, drec)
+            ro = D.MongoDoc(s.collection_name, drec)
             ro.store()
 
 
@@ -669,7 +592,7 @@ class RawEEGData(MongoCollection):
                 if 'bad' in rd_path:
                     continue
                 info = parse_rd_path(rd_path)
-                raweegO = MongoDoc(s.collection_name, info)
+                raweegO = D.MongoDoc(s.collection_name, info)
                 raweegO.store()
             except:
                 print('problem with', rd_path)
@@ -682,7 +605,7 @@ class RawEEGData(MongoCollection):
             try:
                 info = parse_cnt_path(cnt_path)
                 if not info['note']:
-                    raweegO = MongoDoc(s.collection_name, info)
+                    raweegO = D.MongoDoc(s.collection_name, info)
                     raweegO.store()
             except:
                 print('problem with', cnt_path)
@@ -700,7 +623,7 @@ class EEGData(MongoCollection):
             if data['n_chans'] not in ['21', '32', '64']:
                 print(f, 'had unexpected number of chans')
                 continue
-            eegO = MongoDoc(s.collection_name, data)
+            eegO = D.MongoDoc(s.collection_name, data)
             eegO.store()
 
 
@@ -714,7 +637,7 @@ class ERPData(MongoCollection):
         for f in tqdm(avgh1_files):
             fO = CNTH1_File(f)  # basically identical at this point
             fO.parse_fileDB()
-            erpO = MongoDoc(s.collection_name, fO.data)
+            erpO = D.MongoDoc(s.collection_name, fO.data)
             erpO.store()
 
 
@@ -735,7 +658,7 @@ class RestingPower(MongoCollection):
         rec_lst.extend(mcO_B.file_df.to_dict(orient='records'))
 
         for rec in tqdm(rec_lst):
-            rpO = MongoDoc(s.collection_name, rec)
+            rpO = D.MongoDoc(s.collection_name, rec)
             rpO.store()
 
 
@@ -756,7 +679,7 @@ class STInverseMats(MongoCollection):
         for f in tqdm(mat_files):
             infoD = parse_STinv_path(f)
             infoD['path'] = f
-            matO = MongoDoc(s.collection_name, infoD)
+            matO = D.MongoDoc(s.collection_name, infoD)
 
             store = False
             if check_update:
@@ -794,12 +717,12 @@ class EEGBehavior(MongoCollection):
                     continue
 
                 # simply check if the ID-session-experiment already exists
-                erpbeh_obj_ck = MongoDoc(s.collection_name, fO.data)
+                erpbeh_obj_ck = D.MongoDoc(s.collection_name, fO.data)
                 erpbeh_obj_ck.compare()  # populates s.new with bool
 
                 if erpbeh_obj_ck.new:  # "brand new", get general info
                     fO.parse_behav_forDB(general_info=True)
-                    erpbeh_obj = MongoDoc(s.collection_name, fO.data)
+                    erpbeh_obj = D.MongoDoc(s.collection_name, fO.data)
                     erpbeh_obj.store()
                 else:  # if not brand new, check if the experiment is already in the doc
                     try:
@@ -807,7 +730,7 @@ class EEGBehavior(MongoCollection):
                     except KeyError:  # only update experiment info if not already in db
                         fO = AVGH1_File(f)  # refresh the file obj
                         fO.parse_behav_forDB()
-                        erpbeh_obj = MongoDoc(s.collection_name, fO.data)
+                        erpbeh_obj = D.MongoDoc(s.collection_name, fO.data)
                         erpbeh_obj.compare()  # to get update query
                         erpbeh_obj.update()
             except:

@@ -49,12 +49,14 @@ def make_fupdfs(allphase_master_means, pcols):
     ''' given the allphase_master_means df and the phase columns dict,
         return a dict of dataframes that can be converted to records for the followups collection '''
 
+    other_keepcols = ['YYYY_OB', 'SEX', 'YOB', 'SEXp4', 'YYYY_OBp4', 'RELTYPE', ]
+
     phase_dfs = {}
     for phase, phase_cols in pcols.items():
         meandate_col = str(phase) + '_meandate'
 
-        phase_df = allphase_master_means[phase_cols + [meandate_col]]
-        phase_df.dropna(axis=0, how='all', inplace=True)
+        phase_df = allphase_master_means[phase_cols + [meandate_col] + other_keepcols]
+        phase_df.dropna(axis=0, how='all', subset=phase_cols + [meandate_col], inplace=True)
         phase_df.dropna(axis=1, how='all', inplace=True)
 
         phase_df.rename(columns={meandate_col: 'date'}, inplace=True)
