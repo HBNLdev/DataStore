@@ -206,8 +206,8 @@ class EROStack:
     def get_params(s):
         ''' get the ERO file parameters, using the first file as an assumed exemplar '''
 
-        # em = EROMat(s.data_df.ix[0, 'path'])
-        em = EROMat(s.data_df['path'][0])
+        em = EROMat(s.data_df.ix[0, 'path'])
+        # em = EROMat(s.data_df['path'][0])
         em.get_params()
         s.params = em.params
 
