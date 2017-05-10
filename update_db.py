@@ -1,5 +1,9 @@
 from db.collection import Subjects, Sessions, Followups, Neuropsych, Questionnaires, SSAGAs, Internalizing
 
+followup_coll = Followups()
+followup_coll.reset_update()
+followup_coll.update_from_sessions()
+
 subjects_coll = Subjects()
 subjects_coll.reset_update()
 subjects_coll.update_from_followups()
@@ -7,10 +11,6 @@ subjects_coll.update_from_followups()
 session_coll = Sessions()
 session_coll.reset_update()
 session_coll.update_from_followups()
-
-followup_coll = Followups()
-followup_coll.reset_update()
-followup_coll.update_from_sessions()
 
 npsych_coll = Neuropsych()
 npsych_coll.reset_update()
