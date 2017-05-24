@@ -337,17 +337,21 @@ def parse_cnt_path(filepath):
     except IndexError:
         bitrate_or_note = None
 
-    try:
-        note = pieces[5]
-    except IndexError:
-        note = None
+    if bitrate_or_note:
+        try:
+            note = pieces[5]
+        except IndexError:
+            note = None
 
-    try:
-        int(bitrate_or_note)
-        bitrate = bitrate_or_note
-    except ValueError:
-        note = bitrate_or_note
+        try:
+            int(bitrate_or_note)
+            bitrate = bitrate_or_note
+        except ValueError:
+            note = bitrate_or_note
+            bitrate = None
+    else:
         bitrate = None
+        note = None
 
     output = {'path': filepath,
               'system': system,

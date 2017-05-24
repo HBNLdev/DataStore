@@ -505,3 +505,72 @@ def groupby_session(df):
     g = df.groupby(level=df.index.names[0])  # ID
     df.drop('session', axis=1, inplace=True)
     return g
+
+
+# recently added
+
+def convert_fupname(v):
+    ''' given a COGA-style followup designation (e.g. found in core phenotype columns such as 'cor_aldp_first_whint'
+        convert it to the HBNL database convention (e.g. p4f0) '''
+
+    try:
+        phase_str = v[1]
+    except TypeError:
+        return np.nan
+
+    if phase_str == '4':
+        try:
+            followup_str = v[3]
+        except IndexError:
+            followup_str = '0'
+        out_fupname = 'p' + phase_str + 'f' + followup_str
+    else:
+        out_fupname = 'p' + phase_str
+
+    return out_fupname
+
+
+def add_ages(ID_df, fup_df, col):
+    ''' given an ID-indexed dataframe, a corresponding ID-followup-indexed dataframe containing an 'age' column,
+        and the name of a column containing an HBNL-style followup designation that was previously converted
+        (with the suffix _conv), add the age at that followup to the ID dataframe '''
+
+    use_series = ID_df[col + '_conv']
+    indices = []
+    for ID, fup in zip(use_series.index, use_series.values):
+        try:
+            fup + ' '
+            indices.append((ID, fup))
+        except TypeError:
+            pass
+    ages = fup_df.loc[indices, 'age']
+    ID_df[col + '_age'] = ages.reset_index('followup', drop=True)
+
+
+def td_to_years(v):
+    ''' given a timedelta, convert it to years in a slightly inaccurate fashion '''
+
+    try:
+        return v.days / 365.25
+    except AttributeError:
+        return np.nan
+
+
+def daily_average(drink_df_al):
+    ''' given a dataframe containing only the COGA drinking columns for individual days of the week,
+        find out the daily average on drinking days '''
+
+    drink_df_al_na = drink_df_al.copy()
+
+    for day in range(1, 8):
+        day_cols = [col for col in drink_df_al_na.columns if col[-1] == str(day)]
+        print(day, day_cols)
+        drink_df_al_na['day' + str(day) + '_sum'] = drink_df_al_na[day_cols].sum(axis=1)
+
+    drink_df_al_na[(drink_df_al_na == 0)] = np.nan
+
+    sum_cols = ['day' + str(n) + '_sum' for n in range(1, 8)]
+    print(sum_cols)
+    drink_df_al_na['da'] = drink_df_al_na[sum_cols].mean(axis=1)
+
+    return drink_df_al_na['da']
