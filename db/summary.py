@@ -63,6 +63,7 @@ def expand_RE_aliases(aliases, race_type):
 
 def nums_for_labels(labels, property, dataframe):
     countD = dataframe.groupby(property).count()[count_field].to_dict()
+    countD = { str(k):v for k,v in countD.items() }
     return [l + '\n(' + str(countD[l]) + ')' for l in labels]
 
 
@@ -82,7 +83,8 @@ def update_tick_labels(plot, axis, trFun, trIns=None):
 
 
 def session_counts(df):
-    df = df.reset_index()
+    drop = 'ID' in df.columns
+    df = df.reset_index( drop = drop)
     df = df.set_index(['ID', 'session'])
     ses_counts = df.groupby(level=0).count()
     return ses_counts
@@ -344,6 +346,7 @@ def sessions_info(df, folder, name, fup_order=None):
     sp.xaxis.set_visible(False)
     sp.yaxis.set_visible(False)
     ses_count_table = histogram(ses_counts, count_field, type='table')
+    ses_count_table.sort_index(inplace=True)
     table(sp, ses_count_table, loc='center')
     fig.savefig(os.path.join(folder, name + '_sesHist.png'))
 
