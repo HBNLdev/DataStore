@@ -201,6 +201,3 @@ def update_tuple_dict(dict_of_tuples, experiment, condition, peak, channel_lst):
                 if condition in tpl and peak in tpl:
                     v[n] = tuple(list(tpl)[:-1] + [channel_lst])
     return dict_of_tuples
-    
-    
-    comment commment comment
