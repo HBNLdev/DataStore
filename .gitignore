@@ -1,5 +1,10 @@
 *.ipynb
 *.pyc
+*.iml
+*.xml
+*.svg
+*.gv
+*.pdf
 
 # Compiled source #
 ###################
