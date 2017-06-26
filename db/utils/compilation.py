@@ -574,3 +574,13 @@ def daily_average(drink_df_al):
     drink_df_al_na['da'] = drink_df_al_na[sum_cols].mean(axis=1)
 
     return drink_df_al_na['da']
+
+
+def writecsv_date(df, base_path, suffix):
+    ''' given dataframe df, a base_path (including directories and any file prefix), and a suffix,
+        write the dataframe to a CSV that has a date attached to it '''
+
+    today = datetime.now().strftime('%m-%d-%Y')
+    output_str = '_'.join([base_path, today, suffix])
+    output_path = output_str + '.csv'
+    df.to_csv(output_path, float_format='%.3f')
