@@ -648,7 +648,7 @@ def bar(r, measure, figure_by=None, subplot_by=None, set_by=None,
             axarr = [axarr]
         for spi, spval in enumerate(sp_vals):
             for si, sval in enumerate(s_vals):
-                r_lst = []
+                b_lst = []
                 for mi, mval in enumerate(m_vals):
                     vals = [fval, spval, sval, mval]
                     dims = [f_dim[fi], sp_dim[spi], s_dim[si], m_dim[mi]]
@@ -662,9 +662,9 @@ def bar(r, measure, figure_by=None, subplot_by=None, set_by=None,
                     pm = point.squeeze().mean(axis=0)
                     pe = ss.sem(point.squeeze(), axis=0)
                     xpos = si + (mi * width)
-                    r = axarr[spi].bar(xpos, pm, width, color=colors[mi], yerr=pe,
+                    b = axarr[spi].bar(xpos, pm, width, color=colors[mi], yerr=pe,
                                        alpha=alpha, error_kw=error_config)
-                    r_lst.append(r)
+                    b_lst.append(b)
             axarr[spi].set_title(ld['sp_lbls'][spi], fontweight=stitlefont_wt)
             # axarr[spi].legend(loc='upper left')
             axarr[spi].set_xticks(np.arange(n_sets) + width)
@@ -673,10 +673,10 @@ def bar(r, measure, figure_by=None, subplot_by=None, set_by=None,
             if spi % sp_dims[1] == 0:
                 axarr[spi].set_ylabel(units, fontweight=stitlefont_wt)
             if spi % sp_dims[1] == len(sp_vals) - 1:
-                axarr[spi].legend(r_lst, ld['m_lbls'])
+                axarr[spi].legend(b_lst, ld['m_lbls'])
 
         if savedir:
-            save_fig(r, savedir, ptype, measure, f_lbls[fi])
+            save_fig(b, savedir, ptype, measure, f_lbls[fi])
 
 
 def boxplot(r, measure, figure_by=None, subplot_by=None, set_by=None,
