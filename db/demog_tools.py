@@ -3,6 +3,8 @@
 from collections import defaultdict
 from itertools import combinations
 
+from tqdm import tqdm
+
 import graphviz as gv
 import networkx as nx
 import numpy as np
@@ -257,7 +259,7 @@ def fam_ph(fDF, aff_col):
 
     fams = fDF['famID'].unique()
 
-    for fam in fams:
+    for fam in tqdm(fams):
         famDF = fDF[fDF['famID'] == fam]
         famO = Family(famDF, aff_col)
         famO.define_rels()
@@ -286,7 +288,7 @@ def fam_fhd(fDF, aff_col):
 
     fams = fDF['famID'].unique()
 
-    for fam in fams:
+    for fam in tqdm(fams):
         famDF = fDF[fDF['famID'] == fam]
         famO = Family(famDF, aff_col)
         famO.define_rels()
@@ -310,7 +312,7 @@ def fam_fhd_catnorm(fDF, aff_col):
 
     fams = fDF['famID'].unique()
 
-    for fam in fams:
+    for fam in tqdm(fams):
         famDF = fDF[fDF['famID'] == fam]
         famO = Family(famDF, aff_col)
         famO.define_rels()
@@ -334,7 +336,7 @@ def fam_fhd_pathlen(fDF, aff_col, base_constant=2):
 
     fams = fDF['famID'].unique()
 
-    for fam in fams:
+    for fam in tqdm(fams):
         famDF = fDF[fDF['famID'] == fam]
         famO = Family(famDF, aff_col)
         famO.G2 = famO.build_graph_pathlen()
