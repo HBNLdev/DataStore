@@ -983,23 +983,64 @@ class Neuropsych_XML:
     ''' given filepath to .xml file in /raw_data/neuropsych/, represent it '''
 
     # labels for fields output by david's awk script
-
-    # subject info columns
-    cols = ['id', 'dob', 'gender', 'hand', 'testdate', 'sessioncode',
-            'motivTOT', 'motivCBST', 'motivTOLT', 'age',
-            # TOLT columns
-            'mim_3b', 'mom_3b', 'em_3b', 'ao_3b', 'apt_3b', 'atoti_3b', 'ttrti_3b', 'atrti_3b',
-            'mim_4b', 'mom_4b', 'em_4b', 'ao_4b', 'apt_4b', 'atoti_4b', 'ttrti_4b', 'atrti_4b',
-            'mim_5b', 'mom_5b', 'em_5b', 'ao_5b', 'apt_5b', 'atoti_5b', 'ttrti_5b', 'atrti_5b',
-            'mim_tt', 'mom_tt', 'em_tt', 'ao_tt', 'apt_tt', 'atoti_tt', 'ttrti_tt', 'atrti_tt',
-            'otr_3b', 'otr_4b', 'otr_5b', 'otr_tt',  # added 1/18/2017 - number of optimal trials
-            # CBST columns
-            'tc_f', 'span_f', 'tcat_f', 'tat_f',
-            'tc_b', 'span_b', 'tcat_b', 'tat_b']
+    cols = ['id',
+            'dob',
+            'gender',
+            'hand',
+            'testdate',
+            'sessioncode',
+            'motiv_avg',
+            'motiv_cbst',
+            'motiv_tolt',
+            'age',
+            'tolt_3b_mim',
+            'tolt_3b_mom',
+            'tolt_3b_em',
+            'tolt_3b_ao',
+            'tolt_3b_apt',
+            'tolt_3b_atoti',
+            'tolt_3b_ttrti',
+            'tolt_3b_atrti',
+            'tolt_4b_mim',
+            'tolt_4b_mom',
+            'tolt_4b_em',
+            'tolt_4b_ao',
+            'tolt_4b_apt',
+            'tolt_4b_atoti',
+            'tolt_4b_ttrti',
+            'tolt_4b_atrti',
+            'tolt_5b_mim',
+            'tolt_5b_mom',
+            'tolt_5b_em',
+            'tolt_5b_ao',
+            'tolt_5b_apt',
+            'tolt_5b_atoti',
+            'tolt_5b_ttrti',
+            'tolt_5b_atrti',
+            'tolt_tt_mim',
+            'tolt_tt_mom',
+            'tolt_tt_em',
+            'tolt_tt_ao',
+            'tolt_tt_apt',
+            'tolt_tt_atoti',
+            'tolt_tt_ttrti',
+            'tolt_tt_atrti',
+            'tolt_3b_otr',
+            'tolt_4b_otr',
+            'tolt_5b_otr',
+            'tolt_tt_otr',
+            'vst_f_tc',
+            'vst_f_span',
+            'vst_f_tcat',
+            'vst_f_tat',
+            'vst_b_tc',
+            'vst_b_span',
+            'vst_b_tcat',
+            'vst_b_tat']
 
     # this function needs to be in /usr/bin of the invoking system
     func_name = '/opt/bin/do_np_processC'
-    session_letters = 'abcdefghijkl'
+    session_letters = 'abcdefghijklmnop'
     npsession_npfollowup = {letter: number for letter, number in
                             zip(session_letters, range(len(session_letters)))}
 
@@ -1058,8 +1099,8 @@ class Neuropsych_XML:
                 v = datetime.strptime(v, '%m/%d/%Y')  # dates
             elif k in ['id', 'gender', 'hand', 'sessioncode']:
                 pass  # leave these as strings
-            elif 'ao_' in k:
-                v = float(v[:-1]) / 100  # percentages converted to proportions
+            elif '_ao' in k:
+                v = float(v[:-1])  # percentages converted to proportions
             else:
                 v = float(v)  # all other data becomes float
             return v
@@ -1068,25 +1109,25 @@ class Neuropsych_XML:
         ''' after results have been extracted, perform quality assurance checks on them '''
 
         # check if TOLT or CBST data is missing - if so, set motivation to none
-        if s.data['mim_5b'] is None:
-            s.data['motivTOLT'] = None
-        if s.data['tat_f'] is None:
-            s.data['motivCBST'] = None
+        if s.data['tolt_5b_mim'] is None:
+            s.data['motiv_tolt'] = None
+        if s.data['vst_f_tat'] is None:
+            s.data['motiv_cbst'] = None
         # then re-calculate mean
-        motivs = [motiv for motiv in (s.data['motivTOLT'], s.data['motivCBST']) if motiv]
+        motivs = [motiv for motiv in (s.data['motiv_tolt'], s.data['motiv_cbst']) if motiv]
         if motivs:
-            s.data['motivTOT'] = np.mean(motivs)
+            s.data['motiv_avg'] = np.mean(motivs)
         else:
-            s.data['motivTOT'] = None
+            s.data['motiv_avg'] = None
 
         # set CBST fields of 0 to be None
         # if any forward field is 0, set all forward to None
         # if any backward field is 0, set all backward to None
-        if s.data['span_f'] == 0:
-            for field in ['tc_f', 'span_f', 'tcat_f', 'tat_f']:
+        if s.data['vst_f_span'] == 0:
+            for field in ['vst_f_tc', 'vst_f_span', 'vst_f_tcat', 'vst_f_tat']:
                 s.data[field] = None
-        if s.data['span_b'] == 0:
-            for field in ['tc_b', 'span_b', 'tcat_b', 'tat_b']:
+        if s.data['vst_b_span'] == 0:
+            for field in ['vst_b_tc', 'vst_b_span', 'vst_b_tcat', 'vst_b_tat']:
                 s.data[field] = None
 
 

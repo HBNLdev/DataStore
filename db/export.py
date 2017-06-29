@@ -44,8 +44,8 @@ def neuropsych(do_export=True):
     export_cols = ['session_best', 'session', 'session_datediff', 'followup'] + \
                   export_cols + ['np_session', 'site', 'filepath', ]
     for n_ring in ['3b', '4b', '5b', 'tt']:
-        last_pos = export_cols.index('atrti_' + n_ring)
-        otr_pos = export_cols.index('otr_' + n_ring)
+        last_pos = export_cols.index('tolt_' + n_ring + '_atrti')
+        otr_pos = export_cols.index('tolt_' + n_ring + '_otr')
         export_cols.insert(last_pos + 1, export_cols.pop(otr_pos))
 
     npsych_df_export = npsych_df[export_cols]

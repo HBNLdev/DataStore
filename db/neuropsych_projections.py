@@ -39,20 +39,19 @@ def remap_neuro_variables(neuro_var_names):
         split = var.split('_')
         if len(split) == 2:
             if len(split[1]) == 2:
-                tolt = 'TOLT' + '_' + split[1] + '_' + split[0]
+                tolt = 'tolt' + '_' + split[1] + '_' + split[0]
                 neuro_var_dict[var] = tolt
             if len(split[1]) == 1:
-                cbst = 'VST' + '_' + split[1] + '_' + split[0]
+                cbst = 'vst' + '_' + split[1] + '_' + split[0]
                 neuro_var_dict[var] = cbst
         if len(split) == 1:
             motiv = split[0][0:5]
             name = split[0][5:]
             if 'TOLT' in name:
-                new_tolt = name + '_' + motiv
+                new_tolt = 'tolt_' + motiv
                 neuro_var_dict[var] = new_tolt
             if 'CBST' in name:
-                name = 'VST'
-                new_vst = name + '_' + motiv
+                new_vst = 'vst_' + motiv
                 neuro_var_dict[var] = new_vst
 
     return neuro_var_dict
