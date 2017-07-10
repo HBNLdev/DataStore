@@ -6,6 +6,7 @@ import pymongo
 import pandas as pd
 
 socket_path = '/tmp/mongodb-27017.sock'
+socket_path2 = 'mongodb://192.168.1.4/'
 MongoConn = pymongo.MongoClient(socket_path)
 Mdb = None
 

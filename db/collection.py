@@ -15,6 +15,7 @@ from tqdm import tqdm
 import db.database as D
 from .assessment_matching import match_assessments
 from .compilation import buildframe_fromdocs
+from .fhd import build_fhd_df
 from .file_handling import (MT_File, AVGH1_File, CNTH1_File, RestingDAT, Neuropsych_XML)
 from .followups import preparefupdfs_forbuild
 from .knowledge.questionnaires import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
@@ -49,10 +50,11 @@ collection_names = {
     'RestingPower': 'resting_power',
     'STInverseMats': 'STinverseMats',
     'EEGBehavior': 'EEGbehavior',
+    'FHD': 'fhd',
 }
 
 build_order = ['Subjects', 'Sessions', 'Followups', 'SSAGAs', 'Questionnaires', 'Internalizing',
-               'Externalizing', 'Core', 'AllRels', 'FHAM',
+               'Externalizing', 'Core', 'AllRels', 'FHAM', 'FHD',
                'ERPPeaks', 'Neuropsych', 'RestingPower',
                'RawEEGData', 'EEGData', 'ERPData',
                'STInverseMats',
@@ -746,3 +748,11 @@ class EEGBehavior(MongoCollection):
             D.Mdb[s.collection_name].create_index([('uID', pymongo.ASCENDING)])
 
 
+class FHD(MongoCollection):
+
+    def build(s):
+        sub_df_fhd_relthresh = build_fhd_df()
+
+        for rec in tqdm(sub_df_fhd_relthresh.reset_index().to_dict(orient='records')):
+            so = D.MongoDoc(s.collection_name, rec)
+            so.store()

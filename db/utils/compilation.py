@@ -584,3 +584,4 @@ def writecsv_date(df, base_path, suffix):
     output_str = '_'.join([base_path, today, suffix])
     output_path = output_str + '.csv'
     df.to_csv(output_path, float_format='%.3f')
+
