@@ -50,9 +50,9 @@ def calc_date_w_Qs(dstr):
                 if dstr[5:7] == '??':
                     return None
                 else:
-                    dstr = '6/1' + dstr[5:]
+                    dstr = '7/1' + dstr[5:]
             else:
-                dstr = '6' + dstr[2:]
+                dstr = '7' + dstr[2:]
         else:
             if dstr[3:5] == '??':
                 dstr = dstr[:2] + '/15' + dstr[5:]

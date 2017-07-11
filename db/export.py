@@ -7,11 +7,12 @@ import numpy as np
 import db.database as D
 from .compilation import buildframe_fromdocs
 from .file_handling import Neuropsych_XML
-from .utils.compilation import get_bestsession
+from .utils.compilation import get_bestsession, writecsv_date
 
 # neuropsych
 
 npsych_basepath = '/processed_data/neuropsych/neuropsych_all'
+fhd_basepath = '/processed_data/fhd/fhd'
 
 
 def neuropsych(do_export=True):
@@ -86,3 +87,38 @@ def npsych_code_hand(v):
         return 2
     else:
         return np.nan
+
+
+def fhd(do_export=True):
+    fhd_cols = ['ID',
+                'father_cor_alc_dep_dx',
+                'father_cor_ald5dx',
+                'parent_cor_alc_dep_dx',
+                'parent_cor_ald5dx',
+                'first_cor_alc_dep_dx',
+                'first_cor_ald5dx',
+                'parentCOGA_cor_alc_dep_dx',
+                'parentCOGA_cor_ald5dx',
+                'fhdratio_cor_alc_dep_dx',
+                'fhdratio_cor_ald5dx',
+                'fhdratio_cor_ald5sx_max_cnt_log',
+                'fhdratio2_cor_alc_dep_dx',
+                'fhdratio2_cor_ald5dx',
+                'fhdratio2_cor_ald5sx_max_cnt_log',
+                'nrels_cor_alc_dep_dx',
+                'nrels_cor_ald5dx',
+                'nrels_cor_ald5sx_max_cnt_log',
+                'nrels2_cor_alc_dep_dx',
+                'nrels2_cor_ald5dx',
+                'nrels2_cor_ald5sx_max_cnt_log',
+                ]
+    fhd_proj = {c: 1 for c in fhd_cols}
+    fhd_proj['_id'] = 0
+    fhd_docs = D.Mdb['fhd'].find({}, fhd_proj)
+    fhd_df = buildframe_fromdocs(fhd_docs, inds=['ID'])
+    fhd_df = fhd_df[fhd_cols[1:]]
+
+    if do_export:
+        writecsv_date(fhd_df, fhd_basepath, suffix='all')
+    else:
+        return fhd_df
