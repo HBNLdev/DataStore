@@ -3,7 +3,7 @@
 
 # defining maximum followups
 
-most_recent_distribution = 76
+most_recent_distribution = 79
 max_fups = 6
 
 # definitions of zork URLs
@@ -11,8 +11,8 @@ max_fups = 6
 base_url = 'https://zork5.wustl.edu/coganew/data/available_data'
 
 # updated often!
-core_url = '/pheno_all/core_pheno_20170309.zip'
-allrels_file = 'allrelsweb201703.sas7bdat.csv'
+core_url = '/pheno_all/core_pheno_20170612.zip'
+allrels_file = 'allrelsweb201706.sas7bdat.csv'
 
 # updated semi-often
 cal_url = '/Phase_IV/CalFoms01.26.2017_sas.zip'
