@@ -87,7 +87,7 @@ default_EROfields = {'ID': 1, 'session': 1, 'uID': 1, '_id': 0}
 
 subcoll_dict = dict()
 
-
+column_types_by_collection = { 'sessions':{'age':float} }
 # considering a function that lets you set the module-wide DB
 # not sure this is the best implementation
 
@@ -211,7 +211,7 @@ def get_colldocs(coll, subcoll=None, add_query={}, add_proj={}):
     return docs
 
 
-def buildframe_fromdocs(docs, inds=['ID', 'session']):
+def buildframe_fromdocs(docs, inds=['ID', 'session'], column_types={}):
     ''' build a dataframe from a list of docs '''
     df = pd.DataFrame.from_records(
         [flatten_dict(d) for d in list(docs)])
@@ -224,6 +224,8 @@ def buildframe_fromdocs(docs, inds=['ID', 'session']):
 
     df.dropna(axis=1, how='all', inplace=True)  # drop empty columns
     df.sort_index(inplace=True)  # sort
+    for col, typ in column_types.items():
+        df[col] = df[col].astype(typ)
     return df
 
 
