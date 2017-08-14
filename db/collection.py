@@ -16,7 +16,8 @@ import db.database as D
 from .assessment_matching import match_assessments
 from .compilation import buildframe_fromdocs
 from .fhd import build_fhd_df
-from .file_handling import (MT_File, AVGH1_File, CNTH1_File, RestingDAT, Neuropsych_XML)
+from db import file_handling as FH
+from .file_handling import (AVGH1_File, CNTH1_File, RestingDAT, Neuropsych_XML)
 from .followups import preparefupdfs_forbuild
 from .knowledge.questionnaires import (map_ph4, map_ph4_ssaga, map_ph123, map_ph123_ssaga,
                                        zork_p123_path, zork_p4_path,
@@ -29,6 +30,7 @@ from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup
                                 build_parentID, df_fromcsv)
 from .utils.filename_parsing import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
 from .utils.files import identify_files
+
 
 # maps collection objects to their collection names
 collection_names = {
@@ -79,6 +81,7 @@ class MongoCollection(object):
     collection_name = ''
 
     def __init__(s):
+        print( 'init '+s.class_name()+' in datastore')
         s.collection_name = collection_names[s.class_name()]
 
     @staticmethod
@@ -123,6 +126,11 @@ class MongoCollection(object):
         # use dropIndex
         # use reIndex
         pass
+
+    def add_uniqueID(s,fields=['ID','session'],sep='_'):
+        ''' update each document with a 'uID' field composed of fields connected by sep'''
+        for doc in D.Mdb[s.collection_name].find({ f:{'$exists':True} for f in fields }):
+            doc.update()
 
     def class_name(s):
         return type(s).__name__
@@ -248,8 +256,8 @@ class Followups(MongoCollection):
 
 class ERPPeaks(MongoCollection):
     ''' time-regional extrema in event-related potential waveforms '''
-
     def build(s):
+        print('ERPPeaks build from datastore. FH path:', FH.__file__)
 
         mt_files, datemods = identify_files('/processed_data/mt-files/', '*.mt')
         add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
@@ -273,14 +281,14 @@ class ERPPeaks(MongoCollection):
             if '/waves/' in fp or fp in bad_files:
                 continue
 
-            mtO_ck = MT_File(fp)  # get file info
+            mtO_ck = FH.MT_File(fp)  # get file info
 
             erpO_ck = D.MongoDoc(s.collection_name, mtO_ck.data)
             erpO_ck.compare()  # populates s.new with bool
 
             if erpO_ck.new:  # "brand new" get general info
 
-                mtO = MT_File(fp)
+                mtO = FH.MT_File(fp)
                 try:
                     mtO.parse_fileDB(general_info=True)
                 except:
@@ -292,7 +300,7 @@ class ERPPeaks(MongoCollection):
                 try:
                     erpO_ck.doc[mtO.file_info['experiment']]
                 except KeyError:  # only update experiment info if not already in db
-                    mtO = MT_File(fp)  # refresh the file obj
+                    mtO = FH.MT_File(fp)  # refresh the file obj
                     try:
                         mtO.parse_fileDB(general_info=False)
                     except:
