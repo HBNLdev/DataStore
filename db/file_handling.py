@@ -445,12 +445,18 @@ class MT_File:
     query_fields = ['id', 'session', 'experiment']
 
     def normAntCase(s):
-        query = {k: v for k, v in s.file_info.items() if k in s.query_fields}
-        doc = D.Mdb['avgh1s'].find_one(query)
-        avgh1_path = doc['filepath']
-        case_tup = extract_case_tuple(avgh1_path)
-        case_type = MT_File.ant_cases_types_lk.index(case_tup)
-        return MT_File.ant_case_convD[case_type]
+        case_nums = tuple( sorted([ k for k in s.header['cases_peaks'].keys() ]) )
+        if case_nums == (1,3,4): # Inconsistent ordering
+            with open('/active_projects/db/logs/134_cases.log','a') as logf:
+                logf.write(s.fullpath+'\n')
+                return {1:2,2:4,3:1,4:3}
+        else:
+            query = {k: v for k, v in s.file_info.items() if k in s.query_fields}
+            doc = D.Mdb['avgh1s'].find_one(query)
+            avgh1_path = doc['filepath']
+            case_tup = extract_case_tuple(avgh1_path)
+            case_type = MT_File.ant_cases_types_lk.index(case_tup)
+            return MT_File.ant_case_convD[case_type]
 
     def __init__(s, filepath):
         s.fullpath = filepath
@@ -492,8 +498,8 @@ class MT_File:
                     s.header['problems'] = True
                 else:
                     case = int(cs_pks[0][1])
-                    if 'normed_cases' in dir(s):
-                        case = s.normed_cases[case]
+                    # if 'normed_cases' in dir(s):
+                    #     case = s.normed_cases[case]
                     s.header['cases_peaks'][case] = int(cs_pks[1][1])
 
         of.close()
