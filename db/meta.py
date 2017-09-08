@@ -7,6 +7,7 @@ from db.knowledge import drinking as drK
 
 import pandas as pd
 import numpy as np
+from sklearn.neighbors import KernelDensity  
 from datetime import datetime as dt
 from numbers import Number
 from collections import Counter
@@ -124,17 +125,23 @@ def field_ranges(db,mdb,coll,guide={},sniff_guide={}):
                             'std':std,
                             'portion':len(Cvals)/Ndocs,
                               #add bad bad vals with trace
-                            'Nmin':low/mn-1,
-                            'Nmax':hi/mn-1,
-                            'Nstd':std/mn-1,
-                            'Nmedian':med/mn-1,
+                            'Nmin':(low - mn)/std,
+                            'Nmax':(hi - mn)/std,
+                            'Nmedian':(med - mn)/std,
                             'data portion':data_portion,
                              }
-                    for pct in [5,25,75,95]:
+                    for pct in [1,5,25,75,95,99]:
                         pctV = np.percentile(Cvals,pct)
                         spct = str(pct)
                         ranges[fd]['p'+spct] = pctV
-                        ranges[fd]['Np'+spct] = pctV/mn-1
+                        ranges[fd]['Np'+spct] = (pctV - mn)/std
+
+                    kernel = KernelDensity(kernel='gaussian',bandwidth=4).fit(np.array(Cvals)[:,np.newaxis])
+                    pdf_xs = np.linspace(ranges[fd]['p1'],ranges[fd]['p99'],150)[:,np.newaxis]
+                    pdf_vals = [np.exp(v) for v in kernel.score_samples(pdf_xs)]
+                    ranges[fd]['pdf_x'] = list( np.squeeze(pdf_xs) )
+                    ranges[fd]['Npdf_x'] = list( np.squeeze((pdf_xs-mn)/std) )
+                    ranges[fd]['pdf'] = list( np.squeeze(pdf_vals) )
                 except:
                     D.set_db(mdb)
                     D.Mdb['errors'].insert_one({'collection':coll,
