@@ -12,7 +12,7 @@ from PyQt4 import QtGui, QtCore
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from .EEGdata import avgh1
+from picker.EEGdata import avgh1
 
 Qt = QtCore.Qt
 
