@@ -351,34 +351,36 @@ def sessions_info(df, folder, name, fup_order=None):
     fig.savefig(os.path.join(folder, name + '_sesHist.png'))
 
     # age distributions by followup with sex
-    if fup_order:
-        order = fup_order
-    else:
-        order_template = ['p1', 'p2', 'p3', '-1.0', '0', '1', '2', '3', '4', '5']
-        order = [g for g in order_template if g in df['followup'].unique()]
-    fig = plt.figure(figsize=[8, 5]);
-    ax = fig.gca()
-    plot = violin_distributions(df, 'followup', 'session_age', 'sex', ax=ax,
-                                order=order)
-    plot = update_tick_labels(plot, 'x', nums_for_labels, {'property': 'followup',
-                                                           'dataframe': df})
-    plot.set_ylim([0, 38])
-    fig.savefig(os.path.join(folder, name + '_followups_ages_sex.png'))
+    # if fup_order:
+    #     order = fup_order
+    # else:
+    #     order_template = ['p1', 'p2', 'p3', '-1.0', '0', '1', '2', '3', '4', '5']
+    #     order = [g for g in order_template if g in df['followup'].unique()]
+    # fig = plt.figure(figsize=[8, 5]);
+    # ax = fig.gca()
+    # plot = violin_distributions(df, 'followup', 'age', 'sex', ax=ax,
+    #                             order=order)
+    # plot = update_tick_labels(plot, 'x', nums_for_labels, {'property': 'followup',
+    #                                                        'dataframe': df})
+    # plot.set_ylim([0, 38])
+    # fig.savefig(os.path.join(folder, name + '_followups_ages_sex.png'))
 
-    # race + ethnicity table_breakdown
-    re_ses = table_breakdown(df, 'self-reported',
-                             'sex', 'uID', prop_count_label='session')
-    re_sub = table_breakdown(df.groupby('ID').head(1), 'self-reported',
-                             'sex', 'uID', prop_count_label='subject')
-    re_comb = re_sub.join(re_ses)
-    add_REdefs(re_comb, 'self-reported')
+    # # race + ethnicity table_breakdown
+    # re_ses = table_breakdown(df, 'self-reported',
+    #                          'sex', 'uID', prop_count_label='session')
+    # re_sub = table_breakdown(df.groupby('ID').head(1), 'self-reported',
+    #                          'sex', 'uID', prop_count_label='subject')
+    # re_comb = re_sub.join(re_ses)
+    # add_REdefs(re_comb, 'self-reported')
+    
     # fig = plt.figure(figsize=[8,12])
     # ax = fig.gca()
     # ax.xaxis.set_visible(False)
     # ax.yaxis.set_visible(False)
-    # table(ax,re_comb,loc='center')
-    with open(os.path.join(folder, name + '_RaceEthnicity_breakdown.html'), 'w') as wf:
-        re_comb.to_html(wf)
+    # table(ax,re_comb,loc='center')''
+
+    # with open(os.path.join(folder, name + '_RaceEthnicity_breakdown.html'), 'w') as wf:
+    #     re_comb.to_html(wf)
 
 
         # fig = plt.figure(figsize=[8,12])
