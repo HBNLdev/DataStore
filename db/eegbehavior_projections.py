@@ -77,7 +77,7 @@ def EEGbehaviorDF(uIDs,
     query = {'uID': {'$in': uIDs}}
     
     if exp: 
-        proj = parse_EEGbehavior_args(exp, cond=cond, admin=admin, exp_cases_dict=exp_cases_dict, measures = measures)
+        proj = parse_EEGbehavior_args(exp, cond=cond, admin=admin, exp_cases_dict=EEGbehavior_dict, measures = measures)
         add_query = {exp: {'$exists': True}}
         proj.update(proj)
         query.update(add_query)
