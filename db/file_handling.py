@@ -447,7 +447,7 @@ class MT_File:
     def normAntCase(s):
         case_nums = tuple( sorted([ k for k in s.header['cases_peaks'].keys() ]) )
         if case_nums == (1,3,4): # Inconsistent ordering
-            with open('/active_projects/db/logs/134_cases.log','a') as logf:
+            with open('/active_projects/db/logs/134_cases_HBNL4.log','a') as logf:
                 logf.write(s.fullpath+'\n')
                 return {1:2,2:4,3:1,4:3}
         else:
@@ -482,6 +482,7 @@ class MT_File:
         of = open(s.fullpath, 'r')
         reading_header = True
         s.header_lines = 0
+        cases = []
         while reading_header:
             file_line = of.readline()
             if len(file_line) < 2 or file_line[0] != '#':
@@ -498,9 +499,14 @@ class MT_File:
                     s.header['problems'] = True
                 else:
                     case = int(cs_pks[0][1])
+                    peak = int(cs_pks[1][1])
                     # if 'normed_cases' in dir(s):
                     #     case = s.normed_cases[case]
-                    s.header['cases_peaks'][case] = int(cs_pks[1][1])
+                    s.header['cases_peaks'][case] = peak
+                    cases.append( case )
+
+        s.header['case_tup'] = tuple(sorted(list(set(cases))))
+        s.normed_cases_calc()
 
         of.close()
 
@@ -521,12 +527,15 @@ class MT_File:
             case = case_convdict[int(k[0])]
             peak = k[1]
             inner_ddict = {}
-            for chan, amp_lat in s.mt_data[k].items():  # chans
+            for chan, amp_lat in s.mt_data[k].items():  # chans - reaction time in parallel
                 if type(amp_lat) is tuple:  # if amp / lat tuple
                     inner_ddict.update(
                         {chan: {'amp': float(amp_lat[0]),
                                 'lat': float(amp_lat[1])}}
                     )
+                elif chan == 'reaction_time':
+                    inner_ddict['rt'] = float(amp_lat)
+
             ddict[case + '_' + peak] = inner_ddict
         ddict['filepath'] = s.fullpath
         ddict['run'] = s.file_info['run']
@@ -977,6 +986,26 @@ class ERO_Summary_CSV(ERO_CSV):
             s.data[k] = str(v).replace('.', 'p')
 
         s.data = list(s.data.to_dict(orient='records'))
+
+
+class ERN_extract:
+
+    ex_funs = ['extract_ern_react','extract_ern_val']
+
+    def __init__(s, filepath):
+
+        s.filepath = filepath
+        s.path = os.path.dirname(s.filepath)
+        s.path_parts = filepath.split(os.path.sep)
+        s.filename = os.path.splitext(s.path_parts[-1])[0]
+
+        s.file_info = parse_filename(filepath)
+
+        data = s.extract_data
+
+    def extract_data(s):
+
+        pass
 
 
 ##############################
