@@ -42,7 +42,7 @@ def neuropsych(do_export=True):
     export_cols = Neuropsych_XML.cols.copy()
     export_cols.remove('id')
     export_cols.remove('sessioncode')
-    export_cols = ['session_best', 'session', 'session_datediff', 'followup'] + \
+    export_cols = ['session_best', 'session', 'date_diff_session', 'followup'] + \
                   export_cols + ['np_session', 'site', 'filepath', ]
     for n_ring in ['3b', '4b', '5b', 'tt']:
         last_pos = export_cols.index('tolt_' + n_ring + '_atrti')
@@ -58,7 +58,7 @@ def neuropsych(do_export=True):
 
     if do_export:
         today = datetime.now().strftime('%m-%d-%Y')
-        output_str = '_'.join([npsych_basepath, today])
+        output_str = '_'.join([npsych_basepath, D.Mdb.name, today])
         npsych_df_export.to_csv(output_str + '.csv')
         print('saved to', output_str + '.csv')
 
