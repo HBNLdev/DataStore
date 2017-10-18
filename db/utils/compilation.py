@@ -225,7 +225,7 @@ def harmonize_fields_left(row, field1, field2):
 
 def calc_followupcol(row):
     ''' return the Phase 4 followup # '''
-    if row['Phase4-session'] is np.nan or row['Phase4-session'] not in 'abcd':
+    if not isinstance(row['Phase4-session'],str) or row['Phase4-session'] not in 'abcd':
         return np.nan
     else:
         return ord(row['session']) - ord(row['Phase4-session'])
@@ -458,7 +458,7 @@ def get_restingcnts(df):
     return df_out
 
 
-def get_bestsession(df, datediff_col='session_datediff'):
+def get_bestsession(df, datediff_col='date_diff_session'):
     ''' given a dataframe with columns of ID, session, and session_datediff,
         add a column called session_best, which is a copy of session, except
         for duplicated ID/session combinations,
