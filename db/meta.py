@@ -19,6 +19,28 @@ default_sniff_guide = {'category cutoff':20,
                       'numeric tolerance':0,
                       'date tolerance':0}
 
+def find_fields(doc,guide):
+ 
+    if not guide:
+        skip_cols = ['_id']
+        return [ k for k in doc.keys() if k not in skip_cols ]
+    else:
+        pass
+    
+def summarize_collection_meta(db,mdb,coll,coll_guide=None):
+    ''' Scan collection and build description of fields.
+    '''
+    
+    D.set_db(db)
+    cc = D.Mdb[coll].find() #collection_cursor
+    fields = set()
+    [ fields.update( find_fields(doc,coll_guide) ) for doc in cc ]
+    
+    D.set_db(mdb)
+    D.Mdb['summaries'].insert_one({'name':coll,
+                                  'fields':list(fields)})
+
+
 def sniff_field_type(vals,sniff_guide={}):
     ''' determines type as one of:
             - categorical
