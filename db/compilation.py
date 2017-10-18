@@ -118,7 +118,7 @@ def display_dbcontents():
     pp.pprint(subcoll_dict)
 
 
-def get_subjectdocs(sample, sparsify=False):
+def get_subjectdocs(sample, sparsify=False, proj=None):
     ''' given sample, prepare matching docs from the subjects collection '''
     if sample not in subjects_queries.keys():
         print('sample incorrectly specified, the below are valid')
@@ -136,12 +136,10 @@ def get_subjectdocs(sample, sparsify=False):
 
 def get_sessiondocs(sample, followups=None, sparsify=False):
     ''' given sample, prepare matching docs from the sessions collection '''
-    if sample not in subjects_queries.keys():
-        print('sample incorrectly specified, the below are valid')
-        pp.pprint(sorted(list(subjects_queries.keys())))
-        return
-    else:
-        query = subjects_queries[sample]
+    sub_docs = get_subjectdocs(sample,proj={'ID':1})
+    IDs = [ d['ID'] for d in sub_docs]
+    if IDs and len(IDs) > 0:
+        query = {'ID':{'$in':IDs}}
         if followups:
             if len(followups) > 0:
                 query.update({'followup': {'$in': followups}})
@@ -150,9 +148,9 @@ def get_sessiondocs(sample, followups=None, sparsify=False):
         if sparsify:
             proj = format_sparseproj('sessions')
             proj.update({'_id': 0})
-            docs = D.Mdb['sessions'].find(subjects_queries[sample], proj)
+            docs = D.Mdb['sessions'].find(query, proj)
         else:
-            docs = D.Mdb['sessions'].find(subjects_queries[sample])
+            docs = D.Mdb['sessions'].find(query)
         return docs
 
 
