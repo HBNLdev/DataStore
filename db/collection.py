@@ -9,6 +9,7 @@ from datetime import datetime
 from glob import glob
 
 import pandas as pd
+import numpy as np
 import pymongo
 from tqdm import tqdm
 
@@ -23,13 +24,14 @@ from .knowledge.questionnaires import (map_ph4, map_ph4_ssaga, map_ph123, map_ph
                                        zork_p123_path, zork_p4_path,
                                        internalizing_dir, internalizing_file, externalizing_dir, externalizing_file,
                                        allrels_file, fham_file, max_fups)
-from .master_info import load_master
+from .master_info import load_master, load_access
 from .quest_import import (import_questfolder_ph4, import_questfolder_ssaga_ph4, import_questfolder_ph123,
                            import_questfolder_ssaga_ph123, )
 from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup, ID_nan_strintfloat_COGA,
                                 build_parentID, df_fromcsv)
 from .utils.filename_parsing import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
 from .utils.files import identify_files
+from .utils.dates import calc_date_w_Qs
 
 
 # maps collection objects to their collection names
@@ -188,27 +190,56 @@ class Sessions(MongoCollection):
 
     def build(s):
         # fast
-        master, master_mtime = load_master()
-        run_letters = [col[0] for col in master.columns if col[-4:] == '-run']
-        for char in run_letters:
-            sessionDF = master[master[char + '-run'].notnull()]
-            if sessionDF.empty:
-                continue
-            else:
-                print(char)
-                sessionDF.loc[:, 'session'] = char
-                sessionDF.loc[:, 'followup'] = \
-                    sessionDF.apply(calc_followupcol, axis=1)
-                for col in ['raw', 'date', 'age']:
-                    sessionDF.loc[:, col] = sessionDF[char + '-' + col]
-                sessionDF.loc[:, 'uID'] = sessionDF.apply(join_ufields, axis=1)
-                # drop unneeded columns ?
-                # drop_cols = [col for col in sessionDF.columns if '-age' in col or
-                #   '-date' in col or '-raw' in col or '-run' in col]
-                # sessionDF.drop(drop_cols, axis=1, inplace=True)
-                for rec in tqdm(sessionDF.to_dict(orient='records')):
-                    so = D.MongoDoc(s.collection_name, rec)
-                    so.storeNaTsafe()
+        ses_lets = 'abcdefghijk'
+        accDF = load_access()
+        for dumI,ses in tqdm(accDF.iterrows()):
+            if ses['REPT'] != 99:
+                sub = D.Mdb['subjects'].find_one({'ID':ses['ID']})
+                letter = ses_lets[ses['REPT']]
+                date = calc_date_w_Qs(ses['TESTDATE'])
+                DOB = calc_date_w_Qs(ses['DOB'])
+                try:
+                    age = date - DOB
+                    age_years = age.days/365.25
+                except:
+                    #print(ses['ID'],DOB)
+                    age = np.nan
+                rec = {'ID':ses['ID'],
+                      'session':letter,
+                      'date':date,
+                       'age':age_years,
+                       'raw':ses['RAWFILE'],
+                      'uID':ses['ID']+'_'+letter}
+                try:
+                    
+                    rec['followup'] = calc_followupcol({'Phase4-session':sub['Phase4-session'],
+                                                            'session':letter})
+                except:
+                    print(sub['ID'],sub['Phase4-session'])
+                
+                so = D.MongoDoc(s.collection_name, rec)
+                so.storeNaTsafe()
+        # master, master_mtime = load_master()
+        # run_letters = [col[0] for col in master.columns if col[-4:] == '-run']
+        # for char in run_letters:
+        #     sessionDF = master[master[char + '-run'].notnull()]
+        #     if sessionDF.empty:
+        #         continue
+        #     else:
+        #         print(char)
+        #         sessionDF.loc[:, 'session'] = char
+        #         sessionDF.loc[:, 'followup'] = \
+        #             sessionDF.apply(calc_followupcol, axis=1)
+        #         for col in ['raw', 'date', 'age']:
+        #             sessionDF.loc[:, col] = sessionDF[char + '-' + col]
+        #         sessionDF.loc[:, 'uID'] = sessionDF.apply(join_ufields, axis=1)
+        #         # drop unneeded columns ?
+        #         # drop_cols = [col for col in sessionDF.columns if '-age' in col or
+        #         #   '-date' in col or '-raw' in col or '-run' in col]
+        #         # sessionDF.drop(drop_cols, axis=1, inplace=True)
+        #         for rec in tqdm(sessionDF.to_dict(orient='records')):
+        #             so = D.MongoDoc(s.collection_name, rec)
+        #             so.storeNaTsafe()
 
         D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
@@ -261,10 +292,10 @@ class ERPPeaks(MongoCollection):
 
         mt_files, datemods = identify_files('/processed_data/mt-files/', '*.mt')
         add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
-                    'ant_phase4_peaks_2016',
+                    'ant_phase4_peaks_2016','ant_phase4__peaks_2017',
                     'vp3_peak_master',
-                    'vp3_phase4__peaks_2015', 'vp3_phase4__peaks_2016',
-                    'aod_phase4__peaks_2015', 'aod_phase4__peaks_2016',
+                    'vp3_phase4__peaks_2015', 'vp3_phase4__peaks_2016','vp3_phase4__peaks_2017',
+                    'aod_phase4__peaks_2015', 'aod_phase4__peaks_2016','aod_phase4__peaks_2017',
                     'cpt_h1_peaks_may_2016',
                     # 'non_coga_vp3',
                     # 'aod_bis_18-25controls',
@@ -436,8 +467,8 @@ class Core(MongoCollection):
 
     def build(s):
         # fast
-        folder = zork_p4_path + 'subject/core/'
-        csv_files = glob(folder + '*.csv')
+        folder = zork_p4_path + 'subject/'
+        csv_files = glob(folder + 'core*.csv')
         if len(csv_files) != 1:
             print(len(csv_files), 'csvs found, aborting')
         path = csv_files[0]
