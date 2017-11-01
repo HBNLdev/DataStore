@@ -1,7 +1,7 @@
 '''reading and handling EEG data
 '''
 
-import os
+import os, sys
 from collections import OrderedDict
 
 import h5py
@@ -10,7 +10,12 @@ import pandas as pd
 from bokeh.palettes import brewer
 from scipy.signal import argrelextrema
 
-from db.file_handling import parse_filename, MT_File
+try:
+    from db.file_handling import parse_filename, MT_File
+except:
+    sys.path.append( os.path.join(os.path.split(__file__)[0],'../db') )
+    from file_handling import parse_Filename, MT_File
+
 
 
 class avgh1:
@@ -250,8 +255,9 @@ class avgh1:
         peak_pts = []
         for ci, ch in enumerate(chan_list):
             erpa = np.squeeze(erps[caseN, ch_inds[ci], :])
-            start_pt = start_pts[ci]
-            end_pt = end_pts[ci]
+            start_pt = start_pts.item(ci)
+            end_pt = end_pts.item(ci)
+
             erp = erpa[start_pt:end_pt + 1]
             peak_pt = peak_alg(erp, polarity)
             peak_vals.append(erp[peak_pt])

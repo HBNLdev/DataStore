@@ -8,7 +8,7 @@ import sys
 
 import numpy as np
 import pyqtgraph as pg
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -49,6 +49,7 @@ class Picker(QtGui.QMainWindow):
                                   (200, 255, 40),  # yellow-green
                                   (20, 255, 200),  # blue green
                                   (160, 0, 188),  # gray
+				  (225,225,225), # light gray
                                   ],
                   'XY gridlines': ([0, 200, 400, 600, 800], [0]),
                   'grid color': '#555',
