@@ -173,7 +173,7 @@ class avgh1:
         dfR = df.reset_index()
         elecIndex = dict(zip(s.save_elec_order, range(len(s.save_elec_order))))
         dfR['elec_rank'] = dfR['electrode'].map(elecIndex)
-        dfR.sort(['case_num', 'elec_rank', 'peak'], inplace=True)
+        dfR.sort_values(['case_num', 'elec_rank', 'peak'], inplace=True)
         dfR.drop('elec_rank', 1, inplace=True)
 
         dfR.dropna(inplace=True)
