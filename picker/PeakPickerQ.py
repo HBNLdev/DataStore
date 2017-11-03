@@ -16,6 +16,19 @@ from picker.EEGdata import avgh1
 
 Qt = QtCore.Qt
 
+def break_text(text,chars_per_line):
+
+    lines = []; this_line = ''
+    parts = text.split(' ')
+    while len(parts):
+        next_piece = parts.pop(0)
+        if len(this_line) + len(next_piece) +1 > chars_per_line:
+            lines.append(this_line)
+            this_line = ''
+        this_line += next_piece+' '
+    lines.append(this_line)
+    return '<br>'.join(lines)
+
 
 class Picker(QtGui.QMainWindow):
     ''' main GUI '''
@@ -87,6 +100,8 @@ class Picker(QtGui.QMainWindow):
         '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_e1_40143015_avg.h1']
     # os.path.join(os.path.dirname(__file__),init_files_by_exp['ant'] ) ]
     app_data['paths input'] = []
+
+    app_data['status history'] = []
 
     app_data['file ind'] = 0
     app_data['pick state'] = {'case': None, 'peak': None,
@@ -186,6 +201,12 @@ class Picker(QtGui.QMainWindow):
         s.stateLayout.setAlignment(Qt.AlignLeft)
         state_label = QtGui.QLabel("Picked:")
         s.stateInfo = QtGui.QLabel()
+        #s.stateInfo.setMaximumWidth( int(s.plot_props['width']*0.9) )
+        font = QtGui.QFont()
+        font.setFamily('Helvetica')
+        font.setPointSize(7)
+        s.stateInfo.setFont(font)
+        s.stateInfo.setWordWrap(True)
         s.stateInfo.setAlignment(Qt.AlignLeft)
         s.stateLayout.addWidget(state_label)
         s.stateLayout.addWidget(s.stateInfo)
@@ -944,7 +965,7 @@ class Picker(QtGui.QMainWindow):
             for cp in picks:
                 if cp[0] == case:
                     state_string += cp[1]
-                    if s.any_casepeak_edges(case, cp[1]):
+                    if s.get_edge_elecs_casepeak(case, cp[1]):
                         state_string += '*'
                     state_string += ','
             state_string = state_string[:-1]  # drop trailing comma
@@ -952,18 +973,16 @@ class Picker(QtGui.QMainWindow):
 
         s.stateInfo.setText(state_string)
 
-    def any_casepeak_edges(s, case, peak):
+    def get_edge_elecs_casepeak(s, case, peak):
         ''' given a case and peak, check if any of its channels currently picked are at an edge '''
 
-        bool_lst = []
+        el_lst = []
         for elec_case_peak, is_atedge in s.peak_edges.items():
             if elec_case_peak[1] == case and elec_case_peak[2] == peak:
-                bool_lst.append(is_atedge)
+                if is_atedge:
+                    el_lst.append(elec_case_peak[0])
 
-        if any(bool_lst):
-            return True
-        else:
-            return False
+        return el_lst
 
     # def scroll_handler(s,ev):
     #     print('scroll handler', ev[0] )
@@ -1161,10 +1180,12 @@ class Picker(QtGui.QMainWindow):
     def status_message(s, text='', color='#EEE'):
         ''' Clears message by default'''
 
+        s.app_data['status history'].append(text)
+
         html = '''<div style="width:__width__; word-wrap:break-word;">
                     <span style="text-align: center; color: __color__; font-size: 8pt; font-family: Helvetica;">
                 '''
-        html += text
+        html += break_text(text,s.plot_props['width']/8)
         html += '</span><br></div>'
         html = html.replace('__width__', str(s.plot_props['width'] - 10))
 
@@ -1172,17 +1193,24 @@ class Picker(QtGui.QMainWindow):
 
         if 'info_text' not in dir(s):
             s.info_text = pg.TextItem(html=html, anchor=(-0.05, 0))
-            s.info_text.setPos(0.15, 0.8)
+            s.info_text.setPos(-0.1, 0.8)
             s.status_plot.addItem(s.info_text)
         else:
             s.info_text.setHtml(html)
 
+
+
     def notify_applied_ckEdges(s, case, peak):
         ''' for a given case / peak combination, check if any peaks are at an edge, and provide a notification'''
 
-        if s.any_casepeak_edges(case, peak):
-
-            text = 'At least one peak is at an edge'
+        edge_elecs = s.get_edge_elecs_casepeak(case,peak)
+        if edge_elecs:
+            plural = [' is',' an edge:']
+            if len(edge_elecs) > 1:
+                plural = ['s are', ' edges:']
+            text = 'Peak'+plural[0]+ ' at '+ plural[1]+'\n'
+            for el in edge_elecs:
+                text += ' '+el
             s.status_message(text=text, color='#E00')
         else:
             s.status_message(text=case + ' , ' + peak + ' applied. All peaks within range.')
