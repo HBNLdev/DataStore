@@ -212,7 +212,7 @@ class Picker(QtGui.QMainWindow):
         s.pickNavControls.addWidget(s.peakChooser)
 
         pick_buttons = [('Pick', s.pick_init), ('Apply', s.apply_selections),
-                        ('Fix', s.fix_peak)]
+                        ('Fix', s.fix_peak),('Settings',s.settings)]
         # s.add_buttons(s.pickNavControls,pick_buttons)
         for label, handler in pick_buttons:
             s.buttons[label] = QtGui.QPushButton(label)
@@ -270,6 +270,14 @@ class Picker(QtGui.QMainWindow):
         s.applyChange.clicked.connect(s.apply_peak_change)
         [s.fixLayout.addWidget(w) for w in
          [s.fixCase, s.oldPeak, s.removePeak, s.newPeak, s.applyChange]]
+
+        s.settingsDialog = QtGui.QDialog(s)
+        s.settingsLayout = QtGui.QVBoxLayout()
+        s.settingsDialog.setLayout(s.settingsLayout)
+        s.useMainCasesToggle = QtGui.QCheckBox("zoom follows main cases display")
+        s.useMainCasesToggle.setChecked(False)
+        [s.settingsLayout.addWidget(w) for w in 
+         [ s.useMainCasesToggle ] ]
 
         s.plotsGrid.ci.layout.setContentsMargins(0, 0, 0, 0)
         s.plotsGrid.ci.layout.setSpacing(0)
@@ -334,17 +342,6 @@ class Picker(QtGui.QMainWindow):
         s.setCentralWidget(s.tabs)
 
         s.show()
-
-    def get_zoompos(s):
-        ''' store the current position of the zoom window '''
-        s.app_data['display props']['zoom position'][0] = s.zoomDialog.pos().x()
-        s.app_data['display props']['zoom position'][1] = s.zoomDialog.pos().y()
-
-    def zoom_close(s, event):
-        ''' custom handler for the closing of the zoom window that remembers its position '''
-        s.get_zoompos()
-        QtGui.QDialog.closeEvent(s.zoomDialog, event)
-        s.zoomDialog._open = False
 
     def scroll_to_top(s):
         vert_scroll = s.plotsScroll.verticalScrollBar()
@@ -991,6 +988,10 @@ class Picker(QtGui.QMainWindow):
             s.app_data['zoom electrode'] = elec
             proceed = True
 
+        if s.useMainCasesToggle.isChecked():
+            for case in s.app_data['current cases']:
+                s.zoomCaseToggles[case].setChecked( s.caseToggles[case].isChecked() )
+
         if proceed:
             print(elec)
             s.zoomPlot.clear()
@@ -1023,6 +1024,17 @@ class Picker(QtGui.QMainWindow):
 
                 for case in s.app_data['current cases']:  # unsure why this doesn't work in above loop, maybe timing
                     s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
+
+    def get_zoompos(s):
+        ''' store the current position of the zoom window '''
+        s.app_data['display props']['zoom position'][0] = s.zoomDialog.pos().x()
+        s.app_data['display props']['zoom position'][1] = s.zoomDialog.pos().y()
+
+    def zoom_close(s, event):
+        ''' custom handler for the closing of the zoom window that remembers its position '''
+        s.get_zoompos()
+        QtGui.QDialog.closeEvent(s.zoomDialog, event)
+        s.zoomDialog._open = False
 
     def update_zoom_region(s):
 
@@ -1291,6 +1303,10 @@ class Picker(QtGui.QMainWindow):
         s.fixDialog.setVisible(False)
 
         s.status_message('Removed ' + case + ' , ' + peak)
+
+    def settings(s):
+
+        s.settingsDialog.show()
 
     def fix_peak(s):
         ''' callback for Fix button inside Pick tab '''
