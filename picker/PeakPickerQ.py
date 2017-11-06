@@ -1254,7 +1254,7 @@ class Picker(QtGui.QMainWindow):
                 c_ind = s.app_data['current cases'].index(el_cs_pk[1])
                 if el_cs_pk in s.peak_edges and s.peak_edges[el_cs_pk]:
                     sym = 'x'
-                    sz = 12
+                    sz = 16
                 else:
                     sym = 'o'
                     sz = 4
