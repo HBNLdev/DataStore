@@ -16,6 +16,13 @@ from picker.EEGdata import avgh1
 
 Qt = QtCore.Qt
 
+#configuration of case display
+# If an experiment is included, only specified cases will be shown with their aliases
+default_case_display_aliases = {'ern':[('N50','N50'),('N10','N10'),('P10','P10'),('P50','P50')],
+                                'cpt':[('T','Go'),('CN','Cue No-Go'),('N','No-Go')],
+                                #'gng':[('G','Go'),('NG','No-Go')]
+                                }
+
 def break_text(text,chars_per_line):
 
     lines = []; this_line = ''
@@ -45,6 +52,11 @@ class Picker(QtGui.QMainWindow):
                         'aod': ['/processed_data/avg-h1-files/aod/l16-h003-t75-b125/suny/ns32-64/',
                                 'aod_6_a1_40021070_avg.h1 aod_6_a1_40021017_avg.h1 aod_6_a1_40017007_avg.h1']
                         }
+    initD = '/active_projects/mort/test/picker/'#s.dir_paths_by_exp['ant'][0]
+    initFs = 'cpt_4_f1_40719005_avg.h1 ern_7_b1_40001008_avg.h1 gng_2_b1_40355069_avg.h1' +\
+                ' ans_5_f1_40293005_avg.h1 ant_5_a1_49403009_avg.h1 stp_3_e1_40277003_avg.h1'+\
+                ' aod_6_a1_40063010_avg.h1 err_8_a1_40251004_avg.h1 vp3_2_a1_d0226008_avg.h1' 
+#s.dir_paths_by_exp['ant'][1]
 
     ignore = ['BLANK']
     show_only = ['X', 'Y']
@@ -102,6 +114,8 @@ class Picker(QtGui.QMainWindow):
     else:
         app_data['debug'] = 0
  
+    app_data['case display'] = default_case_display_aliases #update for custom here
+
     app_data['file paths'] = [
         '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_e1_40143015_avg.h1']
     # os.path.join(os.path.dirname(__file__),init_files_by_exp['ant'] ) ]
@@ -132,21 +146,19 @@ class Picker(QtGui.QMainWindow):
 
         ### Navigation ###
         # temporary placeholders
-        dir_files = s.dir_paths_by_exp['ant']
-
         s.navTab = QtGui.QWidget()
 
         s.navLayout = QtGui.QVBoxLayout()
 
         s.directoryLayout = QtGui.QHBoxLayout()
         directory_label = QtGui.QLabel('Directory:')
-        s.directoryInput = QtGui.QLineEdit(dir_files[0])
+        s.directoryInput = QtGui.QLineEdit(s.initD)#dir_files[0])
         s.directoryLayout.addWidget(directory_label)
         s.directoryLayout.addWidget(s.directoryInput)
 
         s.filesLayout = QtGui.QHBoxLayout()
         files_label = QtGui.QLabel('Files:')
-        s.filesInput = QtGui.QLineEdit(dir_files[1])
+        s.filesInput = QtGui.QLineEdit(s.initFs)
         s.filesLayout.addWidget(files_label)
         s.filesLayout.addWidget(s.filesInput)
         s.startButton = QtGui.QPushButton("Start")
@@ -451,6 +463,16 @@ class Picker(QtGui.QMainWindow):
             experiment = eeg.file_info['experiment']
             s.gather_info(eeg)
             cases = eeg.case_list
+            if experiment in s.app_data['case display']:
+                exp_cases_aliases = s.app_data['case display'][experiment]
+                s.app_data['working cases'] = [ca[0] for ca in exp_cases_aliases]
+                s.app_data['case aliases'] = dict(exp_cases_aliases)
+            else:
+                s.app_data['working cases'] = cases
+                s.app_data['case aliases'] = {c:c for c in cases}
+            s.app_data['case inds'] = {c:cases.index(c) for c in s.app_data['working cases']}
+            s.app_data['case alias lookup'] = {a:c for c,a in s.app_data['case aliases'].items()}
+
             chans = eeg.electrodes
 
             s.applied_regions = None
@@ -460,7 +482,7 @@ class Picker(QtGui.QMainWindow):
 
             s.debug(['Loaded', experiment, ',', len(paths), 'paths, ind:', ind, ', info:', eeg.file_info],2)
             s.app_data['current experiment'] = experiment
-            s.app_data['current cases'] = eeg.case_list
+            s.app_data['experiment cases'] = eeg.case_list
 
             s.peak_data = {}
             s.peak_edges = {}
@@ -480,9 +502,10 @@ class Picker(QtGui.QMainWindow):
             # connect case toggles
             s.caseToggles = {}
             s.zoomCaseToggles = {}
-            for ci, case in enumerate(cases):
-                s.caseChooser.addItem('  ' + case + '  ')
-                case_toggle = QtGui.QCheckBox(case)
+            for ci, case in enumerate(s.app_data['working cases'] ):
+                alias = s.app_data['case aliases'][case]
+                s.caseChooser.addItem('  ' + alias + '  ')
+                case_toggle = QtGui.QCheckBox(alias)
                 color_str = 'rgb' + str(s.plot_props['line colors'][ci])
                 style_string = "background:" + color_str + ";"
                 case_toggle.setStyleSheet(style_string)
@@ -490,7 +513,7 @@ class Picker(QtGui.QMainWindow):
                 case_toggle.stateChanged.connect(s.toggle_case)
                 s.casesLayout.addWidget(case_toggle)
                 s.caseToggles[case] = case_toggle
-                zoom_case_toggle = QtGui.QCheckBox(case)
+                zoom_case_toggle = QtGui.QCheckBox(alias)
                 zoom_case_toggle.setChecked(True)
                 zoom_case_toggle.stateChanged.connect(s.toggle_zoom_case)
                 s.zoomCaseToggles[case] = zoom_case_toggle
@@ -504,9 +527,9 @@ class Picker(QtGui.QMainWindow):
             # channel layout determined by this
             s.app_data['displayed channels'] = [ch for ch in chans if (ch not in s.ignore)]
             s.app_data['active channels'] = [ch for ch in chans if (ch not in s.show_only + s.ignore)]
-            s.plot_desc = eeg.selected_cases_by_channel(mode='server', style='layout',
-                                                        time_range=s.app_data['display props']['time range'],
-                                                        channels=s.app_data['active channels'])
+            s.plot_desc = eeg.selected_cases_by_channel( cases=s.app_data['working cases'],
+                                        time_range=s.app_data['display props']['time range'],
+                                        channels=s.app_data['active channels'], mode='server', style='layout')
             s.ylims = s.plot_desc[0][1]['props']['yrange']
 
             if not initialize:
@@ -559,7 +582,7 @@ class Picker(QtGui.QMainWindow):
                         plot.addLine(y=yval, pen=grid_pen)
 
                     # ERP amplitude curves for each case
-                    for case in cases:
+                    for case in s.app_data['working cases']:
                         s.curves[(elec, case)] = s.plot_curve(s.plots[elec], elec, case)
 
                     # set y limits
@@ -621,7 +644,7 @@ class Picker(QtGui.QMainWindow):
 
     def plot_curve(s, plot, electrode, case):
         ''' given a plot handle, electrode, and case, return the line plot of its amplitude data '''
-        c_ind = s.app_data['current cases'].index(case)
+        c_ind = s.app_data['working cases'].index(case)
         curve = plot.plot(x=s.current_data['times'],
                           y=s.current_data[electrode + '_' + case],
                           pen=s.plot_props['line colors'][c_ind],
@@ -687,26 +710,27 @@ class Picker(QtGui.QMainWindow):
                     ax.spines['bottom'].set_position('zero')
                     ax.xaxis.set_ticks_position('bottom')
                     ax.yaxis.set_ticks_position('left')
-                    for caseN, case in enumerate(s.app_data['current cases']):
+                    for caseN, case in enumerate(s.app_data['experiment cases']):
+                        if case in s.app_data['working cases']:
+                            workingN = s.app_data['working cases'].index(case)
+                            # case_color = s.plot_props['line colors'][caseN]
+                            ccn = ccns[workingN]  # [v / 255 for v in case_color]
+                            ax.plot(s.current_data['times'],
+                                    s.current_data[elec + '_' + case],
+                                    color=ccn, clip_on=False,
+                                    linewidth=linewidth)
 
-                        # case_color = s.plot_props['line colors'][caseN]
-                        ccn = ccns[caseN]  # [v / 255 for v in case_color]
-                        ax.plot(s.current_data['times'],
-                                s.current_data[elec + '_' + case],
-                                color=ccn, clip_on=False,
-                                linewidth=linewidth)
-
-                        peak_keys = [k for k in s.peak_data.keys() if k[0] == elec and k[1] == case]
-                        for pk in peak_keys:
-                            if pk[2][0] == 'P':
-                                arrow_len = arrow_size
-                            else:
-                                arrow_len = -arrow_size
-                            amp, lat = s.peak_data[pk]
-                            ax.annotate('', (lat, amp), (lat, amp + arrow_len),
-                                        size=7, clip_on=False, annotation_clip=False,
-                                        arrowprops=dict(arrowstyle='-|>',
-                                                        fc=ccn, ec=ccn))
+                            peak_keys = [k for k in s.peak_data.keys() if k[0] == elec and k[1] == case]
+                            for pk in peak_keys:
+                                if pk[2][0] == 'P':
+                                    arrow_len = arrow_size
+                                else:
+                                    arrow_len = -arrow_size
+                                amp, lat = s.peak_data[pk]
+                                ax.annotate('', (lat, amp), (lat, amp + arrow_len),
+                                            size=7, clip_on=False, annotation_clip=False,
+                                            arrowprops=dict(arrowstyle='-|>',
+                                                            fc=ccn, ec=ccn))
         # info row on bottom
         file_info = s.app_data['info']
         subD = s.eeg.subject_data()
@@ -761,7 +785,8 @@ class Picker(QtGui.QMainWindow):
         rx_time_ax.set_xlim(xlim)
         rx_time_ax.add_artist(plt.Line2D((xticks[0], xticks[-1]), (yticks[0], yticks[0]),
                                          color='black', linewidth=0.5))
-        for caseN, case in enumerate(s.app_data['current cases']):
+        for caseN, case in enumerate(s.app_data['working cases']):
+            case_alias = s.app_data['case aliases'][case]
             ccn = ccns[caseN]
             cD = casesD[case]
             trials_table_rows_ax.text(9, 6 - 2 * caseN, cD['descriptor'],
@@ -796,7 +821,7 @@ class Picker(QtGui.QMainWindow):
             weight = 1
             if elec_case[1] == ps['case']:
                 weight = 2
-            c_ind = s.app_data['current cases'].index(elec_case[1])
+            c_ind = s.app_data['working cases'].index(elec_case[1])
             pen = pg.mkPen(color=s.plot_props['line colors'][c_ind],
                            width=weight)
             curve.setPen(pen)
@@ -882,12 +907,13 @@ class Picker(QtGui.QMainWindow):
         ffs = ['Verdana', 'Arial', 'Helvetica', 'sans-serif', 'Times', 'Times New Roman', 'Georgia', 'serif',
                'Lucida Console', 'Courier', 'monospace']
         ffind = 0
-        case = s.caseChooser.currentText().strip()
+        case_alias = s.caseChooser.currentText().strip()
+        case = s.app_data['case alias lookup'][case_alias] 
         peak = s.peakChooser.currentText().strip()
         s.app_data['pick state']['case'] = case
         s.app_data['pick state']['peak'] = peak
 
-        print('Pick init for ', case, peak)
+        print('Pick init for ', case_alias+'('+case+')', peak,)
 
         s.app_data['picks'].add((case, peak))
 
@@ -931,7 +957,7 @@ class Picker(QtGui.QMainWindow):
 
                 s.update_region_label_position((elec, case, peak))
 
-        # for disp_case in s.app_data['current cases']:
+        # for disp_case in s.app_data['experiment cases']:
         #     s.set_case_display(disp_case, disp_case == case)
         s.update_curve_weights()
 
@@ -939,7 +965,7 @@ class Picker(QtGui.QMainWindow):
 
         s.update_zoom_region()
 
-        s.status_message(text="Picking " + case + ',' + peak)
+        s.status_message(text="Picking " + case_alias+'('+case+')' + ',' + peak)
         print('pick_init finish')
 
     def update_region_label_position(s, reg_key=None):
@@ -964,10 +990,11 @@ class Picker(QtGui.QMainWindow):
 
         picks = s.app_data['picks']
         if cases == 'all':
-            cases = s.app_data['current cases']
+            cases = s.app_data['working cases']
         state_string = ''
         for case in cases:
-            state_string += case + ':['
+            case_alias = s.app_data['case aliases'][case]
+            state_string += case_alias + ':['
             for cp in picks:
                 if cp[0] == case:
                     state_string += cp[1]
@@ -1014,7 +1041,7 @@ class Picker(QtGui.QMainWindow):
             proceed = True
 
         if s.useMainCasesToggle.isChecked():
-            for case in s.app_data['current cases']:
+            for case in s.app_data['working cases']:
                 s.zoomCaseToggles[case].setChecked( s.caseToggles[case].isChecked() )
 
         if proceed:
@@ -1032,7 +1059,7 @@ class Picker(QtGui.QMainWindow):
                 for yval in y_lines:
                     s.zoomPlot.addLine(y=yval, pen=grid_pen)
 
-                for case in s.app_data['current cases']:
+                for case in s.app_data['working cases']:
                     s.zoom_curves[case] = s.plot_curve(s.zoomPlot, elec, case)
                     # s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
                     peak_keys = [ecp for ecp in s.peak_data.keys() if ecp[0] == elec and ecp[1] == case]
@@ -1047,7 +1074,7 @@ class Picker(QtGui.QMainWindow):
 
                 s.update_zoom_region()
 
-                for case in s.app_data['current cases']:  # unsure why this doesn't work in above loop, maybe timing
+                for case in s.app_data['working cases']:  # unsure why this doesn't work in above loop, maybe timing
                     s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
 
     def get_zoompos(s):
@@ -1100,7 +1127,7 @@ class Picker(QtGui.QMainWindow):
 
         checked = s.sender().isChecked()
         for el_cs_pk, mark in s.peak_markers.items():
-            if s.caseToggles[el_cs_pk[1]].isChecked():
+            if s.caseToggles[ el_cs_pk[1] ].isChecked():
                 mark.setVisible(checked)
 
     def toggle_peak_tops(s):
@@ -1108,7 +1135,7 @@ class Picker(QtGui.QMainWindow):
 
         checked = s.sender().isChecked()
         for el_cs_pk, top in s.peak_tops.items():
-            if s.caseToggles[el_cs_pk[1]].isChecked():
+            if s.caseToggles[ el_cs_pk[1] ].isChecked():
                 top.setVisible(checked)
 
     def toggle_value_texts(s):
@@ -1122,10 +1149,10 @@ class Picker(QtGui.QMainWindow):
         ''' toggle display of case ERP curves (if checkbox is toggled) '''
 
         sender = s.sender()
-        case = sender.text()
+        case_alias = sender.text()
         # print('toggle_case',case)
         checked = sender.isChecked()
-        s.set_case_display(case, checked)
+        s.set_case_display( s.app_data['case alias lookup'][case_alias], checked)
         # for el_cs in [ec for ec in s.curves if ec[1]==case]:
         #    s.curves[el_cs].setVisible(checked)
 
@@ -1133,14 +1160,14 @@ class Picker(QtGui.QMainWindow):
         ''' toggle display of case ERP curves inside zoomplot (if checkbox is toggled) '''
 
         sender = s.sender()
-        case = sender.text()
+        case_alias = sender.text()
         checked = sender.isChecked()
-        s.set_case_display(case, checked, zoom=True)
+        s.set_case_display( s.app_data['case alias lookup'][case_alias], checked, zoom=True)
 
     def sync_case_display(s):
-        for case in s.app_data['current cases']:
+        for case in s.app_data['working cases']:
             state = s.caseToggles[case].isChecked()
-            s.set_case_display(case, state)
+            s.set_case_display( case, state)
 
     def set_case_display(s, case, state, zoom=False):
         ''' given case string and boolean state, sets display settings  '''
@@ -1208,7 +1235,7 @@ class Picker(QtGui.QMainWindow):
 
     def notify_applied_ckEdges(s, case, peak):
         ''' for a given case / peak combination, check if any peaks are at an edge, and provide a notification'''
-
+        case_alias = s.app_data['case aliases'][case]
         edge_elecs = s.get_edge_elecs_casepeak(case,peak)
         if edge_elecs:
             plural = [' is',' an edge:']
@@ -1219,7 +1246,7 @@ class Picker(QtGui.QMainWindow):
                 text += ' '+el
             s.status_message(text=text, color='#E00')
         else:
-            s.status_message(text=case + ' , ' + peak + ' applied. All peaks within range.')
+            s.status_message(text=case_alias+'('+case+')' + ' , ' + peak + ' applied. All peaks within range.')
 
     def show_zoom_marker(s, amp_lat):
         bar_len = s.app_data['display props']['bar length']
@@ -1234,7 +1261,7 @@ class Picker(QtGui.QMainWindow):
         bar_len = s.app_data['display props']['bar length']
 
         if cases == 'all':
-            cases = s.app_data['current cases']
+            cases = s.app_data['working cases']
 
         for el_cs_pk, amp_lat in s.peak_data.items():
             if el_cs_pk[1] in cases:
@@ -1257,7 +1284,7 @@ class Picker(QtGui.QMainWindow):
                         zkey = (el_cs_pk[0] + '_zoom', el_cs_pk[1], el_cs_pk[2])
                         s.peak_markers[zkey] = zoom_marker
 
-                c_ind = s.app_data['current cases'].index(el_cs_pk[1])
+                c_ind = s.app_data['experiment cases'].index(el_cs_pk[1])
                 if el_cs_pk in s.peak_edges and s.peak_edges[el_cs_pk]:
                     sym = 'x'
                     sz = 16
@@ -1270,8 +1297,9 @@ class Picker(QtGui.QMainWindow):
                     s.peak_tops[el_cs_pk].setSymbol(sym)
                     s.peak_tops[el_cs_pk].setSize(sz)
                 else:
+                    color_ind = s.app_data['working cases'].index(el_cs_pk[1])
                     top = pg.ScatterPlotItem(x=[amp_lat[1]], y=[amp_lat[0] + bar_len],
-                                             symbol=sym, size=sz, pen=None, brush=s.plot_props['line colors'][c_ind])
+                                             symbol=sym, size=sz, pen=None, brush=s.plot_props['line colors'][color_ind])
                     s.peak_tops[el_cs_pk] = top
                     s.plots[el_cs_pk[0]].addItem(top)
                 s.peak_tops[el_cs_pk].setVisible(s.peakTopToggle.isChecked())
@@ -1295,6 +1323,9 @@ class Picker(QtGui.QMainWindow):
             s.peak_markers[nK] = s.peak_markers[oK]
             s.peak_markers.pop(oK)
 
+            s.peak_tops[nK] = s.peak_tops[oK]
+            s.peak_tops.pop(oK)
+
             s.pick_region_labels[nK] = s.pick_region_labels[oK]
             reg = s.pick_region_labels.pop(oK)
             reg.setHtml(s.region_label_html.replace('__PEAK__', new_peak))
@@ -1303,15 +1334,15 @@ class Picker(QtGui.QMainWindow):
         s.app_data['picks'].add((case, new_peak))
 
         s.show_state()
-
-        s.status_message('Changed ' + case + ' , ' + old_peak + '  to  ' + new_peak)
+        case_alias = s.app_data['case aliases'][case]
+        s.status_message('Changed ' + case_alias+'('+case+')' + ' , ' + old_peak + '  to  ' + new_peak)
 
     def remove_peak(s):
         ''' callback for Remove button inside Fix button dialog bix '''
-
-        case = s.fixCase.currentText()
+        case_alias = s.fixCase.currentText()
+        case = s.app_data['case alias lookup'][ case_alias ]
         peak = s.oldPeak.currentText()
-
+        s.debug(['remove_peak','case:',case,'peak:',peak,'keys:',[k for k in s.peak_data.keys()]],3)
         for el_cs_pk in list(s.peak_data.keys()):
 
             if el_cs_pk[1] == case and el_cs_pk[2] == peak:
@@ -1336,7 +1367,7 @@ class Picker(QtGui.QMainWindow):
         s.show_state()
         s.fixDialog.setVisible(False)
 
-        s.status_message('Removed ' + case + ' , ' + peak)
+        s.status_message('Removed ' + case_alias+'('+case+')' + ' , ' + peak)
 
     def settings(s):
 
@@ -1350,36 +1381,45 @@ class Picker(QtGui.QMainWindow):
         s.newPeak.clear()
         picked_cases = set([c_p[0] for c_p in s.app_data['picks']])
         for case in picked_cases:
-            s.fixCase.addItem(case)
+            s.fixCase.addItem(s.app_data['case aliases'][case])
         s.fixDialog.show()
 
     def choose_fix_case(s):
         ''' populates drop-down box of cases to potentially fix '''
 
-        case = s.sender().currentText()
-        print('choose_fix_case', case, s.app_data['picks'])
-        available_peaks = [c_p[1] for c_p in s.app_data['picks'] if c_p[0 == case]]
-        for peak in available_peaks:
-            s.oldPeak.addItem(peak)
+        case_alias = s.sender().currentText()
+        if case_alias:
+            case = s.app_data['case alias lookup'][ case_alias ]
+            print('choose_fix_case', case_alias+'('+case+')', s.app_data['picks'])
+            available_peaks = [c_p[1] for c_p in s.app_data['picks'] if c_p[0 == case]]
+            for peak in available_peaks:
+                s.oldPeak.addItem(peak)
+        else:
+            s.debug(['choose_fix_case','case_alias: ',case_alias, 'sender:',
+                    {d:getattr(s.sender,d) for d in dir(s.sender) if d[:2]!='__'}],3)
 
     def choose_old_peak(s):
         ''' populates drop-down box of peaks to potentially fix '''
-
-        case = s.fixCase.currentText()
-        old_peak = s.sender().currentText()
-        print('choose_old_peak', case, old_peak)
-        possible_peaks = [p for p in s.peak_choices if p[0] == old_peak[0]]
-        for peak in possible_peaks:
-            s.newPeak.addItem(peak)
+        s.debug(['choose_old_peak','sender:',s.sender()],3)
+        case_alias = s.fixCase.currentText()
+        if case_alias:
+            case = s.app_data['case alias lookup'][ case_alias ]
+            old_peak = s.sender().currentText()
+            print('choose_old_peak', case_alias+'('+case+')', old_peak)
+            possible_peaks = [p for p in s.peak_choices if p[0] == old_peak[0]]
+            for peak in possible_peaks:
+                s.newPeak.addItem(peak)
 
     def apply_peak_change(s):
         ''' callback for Apply Change button inside of Fix dialog box '''
 
-        case = s.fixCase.currentText()
-        old_peak = s.oldPeak.currentText()
-        new_peak = s.newPeak.currentText()
-        s.relabel_peak(case, old_peak, new_peak)
-        s.fixDialog.setVisible(False)
+        case_alias = s.fixCase.currentText()
+        if case_alias:
+            case = s.app_data['case alias lookup'][ case_alias ]
+            old_peak = s.oldPeak.currentText()
+            new_peak = s.newPeak.currentText()
+            s.relabel_peak(case, old_peak, new_peak)
+            s.fixDialog.setVisible(False)
 
     def apply_selections(s):
         ''' find the extremum in the given region '''

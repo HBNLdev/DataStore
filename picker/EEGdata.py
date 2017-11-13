@@ -312,19 +312,25 @@ class avgh1:
     def case_letter_from_number(s, number):
         return s.cases[int(number)]['case_type']
 
-    def get_yscale(s, potentials=None, channels=None):
+    def get_yscale(s, potentials=None, channels=None, cases=None):
         if potentials is None:
             dummy, potentials = s.prepare_plot_data()
         # get full list of display channels
         if channels is None:
             channels = s.electrodes
-        ind_lst = []
+        if cases is None:
+            cases = s.case_list
+        ch_ind_lst = []
         # print('electrodes:', s.filepath, s.electrodes)
         for chan in channels:
-            ind_lst.append(s.electrodes.index(chan))
+            ch_ind_lst.append(s.electrodes.index(chan))
+        cs_ind_lst = []
+        for case in cases:
+            cs_ind_lst.append(s.case_list.index(case))
 
         # find means / stds
-        pots = np.take(potentials, ind_lst, 1)
+        pots = np.take(potentials, ch_ind_lst, 1)
+        pots = np.take(pots,cs_ind_lst,0)
         pots_mean = np.mean(pots, axis=2)
         pots_mean2 = np.mean(pots_mean, axis=1)
         pots_meanstd = np.std(pots_mean, axis=1)
@@ -339,8 +345,9 @@ class avgh1:
 
         # remove outlying chans from calculation
         for ind in out_inds:
-            ind_lst.remove(s.electrodes.index(channels[ind]))
-        disp_pots = np.take(potentials, ind_lst, 1)
+            ch_ind_lst.remove(s.electrodes.index(channels[ind]))
+        disp_pots = np.take(potentials, ch_ind_lst, 1)
+        disp_pots = np.take(disp_pots,cs_ind_lst,0)
 
         # calculate min / max for y limits
         min_val = int(np.floor(np.min(disp_pots)))
@@ -412,7 +419,7 @@ class avgh1:
 
         props['times'] = tms
 
-        min_val, max_val = s.get_yscale(potentials, channels)
+        min_val, max_val = s.get_yscale(potentials, channels, cases)
 
         props['yrange'] = [min_val, max_val]
         props['xrange'] = [-100, 700]
