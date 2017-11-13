@@ -20,7 +20,7 @@ Qt = QtCore.Qt
 # If an experiment is included, only specified cases will be shown with their aliases
 default_case_display_aliases = {'ern':[('N50','N50'),('N10','N10'),('P10','P10'),('P50','P50')],
                                 'cpt':[('T','Go'),('CN','Cue No-Go'),('N','No-Go')],
-                                #'gng':[('G','Go'),('NG','No-Go')]
+                                'gng':[('G','Go'),('NG','No-Go')]
                                 }
 
 def break_text(text,chars_per_line):
@@ -542,9 +542,9 @@ class Picker(QtGui.QMainWindow):
                 sep_cases = case_info.split(',')
                 print('sep cases', sep_cases)
                 nC = len(sep_cases)
-                if nC % 2 != 0:
+                if nC % 3 != 0:
                     sep_cases.append('')
-                case_lines = [' '.join(sep_cases[si * 2:si * 2 + 2]) for si in range(int(len(sep_cases) / 2))]
+                case_lines = [' '.join(sep_cases[si * 3:si * 3 + 3]) for si in range(int(len(sep_cases) / 3))]
 
                 # create HTML to display the current file's info in top-left
                 html = '<div>'
@@ -553,17 +553,11 @@ class Picker(QtGui.QMainWindow):
                             'font-size: 8pt; font-family: Helvetica;">' + line + '</span><br>'
                 html += '</div>'
                 print('html', html)
-                info_text = pg.TextItem(html=html, anchor=(-0.05, 0))
-                info_text.setPos(-0.1, 1.18)
+                info_text = pg.TextItem(html=html, anchor=(0, 0))
+                info_text.setPos(0.1, 1.18)
                 s.legend_plot.addItem(info_text)
 
-                # create color-coded case legend
-                s.legend_plot.addLegend(size=(55, 0), offset=(-4, 0.001))
-                for c_ind, case in enumerate(cases):
-                    s.legend_plot.plot(x=[-5, -4], y=[-20, -20],
-                                       pen=s.plot_props['line colors'][c_ind],
-                                       name=case)
-                    s.legend_plot.vb.setRange(xRange=[0, 1], yRange=[0, 1])
+                s.legend_plot.vb.setRange(xRange=[0, 1], yRange=[0, 1])
 
                 # main gridplot loop
                 x_gridlines, y_gridlines = s.plot_props['XY gridlines']
