@@ -62,7 +62,7 @@ class Picker(QtGui.QMainWindow):
                                   (200, 255, 40),  # yellow-green
                                   (20, 255, 200),  # blue green
                                   (160, 0, 188),  # gray
-				  (225,225,225), # light gray
+				                  (225,225,225), # light gray
                                   ],
                   'XY gridlines': ([0, 200, 400, 600, 800], [0]),
                   'grid color': '#555',
@@ -96,6 +96,12 @@ class Picker(QtGui.QMainWindow):
         userName = 'default'
 
     app_data['user'] = userName
+
+    if len(sys.argv) > 2:
+        app_data['debug'] = 3
+    else:
+        app_data['debug'] = 0
+ 
     app_data['file paths'] = [
         '/processed_data/avg-h1-files/ant/l8-h003-t75-b125/suny/ns32-64/ant_5_e1_40143015_avg.h1']
     # os.path.join(os.path.dirname(__file__),init_files_by_exp['ant'] ) ]
@@ -374,7 +380,7 @@ class Picker(QtGui.QMainWindow):
 
     def start_handler(s, signal):
         ''' Start button inside Navigate tab '''
-        print('Start:', signal)
+        s.debug(['Start:', signal],2)
         directory = s.directoryInput.text().strip()
 
         files = s.filesInput.text().split(' ')
@@ -422,7 +428,7 @@ class Picker(QtGui.QMainWindow):
 
     def load_file(s, next_file=False, initialize=False):
         ''' load an avgh1 object as the current file to be picked and plot its data in the plotgrid '''
-
+        s.debug(['load_file','next_file =',next_file,'initialize =',initialize],3)
         paths = s.app_data['file paths']
 
         if 'applied_regions' in dir(s) and s.applied_regions is not None:
@@ -438,7 +444,7 @@ class Picker(QtGui.QMainWindow):
 
         # main plot / drawing portion
         ind = s.app_data['file ind']
-        print('load file: #', ind, paths[ind])
+        s.debug(['load file: #', ind, paths[ind]],2)
         if ind < len(paths):
             eeg = avgh1(paths[ind])
             s.eeg = eeg
@@ -452,7 +458,7 @@ class Picker(QtGui.QMainWindow):
             if paths[ind] in s.app_data['regions by filepath']:
                 s.applied_regions = s.app_data['regions by filepath'][paths[ind]]
 
-            print('Load', experiment, ',', len(paths), 'paths, ind:', ind, ', info:', eeg.file_info)
+            s.debug(['Loaded', experiment, ',', len(paths), 'paths, ind:', ind, ', info:', eeg.file_info],2)
             s.app_data['current experiment'] = experiment
             s.app_data['current cases'] = eeg.case_list
 
@@ -1420,7 +1426,14 @@ class Picker(QtGui.QMainWindow):
 
         s.show_state()
 
-        ## printing for debug
+    def debug(s,message,priority):
+        '''message should be a list
+
+        prints if debug_level (second input) meets or exceeds priority
+        '''
+        if s.app_data['debug'] >= priority:
+            print(*message)
+            ## printing for debug
         # for i in s.plots['FP1'].items:
         #     if 'data' in dir(i):
         #         print( type(i), i.data[:2]  )  
