@@ -163,10 +163,14 @@ class Picker(QtGui.QMainWindow):
         s.filesLayout.addWidget(s.filesInput)
         s.startButton = QtGui.QPushButton("Start")
         s.startButton.clicked.connect(s.start_handler)
+        s.startStatus = QtGui.QLabel('waiting for start...')
+        s.startStatus.setFixedHeight(150)
+        s.startStatus.setWordWrap(True)
 
         s.navLayout.addLayout(s.directoryLayout)
         s.navLayout.addLayout(s.filesLayout)
         s.navLayout.addWidget(s.startButton)
+        s.navLayout.addWidget(s.startStatus)
         s.navTab.setLayout(s.navLayout)
 
         ### Picking ###
@@ -396,9 +400,20 @@ class Picker(QtGui.QMainWindow):
         s.debug(['Start:', signal],2)
         directory = s.directoryInput.text().strip()
 
-        files = s.filesInput.text().split(' ')
-        files = [f for f in files if '.h1' in f]
-        paths = [os.path.join(directory, f) for f in files]
+        files_raw = s.filesInput.text().split('.h1')
+        s.debug(['files_raw: ' files_raw ],2 )
+        files_h1 = [f.strip()+'.h1' for f in files_raw[:-1] ]
+        files_ck = [ f for f in files_h1 if os.path.exists( os.path.join(directory, f) ) ]
+        if len(files_ck) != len(files_h1):
+            bad = set(files_h1).difference(files_ck)
+            bfst = ''
+            for f in bad:
+                bfst = bfst+f+', '
+            s.startStatus.setText('Bad files: '+bfst[:-1] + ' You can proceed with the others.')
+        else:
+            s.startStatus.setText('All file paths check out, ready to pick!')
+
+        paths = [os.path.join(directory, f) for f in files_ck]
 
         # if have already Started
         if len(s.app_data['paths input']) > 0 and paths == s.app_data['paths input'][-1]:
