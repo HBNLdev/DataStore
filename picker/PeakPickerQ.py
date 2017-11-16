@@ -401,7 +401,7 @@ class Picker(QtGui.QMainWindow):
         directory = s.directoryInput.text().strip()
 
         files_raw = s.filesInput.text().split('.h1')
-        s.debug(['files_raw: ' files_raw ],2 )
+        s.debug(['files_raw: ', files_raw ],2 )
         files_h1 = [f.strip()+'.h1' for f in files_raw[:-1] ]
         files_ck = [ f for f in files_h1 if os.path.exists( os.path.join(directory, f) ) ]
         if len(files_ck) != len(files_h1):
@@ -840,7 +840,7 @@ class Picker(QtGui.QMainWindow):
     def save_mt(s, save_dir):
         ''' save the current picks as an HBNL-formatted *.mt text file '''
 
-        print('Save mt')
+        s.debug('save_mt',1)
         picked_cp = s.app_data['picks']
         cases_Ns = list(set([(cp[0], s.eeg.case_num_map[cp[0]]) for cp in picked_cp]))
         peaks = list(set([cp[1] for cp in picked_cp]))
@@ -859,9 +859,13 @@ class Picker(QtGui.QMainWindow):
                 case_peaks.sort()
                 for peak in case_peaks:
                     ipeak = peaks.index(peak)
-                    amp_lat = s.peak_data[(chan, case_name, peak)]
-                    amps[ipeak, ichan, icase] = amp_lat[0]
-                    lats[ipeak, ichan, icase] = amp_lat[1]
+                    pd_key = (chan, case_name, peak)
+                    if pd_key in s.peak_data:
+                        amp_lat = s.peak_data[(chan, case_name, peak)]
+                        amps[ipeak, ichan, icase] = amp_lat[0]
+                        lats[ipeak, ichan, icase] = amp_lat[1]
+                    else:
+                        s.debug(['Missing peak data for:',pd_key],3)
 
         # reshape into 1d arrays
         amps1d = amps.ravel('F')
@@ -1358,7 +1362,9 @@ class Picker(QtGui.QMainWindow):
 
         s.show_state()
         case_alias = s.app_data['case aliases'][case]
-        s.status_message('Changed ' + case_alias+'('+case+')' + ' , ' + old_peak + '  to  ' + new_peak)
+        message = 'Changed ' + case_alias+'('+case+')' + ' , ' + old_peak + '  to  ' + new_peak
+        s.debug([message],2)
+        s.status_message(message)
 
     def remove_peak(s):
         ''' callback for Remove button inside Fix button dialog bix '''
