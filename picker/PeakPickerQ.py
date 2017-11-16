@@ -52,7 +52,7 @@ class Picker(QtGui.QMainWindow):
                         'aod': ['/processed_data/avg-h1-files/aod/l16-h003-t75-b125/suny/ns32-64/',
                                 'aod_6_a1_40021070_avg.h1 aod_6_a1_40021017_avg.h1 aod_6_a1_40017007_avg.h1']
                         }
-    initD = '/active_projects/mort/test/picker/'#s.dir_paths_by_exp['ant'][0]
+    initD = '/active_projects/test/testQ/avgh1s'#s.dir_paths_by_exp['ant'][0]
     initFs = 'cpt_4_f1_40719005_avg.h1 ern_7_b1_40001008_avg.h1 gng_2_b1_40355069_avg.h1' +\
                 ' ans_5_f1_40293005_avg.h1 ant_5_a1_49403009_avg.h1 stp_3_e1_40277003_avg.h1'+\
                 ' aod_6_a1_40063010_avg.h1 err_8_a1_40251004_avg.h1 vp3_2_a1_d0226008_avg.h1' 
@@ -328,6 +328,7 @@ class Picker(QtGui.QMainWindow):
         s.curves = {}
         s.zoom_curves = {}
         s.vb_map = {}
+        s.edge_notified_plots = set()
 
         s.load_file(initialize=True)
         s.caseChooser.clear()
@@ -629,6 +630,7 @@ class Picker(QtGui.QMainWindow):
         s.pick_region_labels_byRegion = {}
 
         if not initialize:
+            s.reset_edge_notification_backgrounds()
             s.status_message('File loaded')
 
     def rescale_yaxis(s):
@@ -898,16 +900,13 @@ class Picker(QtGui.QMainWindow):
     def pick_init(s):
         ''' Pick inside the Pick tab (start picking a certain peak) '''
 
-        ffs = ['Verdana', 'Arial', 'Helvetica', 'sans-serif', 'Times', 'Times New Roman', 'Georgia', 'serif',
-               'Lucida Console', 'Courier', 'monospace']
-        ffind = 0
         case_alias = s.caseChooser.currentText().strip()
         case = s.app_data['case alias lookup'][case_alias] 
         peak = s.peakChooser.currentText().strip()
         s.app_data['pick state']['case'] = case
         s.app_data['pick state']['peak'] = peak
 
-        print('Pick init for ', case_alias+'('+case+')', peak,)
+        s.debug(['Pick init for ', case_alias+'('+case+')', peak,],1)
 
         s.app_data['picks'].add((case, peak))
 
@@ -958,6 +957,8 @@ class Picker(QtGui.QMainWindow):
         s.toggle_regions(True)
 
         s.update_zoom_region()
+
+        s.reset_edge_notification_backgrounds()
 
         s.status_message(text="Picking " + case_alias+'('+case+')' + ',' + peak)
         print('pick_init finish')
@@ -1238,9 +1239,22 @@ class Picker(QtGui.QMainWindow):
             text = 'Peak'+plural[0]+ ' at '+ plural[1]+'\n'
             for el in edge_elecs:
                 text += ' '+el
+                s.plots[el].getViewBox().setBackgroundColor('#a37437')
+                s.edge_notified_plots.add(el)
+            
+            s.reset_edge_notification_backgrounds( s.edge_notified_plots.difference(edge_elecs) )
+                
             s.status_message(text=text, color='#E00')
         else:
             s.status_message(text=case_alias+'('+case+')' + ' , ' + peak + ' applied. All peaks within range.')
+            s.reset_edge_notification_backgrounds()
+
+    def reset_edge_notification_backgrounds(s,elecs='all'):
+
+        if elecs == 'all':
+            elecs = s.edge_notified_plots
+        for el in elecs:
+            s.plots[el].getViewBox().setBackgroundColor('#000000')
 
     def show_zoom_marker(s, amp_lat):
         bar_len = s.app_data['display props']['bar length']
