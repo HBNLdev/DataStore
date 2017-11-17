@@ -69,11 +69,11 @@ class Picker(QtGui.QMainWindow):
                   'line colors': [(221, 34, 34),  # red
                                   (102, 221, 102),  # green
                                   (55, 160, 255),  # light blue
-                                  (221, 34, 221),  # magenta
                                   (255, 200, 20),  # orange
                                   (200, 255, 40),  # yellow-green
                                   (20, 255, 200),  # blue green
                                   (160, 0, 188),  # gray
+                                  (221, 34, 221),  # magenta
 				                  (225,225,225), # light gray
                                   ],
                   'XY gridlines': ([0, 200, 400, 600, 800], [0]),
