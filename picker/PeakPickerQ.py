@@ -921,7 +921,8 @@ class Picker(QtGui.QMainWindow):
             peak = s.app_data['pick state']['peak']
 
         for el_cs_pk, reg in s.pick_regions.items():
-            if s.app_data['pick state']['repick mode'] == 'all' or el_cs_pk == (elec, case, peak):
+            if s.app_data['pick state']['repick mode'] == 'all' or regions_in is not None\
+              or el_cs_pk == (elec, case, peak):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                     if not regions_in:
                         reg.setRegion(region)
@@ -994,9 +995,13 @@ class Picker(QtGui.QMainWindow):
 
                 s.update_region_label_position((elec, case, peak))
         else:
-            s.debug(['pick init for already existing, CZ history: ',
-                s.app_data['applied region limit histories'][('CZ',case,peak)]],3)
-            s.app_data['apply count'] = len(s.app_data['applied region limit histories'][('CZ',case,peak)])
+            check_key = ('CZ',case,peak)
+            if check_key in s.app_data['applied region limit histories']:
+                s.app_data['apply count'] = len(s.app_data['applied region limit histories'][check_key])
+                s.debug(['pick init for already existing, CZ history: ',
+                    s.app_data['applied region limit histories'][('CZ',case,peak)]],3)
+            else:
+                s.app_data['apply_count'] = 0
             s.app_data['apply scan ind'] = s.app_data['apply count'] - 1
             if s.app_data['apply scan ind'] > 0:
                 s.buttons['Back'].setEnabled(True)
