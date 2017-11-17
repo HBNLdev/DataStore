@@ -301,6 +301,7 @@ class Picker(QtGui.QMainWindow):
 
         s.fixDialog = QtGui.QDialog(s)
         s.fixLayout = QtGui.QVBoxLayout()
+        s.fixLabel = QtGui.QLabel('Case and Peak to fix:')
         s.fixDialog.setLayout(s.fixLayout)
         s.fixCase = QtGui.QComboBox()
         s.fixCase.currentIndexChanged.connect(s.choose_fix_case)
@@ -308,11 +309,13 @@ class Picker(QtGui.QMainWindow):
         s.oldPeak.currentIndexChanged.connect(s.choose_old_peak)
         s.removePeak = QtGui.QPushButton('Remove Peak')
         s.removePeak.clicked.connect(s.remove_peak)
+        s.renameLabel = QtGui.QLabel('or Change to:')
         s.newPeak = QtGui.QComboBox()
         s.applyChange = QtGui.QPushButton('Apply Change')
         s.applyChange.clicked.connect(s.apply_peak_change)
         [s.fixLayout.addWidget(w) for w in
-         [s.fixCase, s.oldPeak, s.removePeak, s.newPeak, s.applyChange]]
+         [s.fixLabel, s.fixCase, s.oldPeak, s.removePeak, 
+                        s.renameLabel, s.newPeak, s.applyChange]]
 
         s.settingsDialog = QtGui.QDialog(s)
         s.settingsLayout = QtGui.QVBoxLayout()
@@ -1171,7 +1174,6 @@ class Picker(QtGui.QMainWindow):
         checked = sender.isChecked()
         s.set_case_display( s.app_data['case alias lookup'][case_alias], checked)
 
-
     def toggle_zoom_case(s):
         ''' toggle display of case ERP curves inside zoomplot (if checkbox is toggled) '''
 
@@ -1189,20 +1191,24 @@ class Picker(QtGui.QMainWindow):
         ''' given case string and boolean state, sets display settings  '''
 
         # print('set_case_display',case,state,'zoom',zoom)
-
-        if zoom:
+        curves = {}
+        curve_keys = []
+        if zoom or s.useMainCasesToggle.isChecked():
             toggles = s.zoomCaseToggles
-            curves = s.zoom_curves
-            curve_keys = [case]
-            for zel_cs_pk in [ k for k in s.peak_markers if '_zoom' in k[0] ]:
+            curves.update(s.zoom_curves)
+            curve_keys.extend([case])
+            for zel_cs_pk in [ k for k in s.peak_markers if '_zoom' in k[0] and k[1]==case ]:
                 s.peak_markers[ zel_cs_pk ].setVisible(state)
-        else:
-            toggles = s.caseToggles
-            curves = s.curves
-            curve_keys = [e_c for e_c in curves.keys() if e_c[1] == case]
 
         if not zoom:
-            toggles[case].stateChanged.disconnect(s.toggle_case)
+            toggles = s.caseToggles
+            curves.update(s.curves)
+            curve_keys.extend([e_c for e_c in curves.keys() if isinstance(e_c,tuple) and e_c[1] == case])
+
+        if not zoom:
+            try:
+                toggles[case].stateChanged.disconnect(s.toggle_case)
+            except: s.debug(['set_case_display, case',case,' state',state, ' toggle not connected'],3)
         toggles[case].setChecked(state)
         if not zoom:
             toggles[case].stateChanged.connect(s.toggle_case)
@@ -1215,7 +1221,8 @@ class Picker(QtGui.QMainWindow):
 
             marker_ck_state = s.peakMarkerToggle.isChecked()
             marker_state = state and marker_ck_state
-            for el_cs_pk in [ecp for ecp in s.peak_markers if ecp[1] == case and '_zoom' not in ecp[0]]:
+            for el_cs_pk in [ecp for ecp in s.peak_markers if isinstance(ecp,tuple) and\
+                                ecp[1] == case and '_zoom' not in ecp[0]]:
                 s.peak_markers[el_cs_pk].setVisible(marker_state)
 
     def mode_toggle(s):
