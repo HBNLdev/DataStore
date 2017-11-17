@@ -1079,7 +1079,7 @@ class Picker(QtGui.QMainWindow):
                     peak_keys = [ecp for ecp in s.peak_data.keys() if ecp[0] == elec and ecp[1] == case]
                     for pK in peak_keys:
                         zkey = (pK[0] + '_zoom', pK[1], pK[2])
-                        marker = s.show_zoom_marker(s.peak_data[pK])
+                        marker = s.show_zoom_marker( s.peak_data[pK] )
                         s.peak_markers[zkey] = marker
 
                 s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
@@ -1141,7 +1141,10 @@ class Picker(QtGui.QMainWindow):
 
         checked = s.sender().isChecked()
         for el_cs_pk, mark in s.peak_markers.items():
-            if s.caseToggles[ el_cs_pk[1] ].isChecked():
+            if '_zoom' in el_cs_pk[0]:
+                if s.zoomCaseToggles[ el_cs_pk[1] ].isChecked():
+                    mark.setVisible( checked )
+            elif s.caseToggles[ el_cs_pk[1] ].isChecked():
                 mark.setVisible(checked)
 
     def toggle_peak_tops(s):
@@ -1167,8 +1170,7 @@ class Picker(QtGui.QMainWindow):
         # print('toggle_case',case)
         checked = sender.isChecked()
         s.set_case_display( s.app_data['case alias lookup'][case_alias], checked)
-        # for el_cs in [ec for ec in s.curves if ec[1]==case]:
-        #    s.curves[el_cs].setVisible(checked)
+
 
     def toggle_zoom_case(s):
         ''' toggle display of case ERP curves inside zoomplot (if checkbox is toggled) '''
@@ -1192,6 +1194,8 @@ class Picker(QtGui.QMainWindow):
             toggles = s.zoomCaseToggles
             curves = s.zoom_curves
             curve_keys = [case]
+            for zel_cs_pk in [ k for k in s.peak_markers if '_zoom' in k[0] ]:
+                s.peak_markers[ zel_cs_pk ].setVisible(state)
         else:
             toggles = s.caseToggles
             curves = s.curves
@@ -1211,7 +1215,7 @@ class Picker(QtGui.QMainWindow):
 
             marker_ck_state = s.peakMarkerToggle.isChecked()
             marker_state = state and marker_ck_state
-            for el_cs_pk in [ecp for ecp in s.peak_markers if ecp[1] == case]:
+            for el_cs_pk in [ecp for ecp in s.peak_markers if ecp[1] == case and '_zoom' not in ecp[0]]:
                 s.peak_markers[el_cs_pk].setVisible(marker_state)
 
     def mode_toggle(s):
@@ -1376,6 +1380,12 @@ class Picker(QtGui.QMainWindow):
 
             if el_cs_pk[1] == case and el_cs_pk[2] == peak:
                 s.peak_data.pop(el_cs_pk)
+
+                zk_check = (el_cs_pk[0]+'_zoom',case,peak) 
+                if zk_check in s.peak_markers:
+                    zoom_marker = s.peak_markers[ zk_check ]
+                    zoom_marker.setVisible(False)    
+                    s.zoomPlot.removeItem(zoom_marker)
 
                 plot = s.plots[el_cs_pk[0]]
                 region = s.pick_regions[el_cs_pk]
