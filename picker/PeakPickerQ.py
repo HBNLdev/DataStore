@@ -255,6 +255,7 @@ class Picker(QtGui.QMainWindow):
         s.pickNavControls.addWidget(s.peakChooser)
 
         pick_buttons = [('Pick', s.pick_init), ('Apply', s.apply_selections),
+                        ('Back', s.previous_apply), ('Forward', s.next_apply),
                         ('Fix', s.fix_peak),('Settings',s.settings)]
         # s.add_buttons(s.pickNavControls,pick_buttons)
         for label, handler in pick_buttons:
@@ -473,6 +474,9 @@ class Picker(QtGui.QMainWindow):
                 s.status_message('already on last file')
                 return
 
+        s.buttons['Back'].setEnabled(False)
+        s.buttons['Forward'].setEnabled(False)
+
         # main plot / drawing portion
         ind = s.app_data['file ind']
         s.debug(['load file: #', ind, paths[ind]],2)
@@ -644,6 +648,7 @@ class Picker(QtGui.QMainWindow):
 
         s.pick_regions = {}
         s.applied_region_limits = {}
+        s.app_data['applied region limit histories'] = {}
         s.pick_region_labels = {}
         s.pick_region_labels_byRegion = {}
 
@@ -904,20 +909,31 @@ class Picker(QtGui.QMainWindow):
             if el_cs_pk[1] == Pstate['case'] and el_cs_pk[2] == Pstate['peak']:
                 s.update_region_label_position(el_cs_pk)
 
-    def update_pick_regions(s):
+    def update_pick_regions(s,call,regions_in=None):
         ''' called when pick regions are adjusted '''
 
-        sender = s.sender()
-        region = sender.getRegion()
-        elec, case, peak = s.region_case_peaks[sender]
+        if not regions_in:
+            sender = s.sender()
+            region = sender.getRegion()
+            elec, case, peak = s.region_case_peaks[sender]
+        else: 
+            case = s.app_data['pick state']['case']
+            peak = s.app_data['pick state']['peak']
 
         for el_cs_pk, reg in s.pick_regions.items():
             if s.app_data['pick state']['repick mode'] == 'all' or el_cs_pk == (elec, case, peak):
                 if el_cs_pk[1] == case and el_cs_pk[2] == peak:
-                    reg.setRegion(region)
+                    if not regions_in:
+                        reg.setRegion(region)
+                    else:
+                        reg.setRegion( regions_in[ el_cs_pk ] )
 
-        if 'zoomRegion' in dir(s) and sender != s.zoomRegion and elec == s.app_data['zoom electrode']:
-            s.zoomRegion.setRegion(region)
+        if not regions_in:
+            if 'zoomRegion' in dir(s) and sender != s.zoomRegion and elec == s.app_data['zoom electrode']:
+                s.zoomRegion.setRegion(region)
+        elif s.app_data['zoom electrode']:
+            s.zoomRegion.setRegion( regions_in[ (s.app_data['zoom electrode'], case, peak ) ] )
+
 
     def pick_init(s):
         ''' Pick inside the Pick tab (start picking a certain peak) '''
@@ -938,7 +954,13 @@ class Picker(QtGui.QMainWindow):
         for ztcase, checkbox in s.zoomCaseToggles.items():
             checkbox.setChecked(True)  # ztcase == case )
 
+        s.buttons['Back'].setEnabled(False)
+        s.buttons['Forward'].setEnabled(False)
+        
         if (case, peak) not in pick_case_peaks:
+            s.app_data['apply count'] = 0
+            s.app_data['apply scan ind'] = -1
+
             peak_center_ms = 100 * int(peak[1])
 
             existing_lim_CPs = set([(ecp[1], ecp[2]) for ecp in s.applied_region_limits])
@@ -971,6 +993,13 @@ class Picker(QtGui.QMainWindow):
                 s.plot_texts[s.plots[elec].vb].setHtml('')
 
                 s.update_region_label_position((elec, case, peak))
+        else:
+            s.debug(['pick init for already existing, CZ history: ',
+                s.app_data['applied region limit histories'][('CZ',case,peak)]],3)
+            s.app_data['apply count'] = len(s.app_data['applied region limit histories'][('CZ',case,peak)])
+            s.app_data['apply scan ind'] = s.app_data['apply count'] - 1
+            if s.app_data['apply scan ind'] > 0:
+                s.buttons['Back'].setEnabled(True)
 
         # for disp_case in s.app_data['experiment cases']:
         #     s.set_case_display(disp_case, disp_case == case)
@@ -1467,9 +1496,9 @@ class Picker(QtGui.QMainWindow):
             s.relabel_peak(case, old_peak, new_peak)
             s.fixDialog.setVisible(False)
 
-    def apply_selections(s):
+    def apply_selections(s,state,mode='new',regions=None):
         ''' find the extremum in the given region '''
-
+        s.debug(['apply selections, mode:',mode],3)
         case = s.app_data['pick state']['case']
         peak = s.app_data['pick state']['peak']
         polarity = peak[0].lower()
@@ -1477,16 +1506,28 @@ class Picker(QtGui.QMainWindow):
         finishes = []
         elecs = []
 
-        for elec_case_peak in s.pick_regions:
+        if mode == 'new':
+            regions = { ecp:region.getRegion() for ecp,region in s.pick_regions.items() }
+            s.app_data['apply count'] += 1
+            s.app_data['apply scan ind'] = s.app_data['apply count']-1
+            s.buttons['Forward'].setEnabled(False)
+            if s.app_data['apply count'] > 1:
+                s.buttons['Back'].setEnabled(True)
+
+        for elec_case_peak,start_finish in regions.items():
             if elec_case_peak[1] == case and elec_case_peak[2] == peak:
-                region = s.pick_regions[elec_case_peak]
-                start_finish = region.getRegion()
+                #region = s.pick_regions[elec_case_peak]
+                #start_finish = regions[elec_case_peak]#.getRegion()
                 elecs.append(elec_case_peak[0])
                 starts.append(start_finish[0])
                 finishes.append(start_finish[1])
+                if elec_case_peak not in s.app_data['applied region limit histories']:
+                    s.app_data['applied region limit histories'][elec_case_peak] = []
+                if mode =='new':
+                    s.app_data['applied region limit histories'][elec_case_peak].append(start_finish)
                 s.applied_region_limits[elec_case_peak] = start_finish
                 s.previous_peak_limits[(elec_case_peak[0], peak)] = start_finish
-
+        #print(s.app_data['applied region limit histories'])
         # print('starts:',starts)
         pval, pms = s.eeg.find_peaks(case, elecs,
                                      starts_ms=starts, ends_ms=finishes, polarity=polarity)
@@ -1511,6 +1552,35 @@ class Picker(QtGui.QMainWindow):
         s.notify_applied_ckEdges(case, peak)
 
         s.show_state()
+
+    def previous_apply(s):
+        if s.app_data['apply scan ind'] > 0:
+            s.app_data['apply scan ind'] -= 1
+            if s.app_data['apply scan ind'] == 0:
+                s.buttons['Back'].setEnabled(False)
+        s.buttons['Forward'].setEnabled(True)
+        s.debug(['previous_apply','apply scan ind:',s.app_data['apply scan ind'],
+                ' apply count:',s.app_data['apply count']],3)
+
+        regions = { ecp:hist[s.app_data['apply scan ind']]\
+            for ecp,hist in s.app_data['applied region limit histories'].items()\
+            if ecp[1] == s.app_data['pick state']['case'] and ecp[2] == s.app_data['pick state']['peak'] }
+        s.update_pick_regions('',regions_in=regions)
+        s.apply_selections('',mode='prev',regions=regions)
+
+    def next_apply(s):
+        if s.app_data['apply scan ind'] < s.app_data['apply count']:
+            s.app_data['apply scan ind'] += 1
+            if s.app_data['apply scan ind'] == s.app_data['apply count'] -1:
+                s.buttons['Forward'].setEnabled(False)
+        s.buttons['Back'].setEnabled(True)
+        s.debug(['next_apply','apply scan ind:',s.app_data['apply scan ind'],
+                ' apply count:',s.app_data['apply count']],3)
+        regions = { ecp:hist[s.app_data['apply scan ind']]\
+            for ecp,hist in s.app_data['applied region limit histories'].items()\
+            if ecp[1] == s.app_data['pick state']['case'] and ecp[2] == s.app_data['pick state']['peak'] }
+        s.update_pick_regions('',regions_in=regions)
+        s.apply_selections('',mode='next',regions=regions)
 
     def debug(s,message,priority):
         '''message should be a list
