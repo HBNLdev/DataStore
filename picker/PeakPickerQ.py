@@ -12,6 +12,8 @@ from PyQt5 import QtGui, QtCore
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+from datetime import datetime
+
 from picker.EEGdata import avgh1
 
 Qt = QtCore.Qt
@@ -55,7 +57,8 @@ class Picker(QtGui.QMainWindow):
     initD = '/active_projects/test/testQ/avgh1s'#s.dir_paths_by_exp['ant'][0]
     initFs = 'cpt_4_f1_40719005_avg.h1 ern_7_b1_40001008_avg.h1 gng_2_b1_40355069_avg.h1' +\
                 ' ans_5_f1_40293005_avg.h1 ant_5_a1_49403009_avg.h1 stp_3_e1_40277003_avg.h1'+\
-                ' aod_6_a1_40063010_avg.h1 err_8_a1_40251004_avg.h1 vp3_2_a1_d0226008_avg.h1' 
+                ' aod_6_a1_40063010_avg.h1 err_8_a1_40251004_avg.h1 vp3_5_a1_40017006_avg.h1'+\
+                ' cas_1_e1_40701003_avg.h1' 
 #s.dir_paths_by_exp['ant'][1]
 
     ignore = ['BLANK']
@@ -73,7 +76,7 @@ class Picker(QtGui.QMainWindow):
                                   (200, 255, 40),  # yellow-green
                                   (20, 255, 200),  # blue green
                                   (160, 0, 188),  # gray
-                                  (221, 34, 221),  # magenta
+                                  (221, 34, 221),  # magentagits
 				                  (225,225,225), # light gray
                                   ],
                   'XY gridlines': ([0, 200, 400, 600, 800], [0]),
@@ -110,9 +113,12 @@ class Picker(QtGui.QMainWindow):
     app_data['user'] = userName
 
     if len(sys.argv) > 2:
-        app_data['debug'] = 3
-    else:
-        app_data['debug'] = 0
+        try:
+            app_data['debug'] = int(sys.argv[2])
+        except:
+            print('bad value for debug flag: ', sys.argv[2], ' should be int, setting to 0')
+            app_data['debug'] = 0
+
  
     app_data['case display'] = default_case_display_aliases #update for custom here
 
@@ -431,12 +437,14 @@ class Picker(QtGui.QMainWindow):
 
     def next_file(s):
         ''' Next button inside Pick tab '''
-        print('Next')
+        s.debug(['Next'],1)
+        before = datetime.now()
         s.load_file(next_file=True)
-
+        after = datetime.now()
+        s.debug(['Load took: ', after-before],2)
     def previous_file(s):
         ''' Previous button inside Pick tab '''
-        print('Previous')
+        s.debug(['Previous'],1)
         if s.app_data['file ind'] > 0:
             s.app_data['file ind'] -= 1
             s.load_file()
@@ -470,7 +478,7 @@ class Picker(QtGui.QMainWindow):
             if s.app_data['file ind'] < len(paths) - 1:
                 s.app_data['file ind'] += 1
             else:
-                print('already on last file')
+                s.debug(['already on last file'],1)
                 s.status_message('already on last file')
                 return
 
@@ -514,7 +522,7 @@ class Picker(QtGui.QMainWindow):
 
             # initialize (disconnect) current state of case toggles
             s.caseChooser.clear()
-            print('removing case toggles', s.caseToggles)
+            s.debug(['removing case toggles', s.caseToggles],3)
             for case, toggle in s.caseToggles.items():
                 toggle.stateChanged.disconnect(s.toggle_case)
                 toggle.setParent(None)  # s.casesLayout.removeWidget(toggle)
@@ -563,7 +571,7 @@ class Picker(QtGui.QMainWindow):
                 file_info = s.app_data['info']
                 case_info = file_info[-1]
                 sep_cases = case_info.split(',')
-                print('sep cases', sep_cases)
+                s.debug(['sep cases', sep_cases],1)
                 nC = len(sep_cases)
                 if nC % 3 != 0:
                     sep_cases.append('')
@@ -575,7 +583,7 @@ class Picker(QtGui.QMainWindow):
                     html += '<span style="text-align: center; color: #EEE;' \
                             'font-size: 8pt; font-family: Helvetica;">' + line + '</span><br>'
                 html += '</div>'
-                print('html', html)
+                s.debug(['info html', html],3)
                 info_text = pg.TextItem(html=html, anchor=(0, 0))
                 info_text.setPos(0.1, 1.18)
                 s.legend_plot.addItem(info_text)
@@ -633,16 +641,15 @@ class Picker(QtGui.QMainWindow):
         # check for and load old mt
         picked_file_exists = s.eeg.extract_mt_data()
         if picked_file_exists:
-            print('Already picked')
+            s.debug(['Already picked'],1)
             for cs_pk in s.eeg.case_peaks:
                 s.app_data['picks'].add((s.eeg.num_case_map[int(cs_pk[0])], cs_pk[1]))
 
             for elec in s.pick_electrodes:
                 for cs_pk in s.eeg.case_peaks:
-                    # print(elec,cs_pk,  s.eeg.get_peak_data( elec, cs_pk[0], cs_pk[1] ) )
                     s.peak_data[(elec, s.eeg.case_letter_from_number(cs_pk[0]), cs_pk[1])] = \
                         tuple([float(v) for v in s.eeg.get_peak_data(elec, cs_pk[0], cs_pk[1])])
-            print('picks', s.app_data['picks'])
+            s.debug(['picks', s.app_data['picks']],1)
             s.show_peaks()
             s.show_state()
 
@@ -673,8 +680,13 @@ class Picker(QtGui.QMainWindow):
 
     def save(s):
         test_dir = os.path.join('/active_projects/test', s.app_data['user'] + 'Q')
+        before_mt = datetime.now()
         s.save_mt(test_dir)
+        after_mt = datetime.now()
         s.save_pdf(test_dir)
+        after_pdf = datetime.now()
+        s.debug(['save mt:',after_mt-before_mt],2)
+        s.debug(['Save pdf:',after_pdf-after_mt],2)
 
     def output_page(s, layout_desc):
         # setup
@@ -890,7 +902,7 @@ class Picker(QtGui.QMainWindow):
         of.close()
 
         s.status_message(text='Saved to ' + os.path.split(fullpath)[0])
-        print('Saved', fullpath)
+        s.debug(['Saved', fullpath],1)
 
     def adjust_text(s, viewbox):
         ''' adjusts position of electrode text label objects to be visible if axis limits change '''
@@ -968,7 +980,7 @@ class Picker(QtGui.QMainWindow):
             if (case, peak) in existing_lim_CPs:
                 start_ranges = {el: s.applied_region_limits[(el, case, peak)] for el in s.app_data['active channels']}
             elif peak in previous_peaks:
-                print('using previous peak range')
+                s.debug(['using previous peak range'],1)
                 start_ranges = {el: s.previous_peak_limits[(el, peak)] for el in s.app_data['active channels']}
             else:
                 start_ranges = {el: (peak_center_ms - 75, peak_center_ms + 75) for el in s.app_data['active channels']}
@@ -1017,7 +1029,7 @@ class Picker(QtGui.QMainWindow):
         s.reset_edge_notification_backgrounds()
 
         s.status_message(text="Picking " + case_alias+'('+case+')' + ',' + peak)
-        print('pick_init finish')
+        s.debug(['pick_init finish'],1)
 
     def update_region_label_position(s, reg_key=None):
         ''' given region-identifying 3-tuple of (electrode, case, peak), update a region's label position '''
@@ -1078,7 +1090,7 @@ class Picker(QtGui.QMainWindow):
         if s.zoomDialog._open:
             s.get_zoompos()
 
-        print('zoom_plot', ev_or_elec)
+        s.debug(['zoom_plot', ev_or_elec],1)
 
         Pstate = s.app_data['pick state']
 
@@ -1096,7 +1108,7 @@ class Picker(QtGui.QMainWindow):
                 s.zoomCaseToggles[case].setChecked( s.caseToggles[case].isChecked() )
 
         if proceed:
-            print(elec)
+            s.debug([elec],1)
             s.zoomPlot.clear()
 
             if Pstate['case']:
@@ -1164,7 +1176,7 @@ class Picker(QtGui.QMainWindow):
             state = s.sender().isChecked()
 
         Pstate = s.app_data['pick state']
-        print('toggle_regions', state, Pstate)
+        s.debug(['toggle_regions', state, Pstate],3)
 
         for el_cs_pk, reg in s.pick_regions.items():
             show = False
@@ -1470,7 +1482,7 @@ class Picker(QtGui.QMainWindow):
         case_alias = s.sender().currentText()
         if case_alias:
             case = s.app_data['case alias lookup'][ case_alias ]
-            print('choose_fix_case', case_alias+'('+case+')', s.app_data['picks'])
+            s.debug([ 'choose_fix_case', case_alias+'('+case+')', s.app_data['picks'] ],3)
             available_peaks = [c_p[1] for c_p in s.app_data['picks'] if c_p[0 == case]]
             for peak in available_peaks:
                 s.oldPeak.addItem(peak)
@@ -1485,7 +1497,7 @@ class Picker(QtGui.QMainWindow):
         if case_alias:
             case = s.app_data['case alias lookup'][ case_alias ]
             old_peak = s.sender().currentText()
-            print('choose_old_peak', case_alias+'('+case+')', old_peak)
+            s.debug(['choose_old_peak', case_alias+'('+case+')', old_peak],3)
             possible_peaks = [p for p in s.peak_choices if p[0] == old_peak[0]]
             for peak in possible_peaks:
                 s.newPeak.addItem(peak)

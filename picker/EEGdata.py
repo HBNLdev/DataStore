@@ -352,7 +352,7 @@ class avgh1:
         # calculate min / max for y limits
         min_val = int(np.floor(np.min(disp_pots)))
         max_val = int(np.ceil(np.max(disp_pots)))
-        print('Yscale: ', min_val, max_val)
+        #print('Yscale: ', min_val, max_val)
         return min_val, max_val
 
     def butterfly_channels_by_case(s, channel_list=['FZ', 'CZ', 'PZ'], offset=0):
@@ -501,7 +501,7 @@ class avgh1:
             h1_name = os.path.split(s.filepath)[1]
             s.mt_name = os.path.splitext(h1_name)[0] + '.mt'
             s.mt_defaultpath = os.path.splitext(s.filepath)[0] + '.mt'
-            print(s.mt_defaultpath)
+            #print(s.mt_defaultpath)
             if os.path.isfile(s.mt_defaultpath):
                 mt = MT_File(s.mt_defaultpath)
                 mt.parse_file()
