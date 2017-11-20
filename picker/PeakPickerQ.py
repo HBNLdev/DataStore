@@ -409,6 +409,7 @@ class Picker(QtGui.QMainWindow):
         ''' Start button inside Navigate tab '''
         s.debug(['Start:', signal],2)
         directory = s.directoryInput.text().strip()
+        s.app_data['working directory'] = directory
 
         files_raw = s.filesInput.text().split('.h1')
         s.debug(['files_raw: ', files_raw ],2 )
@@ -681,9 +682,9 @@ class Picker(QtGui.QMainWindow):
     def save(s):
         test_dir = os.path.join('/active_projects/test', s.app_data['user'] + 'Q')
         before_mt = datetime.now()
-        s.save_mt(test_dir)
+        s.save_mt(s.app_data['working directory'])
         after_mt = datetime.now()
-        s.save_pdf(test_dir)
+        s.save_pdf(s.app_data['working directory'])
         after_pdf = datetime.now()
         s.debug(['save mt:',after_mt-before_mt],2)
         s.debug(['Save pdf:',after_pdf-after_mt],2)
