@@ -58,7 +58,8 @@ class Picker(QtGui.QMainWindow):
     initFs = 'cpt_4_f1_40719005_avg.h1 ern_7_b1_40001008_avg.h1 gng_2_b1_40355069_avg.h1' +\
                 ' ans_5_f1_40293005_avg.h1 ant_5_a1_49403009_avg.h1 stp_3_e1_40277003_avg.h1'+\
                 ' aod_6_a1_40063010_avg.h1 err_8_a1_40251004_avg.h1 vp3_5_a1_40017006_avg.h1'+\
-                ' cas_1_e1_40701003_avg.h1' 
+                ' cas_1_e1_40701003_avg.h1'
+    debug_dir = '/active_projects/programs/picker/debug' 
 #s.dir_paths_by_exp['ant'][1]
 
     ignore = ['BLANK']
@@ -142,6 +143,9 @@ class Picker(QtGui.QMainWindow):
         super(Picker, s).__init__()
         s.setGeometry(*DProps['main position'])
         s.setWindowTitle("HBNL Peak Picker (" + s.user + ")      ")
+
+        s.app_data['debug path'] = \
+            os.path.join(s.debug_dir,s.user+'_'+str(int(datetime.now().timestamp()))+'.log')
 
         pg.setConfigOption('background', DProps['background'])
         pg.setConfigOption('foreground', DProps['foreground'])
@@ -1607,7 +1611,9 @@ class Picker(QtGui.QMainWindow):
         '''
         if s.app_data['debug'] >= priority:
             print(*message)
-            ## printing for debug
+        with open(s.app_data['debug path'],'a') as odf:
+            odf.write(str(priority)+'\t'+' '.join([str(m) for m in message])+'\n')
+
         # for i in s.plots['FP1'].items:
         #     if 'data' in dir(i):
         #         print( type(i), i.data[:2]  )  
