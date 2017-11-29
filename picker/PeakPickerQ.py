@@ -692,14 +692,23 @@ class Picker(QtGui.QMainWindow):
         pickD = {'picks':s.app_data['picks'],
                 'peak data':s.peak_data,
                 'avgh1 path':s.eeg.filepath,
-                'save dir':s.app_data['working directory']}
+                'save dir':s.app_data['working directory'],
+                'plot props':s.plot_props,
+                'experiment cases':s.app_data['experiment cases'],
+                'working cases':s.app_data['working cases'],
+                'case aliases':s.app_data['case aliases'],
+                'current data':s.current_data,
+                'info':s.app_data['info'],
+                'plot desc':s.plot_desc,
+                }
         store_name = s.app_data['user']+'_'+os.path.split(s.eeg.filepath)[1]+'.p'
         store_path = os.path.join(s.temp_store_dir,store_name)
         with open( store_path,'wb') as of:
             pickle.dump(pickD,of)
         s.debug(['stored pickled picks to ',store_path],2)
         subprocess.Popen('/usr/local/PeakPicker/storePicks.sh '+\
-               store_path, shell=True )
+               store_path, shell=True ) 
+        s.debug(['saving in background'],2)
 
         # test_dir = os.path.join('/active_projects/test', s.app_data['user'] + 'Q')
         # before_mt = datetime.now()
