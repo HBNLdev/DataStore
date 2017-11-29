@@ -5,6 +5,8 @@
 
 import os
 import sys
+import subprocess
+import pickle
 
 import numpy as np
 import pyqtgraph as pg
@@ -59,7 +61,8 @@ class Picker(QtGui.QMainWindow):
                 ' ans_5_f1_40293005_avg.h1 ant_5_a1_49403009_avg.h1 stp_3_e1_40277003_avg.h1'+\
                 ' aod_6_a1_40063010_avg.h1 err_8_a1_40251004_avg.h1 vp3_5_a1_40017006_avg.h1'+\
                 ' cas_1_e1_40701003_avg.h1'
-    debug_dir = '/active_projects/programs/picker/debug' 
+    debug_dir = '/active_projects/programs/picker/debug'
+    temp_store_dir = '/active_projects/programs/picker/store'
 #s.dir_paths_by_exp['ant'][1]
 
     ignore = ['BLANK']
@@ -684,14 +687,28 @@ class Picker(QtGui.QMainWindow):
         return curve
 
     def save(s):
-        test_dir = os.path.join('/active_projects/test', s.app_data['user'] + 'Q')
-        before_mt = datetime.now()
-        s.save_mt(s.app_data['working directory'])
-        after_mt = datetime.now()
-        s.save_pdf(s.app_data['working directory'])
-        after_pdf = datetime.now()
-        s.debug(['save mt:',after_mt-before_mt],2)
-        s.debug(['Save pdf:',after_pdf-after_mt],2)
+        # save picks in pickle file
+        s.debug(['Save'],2)
+        pickD = {'picks':s.app_data['picks'],
+                'peak data':s.peak_data,
+                'avgh1 path':s.eeg.filepath,
+                'save dir':s.app_data['working directory']}
+        store_name = s.app_data['user']+'_'+os.path.split(s.eeg.filepath)[1]+'.p'
+        store_path = os.path.join(s.temp_store_dir,store_name)
+        with open( store_path,'wb') as of:
+            pickle.dump(pickD,of)
+        s.debug(['stored pickled picks to ',store_path],2)
+        subprocess.Popen('/usr/local/PeakPicker/storePicks.sh '+\
+               store_path, shell=True )
+
+        # test_dir = os.path.join('/active_projects/test', s.app_data['user'] + 'Q')
+        # before_mt = datetime.now()
+        # s.save_mt(s.app_data['working directory'])
+        # after_mt = datetime.now()
+        # s.save_pdf(s.app_data['working directory'])
+        # after_pdf = datetime.now()
+        # s.debug(['save mt:',after_mt-before_mt],2)
+        # s.debug(['Save pdf:',after_pdf-after_mt],2)
 
     def output_page(s, layout_desc):
         # setup
