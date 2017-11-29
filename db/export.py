@@ -14,6 +14,9 @@ from .utils.compilation import get_bestsession, writecsv_date
 npsych_basepath = '/processed_data/neuropsych/neuropsych_all'
 fhd_basepath = '/processed_data/fhd/fhd'
 
+def export_a_collection(df,basepath, suffix=''):
+        writecsv_date(df, basepath, midfix=D.Mdb.name, suffix=suffix )
+        print('saved to', output_str + '.csv')
 
 def neuropsych(do_export=True):
     docs = D.Mdb['neuropsych'].find()
@@ -57,10 +60,7 @@ def neuropsych(do_export=True):
     npsych_df_export.sort_index(inplace=True)
 
     if do_export:
-        today = datetime.now().strftime('%m-%d-%Y')
-        output_str = '_'.join([npsych_basepath, D.Mdb.name, today])
-        npsych_df_export.to_csv(output_str + '.csv')
-        print('saved to', output_str + '.csv')
+        export_a_collection(npsychDF, npsych_basepath)
 
     return npsych_df_export
 
@@ -119,6 +119,10 @@ def fhd(do_export=True):
     fhd_df = fhd_df[fhd_cols[1:]]
 
     if do_export:
-        writecsv_date(fhd_df, fhd_basepath, suffix='all')
+        # today = datetime.now().strftime('%m-%d-%Y')
+        # output_str = '_'.join([npsych_basepath, D.Mdb.name, today])
+        # npsych_df_export.to_csv(output_str + '.csv')
+        # print('saved to', output_str + '.csv')
+        export_a_collection(fhd_df, fhd_basepath, suffix='all')
     else:
         return fhd_df
