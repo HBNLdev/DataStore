@@ -468,8 +468,6 @@ class MT_File:
         s.data = dict()
         s.data['uID'] = s.file_info['id'] + '_' + s.file_info['session']
 
-        if s.file_info['experiment'] == 'ant':
-            s.normed_cases_calc()
         s.parse_header()
 
     def parse_fileinfo(s):
@@ -506,7 +504,8 @@ class MT_File:
                     cases.append( case )
 
         s.header['case_tup'] = tuple(sorted(list(set(cases))))
-        s.normed_cases_calc()
+        if s.file_info['experiment'] == 'ant':
+            s.normed_cases_calc()
 
         of.close()
 
