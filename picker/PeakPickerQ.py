@@ -312,6 +312,12 @@ class Picker(QtGui.QMainWindow):
         s.zoomLayout.addWidget(s.zoomPlotWidget)
         s.zoomGW = pg.GraphicsWindow(parent=s.zoomPlotWidget)  # zoomDialogWidget)
         s.zoomPlot = s.zoomGW.addPlot()  # pg.PlotWidget(parent=s.zoomDialog)
+        zoom_region = pg.LinearRegionItem(values=[-10, -5], movable=True,
+                                             brush=s.app_data['display props']['pick region'])
+        zoom_region.setVisible(False)
+        s.zoomPlot.addItem(zoom_region)
+        s.pick_regions = { 'zoom': zoom_region }
+        s.region_elecs = { zoom_region: 'zoom' }
 
         s.fixDialog = QtGui.QDialog(s)
         s.fixLayout = QtGui.QVBoxLayout()
@@ -372,13 +378,28 @@ class Picker(QtGui.QMainWindow):
                     s.proxyMouse = pg.SignalProxy(plot.scene().sigMouseClicked, slot=s.show_zoom_plot)
                     # s.proxyScroll = pg.SignalProxy(plot.scene().sigMouseMoved, slot=s.scroll_handler)
                     # plot.resize(300,250)
-                    plot.vb.sigRangeChanged.connect(s.update_ranges)
+
                     s.vb_map[plot.vb] = elec
                     s.plots[elec] = plot
                     if prev_plot:
                         plot.setXLink(prev_plot)
                         plot.setYLink(prev_plot)
                     prev_plot = plot
+
+                    if elec in s.app_data['active channels']:
+                        region = pg.LinearRegionItem(values=[-10,-5], movable=True,
+                                             brush=s.app_data['display props']['pick region'])
+                        region.setVisible(False)
+                        region.sigRegionChanged.connect(s.update_region_label_position)
+                        region.sigRegionChangeFinished.connect(s.update_pick_regions)
+
+                        #plot.vb.sigRangeChanged.connect(s.update_ranges)
+
+                        s.pick_regions[ elec ] = region
+                        s.plots[elec].addItem(region)                    
+
+                    s.region_elecs[region] = elec
+
                 elif not s.legend_plot:
                     s.legend_plot = s.plotsGrid.addPlot(rN + 1, cN)
                     s.legend_plot.getAxis('left').hide()
@@ -577,6 +598,8 @@ class Picker(QtGui.QMainWindow):
                 s.legend_plot.clear()
                 if 'items' in dir(s.legend_plot.legend):
                     s.legend_plot.legend.items = []
+                for mk in [k for k in s.peak_markers.keys() if '_zoom' in k[0]]:
+                    s.zoomPlot.removeItem( s.peak_markers[mk] )
 
                 file_info = s.app_data['info']
                 case_info = file_info[-1]
@@ -604,10 +627,24 @@ class Picker(QtGui.QMainWindow):
                 # main gridplot loop
                 x_gridlines, y_gridlines = s.plot_props['XY gridlines']
                 grid_pen = s.plot_props['grid color']
+                #keep_items = [k for k in s.region_elecs.keys]+[v for k,v in s.plots.items]
                 s.curves = {}
                 for elec in s.app_data['displayed channels']:
                     plot = s.plots[elec]
-                    plot.clear()
+                    # clear plot
+                    for item in plot.listDataItems():
+                        if item not in s.region_elecs:
+                            plot.removeItem( item )
+                    for ecp, lab in s.pick_region_labels.items():
+                        if ecp[0] == elec:
+                            plot.removeItem( lab )
+                    for ecp, marker in s.peak_markers.items():
+                        if ecp[0] == elec:
+                            plot.removeItem( marker )
+
+                    for reg in s.region_elecs:
+                        reg.setVisible(False)
+
                     if elec == s.app_data['displayed channels'][0]:
                         s.debug(['clear first:',datetime.now()-T_1],3)
                     if plot.vb in s.plot_labels:
@@ -648,11 +685,11 @@ class Picker(QtGui.QMainWindow):
                 s.debug(['Plot setup time: ', T_1-T_prelims],3)
                 Tp = T_1
                 for T in T_plots:
-                    s.debug(['Plot time:', T-Tp],3)
+                    #s.debug(['Plot time:', T-Tp],3)
                     Tp = T
                 # update zoom plot
                 s.zoom_curves = {}
-                s.pick_regions = {}
+
                 if s.app_data['zoom electrode'] is not None:
                     s.show_zoom_plot(s.app_data['zoom electrode'])
         T_end = datetime.now()
@@ -661,7 +698,6 @@ class Picker(QtGui.QMainWindow):
 
         s.peak_markers = {}
         s.peak_tops = {}
-        s.region_case_peaks = {}
 
         # check for and load old mt
         picked_file_exists = s.eeg.extract_mt_data()
@@ -678,11 +714,9 @@ class Picker(QtGui.QMainWindow):
             s.show_peaks()
             s.show_state()
 
-        s.pick_regions = {}
         s.applied_region_limits = {}
         s.app_data['applied region limit histories'] = {}
         s.pick_region_labels = {}
-        s.pick_region_labels_byRegion = {}
 
         if not initialize:
             s.reset_edge_notification_backgrounds()
@@ -956,35 +990,43 @@ class Picker(QtGui.QMainWindow):
         ''' called when axis limits change (e.g. on pan/zoom) '''
         Pstate = s.app_data['pick state']
         # s.adjust_label(s.sender())
-        for el_cs_pk in s.pick_regions:
-            if el_cs_pk[1] == Pstate['case'] and el_cs_pk[2] == Pstate['peak']:
-                s.update_region_label_position(el_cs_pk)
+        for el in s.pick_regions:
+            #if el_cs_pk[1] == Pstate['case'] and el_cs_pk[2] == Pstate['peak']:
+            s.update_region_label_position(el)
 
     def update_pick_regions(s,call,regions_in=None):
         ''' called when pick regions are adjusted '''
-
+        #s.debug(['update_pick_regions caller: ',call,'regions_in: ',regions_in],2)
         if not regions_in:
             sender = s.sender()
             region = sender.getRegion()
-            elec, case, peak = s.region_case_peaks[sender]
-        else: 
-            case = s.app_data['pick state']['case']
-            peak = s.app_data['pick state']['peak']
+            elec = s.region_elecs[sender]
 
-        for el_cs_pk, reg in s.pick_regions.items():
+            if elec == 'zoom':
+                elec = s.app_data['zoom electrode']
+        else:
+            elec = None
+         
+        case = s.app_data['pick state']['case']
+        peak = s.app_data['pick state']['peak']
+
+        for el, reg in s.pick_regions.items():
             if s.app_data['pick state']['repick mode'] == 'all' or regions_in is not None\
-              or el_cs_pk == (elec, case, peak):
-                if el_cs_pk[1] == case and el_cs_pk[2] == peak:
-                    if not regions_in:
-                        reg.setRegion(region)
-                    else:
-                        reg.setRegion( regions_in[ el_cs_pk ] )
+              or el == elec:
+                if not regions_in:
+                    reg.setRegion(region)
+                else:
+                    if el in regions_in:
+                        reg.setRegion( regions_in[ el ] )
+            elif el == 'zoom' and elec == s.app_data['zoom electrode']:
+                reg.setRegion( region ) 
 
         if not regions_in:
-            if 'zoomRegion' in dir(s) and sender != s.zoomRegion and elec == s.app_data['zoom electrode']:
-                s.zoomRegion.setRegion(region)
+            if 'zoomRegion' in dir(s) and sender != s.pick_regions['zoom']\
+                                and elec == s.app_data['zoom electrode']:
+                s.pick_regions['zoom'].setRegion(region)
         elif s.app_data['zoom electrode']:
-            s.zoomRegion.setRegion( regions_in[ (s.app_data['zoom electrode'], case, peak ) ] )
+            s.pick_regions['zoom'].setRegion( regions_in[ s.app_data['zoom electrode'] ] )
 
 
     def pick_init(s):
@@ -1000,7 +1042,7 @@ class Picker(QtGui.QMainWindow):
 
         s.app_data['picks'].add((case, peak))
 
-        pick_case_peaks = set([(ecp[1], ecp[2]) for ecp in s.pick_regions])
+        pick_case_peaks = set([(ecp[1], ecp[2]) for ecp in s.pick_region_labels])
         previous_peaks = set([el_pk[1] for el_pk in s.previous_peak_limits])
 
         for ztcase, checkbox in s.zoomCaseToggles.items():
@@ -1009,6 +1051,9 @@ class Picker(QtGui.QMainWindow):
         s.buttons['Back'].setEnabled(False)
         s.buttons['Forward'].setEnabled(False)
         
+        s.pick_regions['zoom'].setVisible(True)
+        s.pick_regions['zoom'].sigRegionChangeFinished.connect(s.update_pick_regions)
+
         if (case, peak) not in pick_case_peaks:
             s.app_data['apply count'] = 0
             s.app_data['apply scan ind'] = -1
@@ -1025,25 +1070,19 @@ class Picker(QtGui.QMainWindow):
                 start_ranges = {el: (peak_center_ms - 75, peak_center_ms + 75) for el in s.app_data['active channels']}
 
             for elec in s.app_data['active channels']:  # [ p for p in s.plots if p not in s.show_only ]:
-                region = pg.LinearRegionItem(values=start_ranges[elec], movable=True,
-                                             brush=s.app_data['display props']['pick region'])
 
-                region.sigRegionChanged.connect(s.update_region_label_position)
-                region.sigRegionChangeFinished.connect(s.update_pick_regions)
+                s.pick_regions[ elec ].setRegion( start_ranges[elec] )
+                s.pick_regions[ elec ].setVisible( True )
 
                 region_label = pg.TextItem(
                     html=s.region_label_html.replace('__PEAK__', peak),
-                    anchor=(-0.025, -0.2))
+                    anchor=(-0.025, -0.2) )
 
-                s.pick_regions[(elec, case, peak)] = region
                 s.pick_region_labels[(elec, case, peak)] = region_label
-                s.pick_region_labels_byRegion[region] = region_label
-                s.region_case_peaks[region] = (elec, case, peak)
-                s.plots[elec].addItem(region)
                 s.plots[elec].addItem(region_label)
 
                 s.plot_texts[s.plots[elec].vb].setHtml('')
-
+                #s.debug(['about to update region label pos',(elec, case, peak)],3)
                 s.update_region_label_position((elec, case, peak))
         else:
             check_key = ('CZ',case,peak)
@@ -1073,19 +1112,36 @@ class Picker(QtGui.QMainWindow):
     def update_region_label_position(s, reg_key=None):
         ''' given region-identifying 3-tuple of (electrode, case, peak), update a region's label position '''
 
-        if type(reg_key) != tuple:
-            region = s.sender()
-            region_label = s.pick_region_labels_byRegion[region]
-        else:
-            region = s.pick_regions[reg_key]
-            region_label = s.pick_region_labels[reg_key]
+        region_label = None
+        if s.app_data['pick state']['case']:
+            if not isinstance(reg_key, str):
+                region = s.sender()
+                if region in s.region_elecs:
+                    elec = s.region_elecs[ region ]
+                    case = s.app_data['pick state']['case']
+                    peak = s.app_data['pick state']['peak']
+                elif isinstance(reg_key,tuple):
+                    region = s.pick_regions[ reg_key[0] ]
+                    elec, case, peak = reg_key
+                else:
+                    elec, case, peak = None, None, None
+                    s.debug(['update_region_label_position, bad input, reg_key: ',reg_key],1)
 
-        # check region for one electrode
-        elec = 'FZ'  # s.eeg.electrodes[0]#reg_key[0]
-        vb_range = s.plots[elec].vb.getState()['viewRange']
-        start_fin = region.getRegion()
+                if (elec, case, peak) in s.pick_region_labels:
+                    region_label = s.pick_region_labels[ (elec, case, peak) ]
 
-        region_label.setPos(start_fin[0], vb_range[1][1])
+            else:
+                region = s.pick_regions[reg_key]
+                if reg_key in s.pick_region_labels:
+                    region_label = s.pick_region_labels[reg_key]
+
+            # check region for one electrode
+            elec = 'FZ'  # s.eeg.electrodes[0]#reg_key[0]
+            vb_range = s.plots[elec].vb.getState()['viewRange']
+            
+            if region_label:
+                start_fin = region.getRegion()
+                region_label.setPos(start_fin[0], vb_range[1][1])
 
     def show_state(s, cases='all'):
         ''' display the current pick state as a list of cases, with corresponding picked peaks following in brackets '''
@@ -1148,7 +1204,9 @@ class Picker(QtGui.QMainWindow):
 
         if proceed:
             s.debug([elec],1)
-            s.zoomPlot.clear()
+            for item in s.zoomPlot.listDataItems():
+                if item != s.pick_regions['zoom']:
+                    s.zoomPlot.removeItem( item )
 
             if Pstate['case']:
                 s.zoomDialog.show()
@@ -1194,19 +1252,13 @@ class Picker(QtGui.QMainWindow):
 
         elec = s.app_data['zoom electrode']
         if elec is not None:
-            if 'zoomRegion' in dir(s) and s.zoomRegion in s.zoomPlot.items:
-                s.zoomPlot.removeItem(s.zoomRegion)
+            # if 'zoomRegion' in dir(s) and s.zoomRegion in s.zoomPlot.items:
+            #     s.zoomPlot.removeItem(s.zoomRegion)
             Pstate = s.app_data['pick state']
-            reg_key = (elec, Pstate['case'], Pstate['peak'])
-            if reg_key in s.pick_regions:
-                small_region = s.pick_regions[reg_key]
+            if elec in s.pick_regions:
+                small_region = s.pick_regions[elec]
                 start_fin = small_region.getRegion()
-                region = pg.LinearRegionItem(values=start_fin, movable=True,
-                                             brush=s.app_data['display props']['pick region'])
-                region.sigRegionChangeFinished.connect(s.update_pick_regions)
-                s.zoomRegion = region
-                s.region_case_peaks[region] = (elec, Pstate['case'], Pstate['peak'])
-                s.zoomPlot.addItem(region)
+                s.pick_regions['zoom'].setRegion(start_fin)
 
     def toggle_regions(s, state=None):
         ''' toggle display of regions (if peak being picked is changed or the display checkbox is toggled) '''
@@ -1217,12 +1269,12 @@ class Picker(QtGui.QMainWindow):
         Pstate = s.app_data['pick state']
         s.debug(['toggle_regions', state, Pstate],3)
 
-        for el_cs_pk, reg in s.pick_regions.items():
-            show = False
-            if state and el_cs_pk[1] == Pstate['case'] and el_cs_pk[2] == Pstate['peak']:
-                show = True
-            reg.setVisible(show)
-            s.pick_region_labels[el_cs_pk].setVisible(show)
+        for el, reg in s.pick_regions.items():
+            reg.setVisible(state)
+            if el != 'zoom':
+                prl_key = (el,Pstate['case'],Pstate['peak'])
+                if prl_key in s.pick_region_labels:
+                    s.pick_region_labels[ prl_key ].setVisible(state)
 
     def toggle_peaks(s):
         ''' toggle display of peak-marking glyphs (if checkbox is toggled) '''
@@ -1439,10 +1491,6 @@ class Picker(QtGui.QMainWindow):
             s.peak_data[nK] = s.peak_data[oK]
             s.peak_data.pop(oK)
 
-            s.pick_regions[nK] = s.pick_regions[oK]
-            region = s.pick_regions.pop(oK)
-            s.region_case_peaks[region] = nK
-
             s.peak_markers[nK] = s.peak_markers[oK]
             s.peak_markers.pop(oK)
 
@@ -1480,11 +1528,6 @@ class Picker(QtGui.QMainWindow):
                     s.zoomPlot.removeItem(zoom_marker)
 
                 plot = s.plots[el_cs_pk[0]]
-                region = s.pick_regions[el_cs_pk]
-                s.pick_regions.pop(el_cs_pk)
-                s.region_case_peaks.pop(region)
-                s.pick_region_labels_byRegion.pop(region)
-                plot.removeItem(region)
                 label = s.pick_region_labels.pop(el_cs_pk)
                 plot.removeItem(label)
                 marker = s.peak_markers.pop(el_cs_pk)
@@ -1563,18 +1606,17 @@ class Picker(QtGui.QMainWindow):
         elecs = []
 
         if mode == 'new':
-            regions = { ecp:region.getRegion() for ecp,region in s.pick_regions.items() }
+            regions = { e:region.getRegion() for e,region in s.pick_regions.items() }
             s.app_data['apply count'] += 1
             s.app_data['apply scan ind'] = s.app_data['apply count']-1
             s.buttons['Forward'].setEnabled(False)
             if s.app_data['apply count'] > 1:
                 s.buttons['Back'].setEnabled(True)
 
-        for elec_case_peak,start_finish in regions.items():
-            if elec_case_peak[1] == case and elec_case_peak[2] == peak:
-                #region = s.pick_regions[elec_case_peak]
-                #start_finish = regions[elec_case_peak]#.getRegion()
-                elecs.append(elec_case_peak[0])
+        for elec,start_finish in regions.items():
+            if elec != 'zoom':
+                elec_case_peak = (elec, case, peak)
+                elecs.append( elec )
                 starts.append(start_finish[0])
                 finishes.append(start_finish[1])
                 if elec_case_peak not in s.app_data['applied region limit histories']:
@@ -1618,9 +1660,11 @@ class Picker(QtGui.QMainWindow):
         s.debug(['previous_apply','apply scan ind:',s.app_data['apply scan ind'],
                 ' apply count:',s.app_data['apply count']],3)
 
-        regions = { ecp:hist[s.app_data['apply scan ind']]\
+        regions = { ecp[0]:hist[s.app_data['apply scan ind']]\
             for ecp,hist in s.app_data['applied region limit histories'].items()\
             if ecp[1] == s.app_data['pick state']['case'] and ecp[2] == s.app_data['pick state']['peak'] }
+        if s.app_data['zoom electrode']:
+            regions['zoom'] =  regions[ s.app_data['zoom electrode'] ]
         s.update_pick_regions('',regions_in=regions)
         s.apply_selections('',mode='prev',regions=regions)
 
@@ -1632,9 +1676,11 @@ class Picker(QtGui.QMainWindow):
         s.buttons['Back'].setEnabled(True)
         s.debug(['next_apply','apply scan ind:',s.app_data['apply scan ind'],
                 ' apply count:',s.app_data['apply count']],3)
-        regions = { ecp:hist[s.app_data['apply scan ind']]\
+        regions = { ecp[0]:hist[s.app_data['apply scan ind']]\
             for ecp,hist in s.app_data['applied region limit histories'].items()\
             if ecp[1] == s.app_data['pick state']['case'] and ecp[2] == s.app_data['pick state']['peak'] }
+        if s.app_data['zoom electrode']:
+            regions['zoom'] =  regions[ s.app_data['zoom electrode'] ]
         s.update_pick_regions('',regions_in=regions)
         s.apply_selections('',mode='next',regions=regions)
 
