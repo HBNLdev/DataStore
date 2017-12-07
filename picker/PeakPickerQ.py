@@ -62,7 +62,7 @@ class Picker(QtGui.QMainWindow):
                 ' aod_6_a1_40063010_avg.h1 err_8_a1_40251004_avg.h1 vp3_5_a1_40017006_avg.h1'+\
                 ' cas_1_e1_40701003_avg.h1'
     debug_dir = '/active_projects/programs/picker/debug'
-    temp_store_dir = '/active_projects/programs/picker/store'
+    temp_store_dir = '/active_projects/picker/store'
 #s.dir_paths_by_exp['ant'][1]
 
     ignore = ['BLANK']
@@ -477,6 +477,7 @@ class Picker(QtGui.QMainWindow):
     def load_file(s, next_file=False, initialize=False):
         ''' load an avgh1 object as the current file to be picked and plot its data in the plotgrid '''
         s.debug(['load_file','next_file =',next_file,'initialize =',initialize],3)
+        T_load = datetime.now()
         paths = s.app_data['file paths']
 
         if 'applied_regions' in dir(s) and s.applied_regions is not None:
@@ -571,6 +572,7 @@ class Picker(QtGui.QMainWindow):
                                         channels=s.app_data['active channels'], mode='server', style='layout')
             s.ylims = s.plot_desc[0][1]['props']['yrange']
 
+            T_prelims = datetime.now()
             if not initialize:
                 s.legend_plot.clear()
                 if 'items' in dir(s.legend_plot.legend):
@@ -598,6 +600,7 @@ class Picker(QtGui.QMainWindow):
 
                 s.legend_plot.vb.setRange(xRange=[0, 1], yRange=[0, 1])
 
+                T_1 = datetime.now(); T_plots = []
                 # main gridplot loop
                 x_gridlines, y_gridlines = s.plot_props['XY gridlines']
                 grid_pen = s.plot_props['grid color']
@@ -605,6 +608,8 @@ class Picker(QtGui.QMainWindow):
                 for elec in s.app_data['displayed channels']:
                     plot = s.plots[elec]
                     plot.clear()
+                    if elec == s.app_data['displayed channels'][0]:
+                        s.debug(['clear first:',datetime.now()-T_1],3)
                     if plot.vb in s.plot_labels:
                         plot.vb.removeItem(s.plot_labels[plot.vb])
 
@@ -617,7 +622,8 @@ class Picker(QtGui.QMainWindow):
                     # ERP amplitude curves for each case
                     for case in s.app_data['working cases']:
                         s.curves[(elec, case)] = s.plot_curve(s.plots[elec], elec, case)
-
+                    if elec == s.app_data['displayed channels'][0]:
+                        s.debug(['plot first:',datetime.now()-T_1],3)
                     # set y limits
                     plot.setYRange(s.ylims[0], s.ylims[1])
 
@@ -626,21 +632,32 @@ class Picker(QtGui.QMainWindow):
                     plot.addItem(peak_text)
                     s.plot_texts[plot.vb] = peak_text
                     s.adjust_text(plot.vb)
+                    if elec == s.app_data['displayed channels'][0]:
+                        s.debug(['peak texts:',datetime.now()-T_1],3)
 
                     bLabel = pg.ButtonItem(
                         imageFile=os.path.join(s.module_path, os.path.join('chanlogos', elec + '.png')),
                         width=s.plot_props['label size'], parentItem=plot)
                     bLabel.setPos(12, -8)
-
+                    if elec == s.app_data['displayed channels'][0]:
+                        s.debug(['label plots:',datetime.now()-T_1],3)
                     s.plot_labels[plot.vb] = bLabel
 
                     plot.vb.setMouseEnabled(x=False, y=False)
-
+                    T_plots.append(datetime.now())
+                s.debug(['Plot setup time: ', T_1-T_prelims],3)
+                Tp = T_1
+                for T in T_plots:
+                    s.debug(['Plot time:', T-Tp],3)
+                    Tp = T
                 # update zoom plot
                 s.zoom_curves = {}
                 s.pick_regions = {}
                 if s.app_data['zoom electrode'] is not None:
                     s.show_zoom_plot(s.app_data['zoom electrode'])
+        T_end = datetime.now()
+        s.debug(['Prelim load time:',T_prelims - T_load],3)
+        s.debug(['Display load time:',T_end - T_prelims],3)
 
         s.peak_markers = {}
         s.peak_tops = {}
@@ -706,18 +723,9 @@ class Picker(QtGui.QMainWindow):
         with open( store_path,'wb') as of:
             pickle.dump(pickD,of)
         s.debug(['stored pickled picks to ',store_path],2)
-        subprocess.Popen('/usr/local/PeakPicker/storePicks.sh '+\
-               store_path, shell=True ) 
+        subprocess.Popen(['/usr/local/PeakPicker/storePicks.sh', store_path])#+\
+               #store_path, shell=True ) 
         s.debug(['saving in background'],2)
-
-        # test_dir = os.path.join('/active_projects/test', s.app_data['user'] + 'Q')
-        # before_mt = datetime.now()
-        # s.save_mt(s.app_data['working directory'])
-        # after_mt = datetime.now()
-        # s.save_pdf(s.app_data['working directory'])
-        # after_pdf = datetime.now()
-        # s.debug(['save mt:',after_mt-before_mt],2)
-        # s.debug(['Save pdf:',after_pdf-after_mt],2)
 
     def output_page(s, layout_desc):
         # setup
