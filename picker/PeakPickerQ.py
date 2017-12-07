@@ -1269,6 +1269,10 @@ class Picker(QtGui.QMainWindow):
         Pstate = s.app_data['pick state']
         s.debug(['toggle_regions', state, Pstate],3)
 
+        for prlK,prl in s.pick_region_labels.items():
+            if prlK[1] != Pstate['case'] or prlK[2] != Pstate['peak']:
+                prl.setVisible(False)
+
         for el, reg in s.pick_regions.items():
             reg.setVisible(state)
             if el != 'zoom':
