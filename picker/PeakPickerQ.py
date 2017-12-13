@@ -726,6 +726,7 @@ class Picker(QtGui.QMainWindow):
         ''' set y limits of all plots in plotgrid to the recommended vals '''
         plot = s.plots['PZ']
         plot.setYRange(s.ylims[0], s.ylims[1])
+        s.zoomPlot.autoRange()
 
     def plot_curve(s, plot, electrode, case):
         ''' given a plot handle, electrode, and case, return the line plot of its amplitude data '''
