@@ -312,7 +312,7 @@ class Picker(QtGui.QMainWindow):
         s.zoomLayout.addWidget(s.zoomPlotWidget)
         s.zoomGW = pg.GraphicsWindow(parent=s.zoomPlotWidget)  # zoomDialogWidget)
         s.zoomPlot = s.zoomGW.addPlot()  # pg.PlotWidget(parent=s.zoomDialog)
-        zoom_region = pg.LinearRegionItem(values=[-10, -5], movable=True,
+        zoom_region = pg.LinearRegionItem(values=[-0.01, -0.009], movable=True,
                                              brush=s.app_data['display props']['pick region'])
         zoom_region.setVisible(False)
         s.zoomPlot.addItem(zoom_region)
@@ -387,7 +387,7 @@ class Picker(QtGui.QMainWindow):
                     prev_plot = plot
 
                     if elec in s.app_data['active channels']:
-                        region = pg.LinearRegionItem(values=[-10,-5], movable=True,
+                        region = pg.LinearRegionItem(values=[-0.01,-0.009], movable=True,
                                              brush=s.app_data['display props']['pick region'])
                         region.setVisible(False)
                         region.sigRegionChanged.connect(s.update_region_label_position)
@@ -592,6 +592,7 @@ class Picker(QtGui.QMainWindow):
                                         time_range=s.app_data['display props']['time range'],
                                         channels=s.app_data['active channels'], mode='server', style='layout')
             s.ylims = s.plot_desc[0][1]['props']['yrange']
+            s.times = s.plot_desc[1][1]['props']['times']
 
             T_prelims = datetime.now()
             if not initialize:
@@ -682,6 +683,11 @@ class Picker(QtGui.QMainWindow):
 
                     plot.vb.setMouseEnabled(x=False, y=False)
                     T_plots.append(datetime.now())
+                
+                # Adjust x range - requires extra call to setXRange at end of function below
+                adj_plot = s.plots[s.app_data['displayed channels'][0]]
+                adj_plot.setXRange(min(s.times),max(s.times))
+
                 s.debug(['Plot setup time: ', T_1-T_prelims],3)
                 Tp = T_1
                 for T in T_plots:
@@ -721,6 +727,8 @@ class Picker(QtGui.QMainWindow):
         if not initialize:
             s.reset_edge_notification_backgrounds()
             s.status_message('File loaded')
+            # Extra setXRange call - to handle first file 
+            adj_plot.setXRange(min(s.times),max(s.times))
 
     def rescale_yaxis(s):
         ''' set y limits of all plots in plotgrid to the recommended vals '''
