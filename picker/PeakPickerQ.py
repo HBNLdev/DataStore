@@ -1213,6 +1213,9 @@ class Picker(QtGui.QMainWindow):
 
         if proceed:
             s.debug([elec],1)
+            for el_cs_pk, mark in s.peak_markers.items():
+                if '_zoom' in el_cs_pk[0]:
+                    s.zoomPlot.removeItem(mark)
             for item in s.zoomPlot.listDataItems():
                 if item != s.pick_regions['zoom']:
                     s.zoomPlot.removeItem( item )
@@ -1445,7 +1448,7 @@ class Picker(QtGui.QMainWindow):
 
     def show_peaks(s, cases='all'):
         ''' display chosen extrema as glyphs '''
-
+        s.debug(['show_peaks',' cases:',cases],2)
         bar_len = s.app_data['display props']['bar length']
 
         if cases == 'all':
@@ -1524,7 +1527,7 @@ class Picker(QtGui.QMainWindow):
         s.status_message(message)
 
     def remove_peak(s):
-        ''' callback for Remove button inside Fix button dialog bix '''
+        ''' callback for Remove button inside Fix button dialog box '''
         case_alias = s.fixCase.currentText()
         case = s.app_data['case alias lookup'][ case_alias ]
         peak = s.oldPeak.currentText()
@@ -1548,7 +1551,7 @@ class Picker(QtGui.QMainWindow):
                 plot.removeItem(marker)
                 top = s.peak_tops.pop(el_cs_pk)
                 top.setVisible(False)
-                # plot.removeItem(top)
+                plot.removeItem(top)
 
         s.app_data['picks'].remove((case, peak))
         s.show_state()
