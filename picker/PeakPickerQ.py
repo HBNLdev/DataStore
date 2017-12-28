@@ -930,7 +930,10 @@ class Picker(QtGui.QMainWindow):
 
     def update_curve_weights(s):
         ps = s.app_data['pick state']
-        for elec_case, curve in s.curves.items():
+        all_curves = [ (k,v) for k,v in s.curves.items() ]
+        all_curves.extend([ (('zoom',k),v) for k,v in s.zoom_curves.items()])
+        #s.debug(['update_curve_weights','all_curves keys:',[t[0] for t in all_curves]],3)
+        for elec_case, curve in all_curves:
             weight = 1
             if elec_case[1] == ps['case']:
                 weight = 2
@@ -1248,6 +1251,8 @@ class Picker(QtGui.QMainWindow):
 
                 for case in s.app_data['working cases']:  # unsure why this doesn't work in above loop, maybe timing
                     s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
+
+            s.update_curve_weights()
 
     def get_zoompos(s):
         ''' store the current position of the zoom window '''
@@ -1654,7 +1659,7 @@ class Picker(QtGui.QMainWindow):
             latency = pms[e_ind]
             amplitude = pval[e_ind]
             s.plot_texts[s.plots[elec].vb].setHtml(
-                '<div style="font-size: 8pt; font-family: Helvetica; font-weigth: bolder">' + '%.3f' % amplitude + ', ' + '%.1f' % latency + '</div>')
+                '<div style="font-size: 8pt; font-family: Helvetica; font-weight: bolder">' + '%.3f' % amplitude + ', ' + '%.1f' % latency + '</div>')
             s.peak_data[(elec, case, peak)] = (amplitude, latency)
             if (np.fabs(latency - starts[e_ind]) < 3) or (np.fabs(latency - finishes[e_ind]) < 3):
                 s.peak_edges[(elec, case, peak)] = True
