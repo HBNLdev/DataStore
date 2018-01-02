@@ -630,11 +630,12 @@ class Picker(QtGui.QMainWindow):
                 grid_pen = s.plot_props['grid color']
                 #keep_items = [k for k in s.region_elecs.keys]+[v for k,v in s.plots.items]
                 s.curves = {}
+                value_texts = [ v for k,v in s.plot_texts.items() ]
                 for elec in s.app_data['displayed channels']:
                     plot = s.plots[elec]
                     # clear plot
                     for item in plot.listDataItems():
-                        if item not in s.region_elecs:
+                        if item not in s.region_elecs and item not in value_texts:
                             plot.removeItem( item )
                     for ecp, lab in s.pick_region_labels.items():
                         if ecp[0] == elec:
@@ -648,8 +649,6 @@ class Picker(QtGui.QMainWindow):
 
                     if elec == s.app_data['displayed channels'][0]:
                         s.debug(['clear first:',datetime.now()-T_1],3)
-                    if plot.vb in s.plot_labels:
-                        plot.vb.removeItem(s.plot_labels[plot.vb])
 
                     # # grid lines
                     for xval in x_gridlines:
@@ -673,13 +672,14 @@ class Picker(QtGui.QMainWindow):
                     if elec == s.app_data['displayed channels'][0]:
                         s.debug(['peak texts:',datetime.now()-T_1],3)
 
-                    bLabel = pg.ButtonItem(
-                        imageFile=os.path.join(s.module_path, os.path.join('chanlogos', elec + '.png')),
-                        width=s.plot_props['label size'], parentItem=plot)
-                    bLabel.setPos(12, -8)
-                    if elec == s.app_data['displayed channels'][0]:
-                        s.debug(['label plots:',datetime.now()-T_1],3)
-                    s.plot_labels[plot.vb] = bLabel
+                    if plot.vb not in s.plot_labels:
+                        bLabel = pg.ButtonItem(
+                            imageFile=os.path.join(s.module_path, os.path.join('chanlogos', elec + '.png')),
+                            width=s.plot_props['label size'], parentItem=plot)
+                        bLabel.setPos(12, -8)
+                        if elec == s.app_data['displayed channels'][0]:
+                            s.debug(['label plots:',datetime.now()-T_1],3)
+                        s.plot_labels[plot.vb] = bLabel
 
                     plot.vb.setMouseEnabled(x=False, y=False)
                     T_plots.append(datetime.now())
