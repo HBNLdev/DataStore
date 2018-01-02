@@ -1111,7 +1111,7 @@ class Picker(QtGui.QMainWindow):
         # for disp_case in s.app_data['experiment cases']:
         #     s.set_case_display(disp_case, disp_case == case)
         s.update_curve_weights()
-
+        s.caseToggles[case].setChecked(True)
         s.toggle_regions(True)
 
         s.update_zoom_region()
