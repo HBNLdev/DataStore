@@ -139,6 +139,7 @@ class Picker(QtGui.QMainWindow):
     app_data['zoom electrode'] = None
     app_data['regions by filepath'] = {}
 
+
     def __init__(s):
         ''' the init lays out all of the GUI elements, connects interactive elements to call-backs '''
 
@@ -470,13 +471,16 @@ class Picker(QtGui.QMainWindow):
         before = datetime.now()
         s.load_file(next_file=True)
         after = datetime.now()
+        #s.app_data['applied region limit histories'][s.app_data['current path']] = s.applied_region_limits
         s.debug(['Load took: ', after-before],2)
+
     def previous_file(s):
         ''' Previous button inside Pick tab '''
         s.debug(['Previous'],1)
         if s.app_data['file ind'] > 0:
             s.app_data['file ind'] -= 1
             s.load_file()
+        #s.app_data['applied region limit histories'][s.app_data['current path']] = s.applied_region_limits
 
     def gather_info(s, eeg):
         ''' given EEGdata.avgh1 object, gather info about transforms and cases '''
@@ -501,8 +505,8 @@ class Picker(QtGui.QMainWindow):
         T_load = datetime.now()
         paths = s.app_data['file paths']
 
-        if 'applied_regions' in dir(s) and s.applied_regions is not None:
-            s.app_data['regions by filepath'][paths[s.app_data['file ind']]] = s.applied_regions
+        if 'applied_region_limits' in dir(s) and len(s.applied_region_limits) > 0:
+            s.app_data['regions by filepath'][paths[s.app_data['file ind']]] = s.applied_region_limits
 
         if next_file:
             if s.app_data['file ind'] < len(paths) - 1:
@@ -519,6 +523,12 @@ class Picker(QtGui.QMainWindow):
         ind = s.app_data['file ind']
         s.debug(['load file: #', ind, paths[ind]],2)
         if ind < len(paths):
+            # path = paths[ind]
+            # s.app_data['current path'] = path
+            # if path in s.app_data['applied region limit histories']:
+            #     s.applied_region_limits = s.app_data['applied region limit histories'][path]
+            # else:
+            #     s.applied_region_limits = {}
             eeg = avgh1(paths[ind])
             s.eeg = eeg
             experiment = eeg.file_info['experiment']
@@ -536,10 +546,13 @@ class Picker(QtGui.QMainWindow):
 
             chans = eeg.electrodes
 
-            s.applied_regions = None
-            s.previous_peak_limits = {}
+            #s.previous_peak_limits = {}
             if paths[ind] in s.app_data['regions by filepath']:
-                s.applied_regions = s.app_data['regions by filepath'][paths[ind]]
+                s.applied_region_limits = s.app_data['regions by filepath'][paths[ind]]
+                s.debug(['loaded previous applied region limit',
+                    [(k,len(rs)) for k,rs in s.applied_region_limits.items()]],3)
+            else:
+                s.applied_region_limits = {}
 
             s.debug(['Loaded', experiment, ',', len(paths), 'paths, ind:', ind, ', info:', eeg.file_info],2)
             s.app_data['current experiment'] = experiment
@@ -720,8 +733,6 @@ class Picker(QtGui.QMainWindow):
             s.show_peaks()
             s.show_state()
 
-        s.applied_region_limits = {}
-        s.app_data['applied region limit histories'] = {}
         s.pick_region_labels = {}
 
         if not initialize:
@@ -1054,8 +1065,9 @@ class Picker(QtGui.QMainWindow):
 
         s.app_data['picks'].add((case, peak))
 
-        pick_case_peaks = set([(ecp[1], ecp[2]) for ecp in s.pick_region_labels])
-        previous_peaks = set([el_pk[1] for el_pk in s.previous_peak_limits])
+        #pick_case_peaks = set([(ecp[1], ecp[2]) for ecp in s.pick_region_labels])
+        previous_case_peaks = set( [ (ecp[1],ecp[2]) for ecp in s.applied_region_limits ] )
+        #previous_peaks = set([el_pk[1] for el_pk in s.previous_peak_limits])
 
         for ztcase, checkbox in s.zoomCaseToggles.items():
             checkbox.setChecked(True)  # ztcase == case )
@@ -1066,7 +1078,7 @@ class Picker(QtGui.QMainWindow):
         s.pick_regions['zoom'].setVisible(True)
         s.pick_regions['zoom'].sigRegionChangeFinished.connect(s.update_pick_regions)
 
-        if (case, peak) not in pick_case_peaks:
+        if (case, peak) not in previous_case_peaks:
             s.app_data['apply count'] = 0
             s.app_data['apply scan ind'] = -1
 
@@ -1074,11 +1086,13 @@ class Picker(QtGui.QMainWindow):
 
             existing_lim_CPs = set([(ecp[1], ecp[2]) for ecp in s.applied_region_limits])
             if (case, peak) in existing_lim_CPs:
+                new = False
                 start_ranges = {el: s.applied_region_limits[(el, case, peak)] for el in s.app_data['active channels']}
-            elif peak in previous_peaks:
-                s.debug(['using previous peak range'],1)
-                start_ranges = {el: s.previous_peak_limits[(el, peak)] for el in s.app_data['active channels']}
+            # elif peak in previous_peaks:
+            #     s.debug(['using previous peak range'],1)
+            #     start_ranges = {el: s.previous_peak_limits[(el, peak)] for el in s.app_data['active channels']}
             else:
+                new = True
                 start_ranges = {el: (peak_center_ms - 75, peak_center_ms + 75) for el in s.app_data['active channels']}
 
             for elec in s.app_data['active channels']:  # [ p for p in s.plots if p not in s.show_only ]:
@@ -1096,12 +1110,14 @@ class Picker(QtGui.QMainWindow):
                 s.plot_texts[s.plots[elec].vb].setHtml('')
                 #s.debug(['about to update region label pos',(elec, case, peak)],3)
                 s.update_region_label_position((elec, case, peak))
+                if new:
+                    s.applied_region_limits[ (elec,case,peak) ] = []
         else:
             check_key = ('CZ',case,peak)
-            if check_key in s.app_data['applied region limit histories']:
-                s.app_data['apply count'] = len(s.app_data['applied region limit histories'][check_key])
+            if check_key in s.applied_region_limits:
+                s.app_data['apply count'] = len(s.applied_region_limits[check_key])
                 s.debug(['pick init for already existing, CZ history: ',
-                    s.app_data['applied region limit histories'][('CZ',case,peak)]],3)
+                    s.applied_region_limits[('CZ',case,peak)]],3)
             else:
                 s.app_data['apply_count'] = 0
             s.app_data['apply scan ind'] = s.app_data['apply count'] - 1
@@ -1644,12 +1660,10 @@ class Picker(QtGui.QMainWindow):
                 elecs.append( elec )
                 starts.append(start_finish[0])
                 finishes.append(start_finish[1])
-                if elec_case_peak not in s.app_data['applied region limit histories']:
-                    s.app_data['applied region limit histories'][elec_case_peak] = []
                 if mode =='new':
-                    s.app_data['applied region limit histories'][elec_case_peak].append(start_finish)
-                s.applied_region_limits[elec_case_peak] = start_finish
-                s.previous_peak_limits[(elec_case_peak[0], peak)] = start_finish
+                    s.applied_region_limits[elec_case_peak].append(start_finish)
+                # s.applied_region_limits[elec_case_peak].append(start_finish)
+                # s.previous_peak_limits[(elec_case_peak[0], peak)] = start_finish
         #print(s.app_data['applied region limit histories'])
         # print('starts:',starts)
         pval, pms = s.eeg.find_peaks(case, elecs,
@@ -1686,7 +1700,7 @@ class Picker(QtGui.QMainWindow):
                 ' apply count:',s.app_data['apply count']],3)
 
         regions = { ecp[0]:hist[s.app_data['apply scan ind']]\
-            for ecp,hist in s.app_data['applied region limit histories'].items()\
+            for ecp,hist in s.applied_region_limits.items()\
             if ecp[1] == s.app_data['pick state']['case'] and ecp[2] == s.app_data['pick state']['peak'] }
         if s.app_data['zoom electrode']:
             regions['zoom'] =  regions[ s.app_data['zoom electrode'] ]
@@ -1702,7 +1716,7 @@ class Picker(QtGui.QMainWindow):
         s.debug(['next_apply','apply scan ind:',s.app_data['apply scan ind'],
                 ' apply count:',s.app_data['apply count']],3)
         regions = { ecp[0]:hist[s.app_data['apply scan ind']]\
-            for ecp,hist in s.app_data['applied region limit histories'].items()\
+            for ecp,hist in s.applied_region_limits.items()\
             if ecp[1] == s.app_data['pick state']['case'] and ecp[2] == s.app_data['pick state']['peak'] }
         if s.app_data['zoom electrode']:
             regions['zoom'] =  regions[ s.app_data['zoom electrode'] ]
