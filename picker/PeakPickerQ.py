@@ -373,7 +373,9 @@ class Picker(QtGui.QMainWindow):
             for cN, p_desc in enumerate(prow):
                 if p_desc:
                     elec = p_desc['electrode']
+                    pick_elec = False
                     if elec not in s.ignore + s.show_only:
+                        pick_elec = True
                         s.pick_electrodes.append(elec)
                     plot = s.plotsGrid.addPlot(rN + 1, cN)  # ,title=elec)
                     s.proxyMouse = pg.SignalProxy(plot.scene().sigMouseClicked, slot=s.show_zoom_plot)
@@ -387,7 +389,7 @@ class Picker(QtGui.QMainWindow):
                         plot.setYLink(prev_plot)
                     prev_plot = plot
 
-                    if elec in s.app_data['active channels']:
+                    if pick_elec: #elec in s.app_data['active channels']:
                         region = pg.LinearRegionItem(values=[-0.01,-0.009], movable=True,
                                              brush=s.app_data['display props']['pick region'])
                         region.setVisible(False)
@@ -399,7 +401,7 @@ class Picker(QtGui.QMainWindow):
                         s.pick_regions[ elec ] = region
                         s.plots[elec].addItem(region)                    
 
-                    s.region_elecs[region] = elec
+                        s.region_elecs[region] = elec
 
                 elif not s.legend_plot:
                     s.legend_plot = s.plotsGrid.addPlot(rN + 1, cN)
@@ -1100,13 +1102,6 @@ class Picker(QtGui.QMainWindow):
                 s.pick_regions[ elec ].setRegion( start_ranges[elec] )
                 s.pick_regions[ elec ].setVisible( True )
 
-                region_label = pg.TextItem(
-                    html=s.region_label_html.replace('__PEAK__', peak),
-                    anchor=(-0.025, -0.2) )
-
-                s.pick_region_labels[(elec, case, peak)] = region_label
-                s.plots[elec].addItem(region_label)
-
                 s.plot_texts[s.plots[elec].vb].setHtml('')
                 #s.debug(['about to update region label pos',(elec, case, peak)],3)
                 s.update_region_label_position((elec, case, peak))
@@ -1126,6 +1121,7 @@ class Picker(QtGui.QMainWindow):
 
         # for disp_case in s.app_data['experiment cases']:
         #     s.set_case_display(disp_case, disp_case == case)
+        s.add_region_labels(case, peak)
         s.update_curve_weights()
         s.caseToggles[case].setChecked(True)
         s.toggle_regions(True)
@@ -1136,6 +1132,18 @@ class Picker(QtGui.QMainWindow):
 
         s.status_message(text="Picking " + case_alias+'('+case+')' + ',' + peak)
         s.debug(['pick_init finish'],1)
+
+    def add_region_labels(s,case,peak):
+
+        for elec in s.app_data['active channels']:
+            ecp = (elec, case, peak)
+            if ecp not in s.pick_region_labels:
+                region_label = pg.TextItem(
+                    html=s.region_label_html.replace('__PEAK__', peak),
+                    anchor=(-0.025, -0.2) )
+                s.pick_region_labels[ecp] = region_label
+                s.plots[elec].addItem(region_label)
+                s.update_region_label_position(ecp)
 
     def update_region_label_position(s, reg_key=None):
         ''' given region-identifying 3-tuple of (electrode, case, peak), update a region's label position '''
@@ -1148,6 +1156,7 @@ class Picker(QtGui.QMainWindow):
                     elec = s.region_elecs[ region ]
                     case = s.app_data['pick state']['case']
                     peak = s.app_data['pick state']['peak']
+                    #s.debug(['update_region_label_position signal',elec,case,peak],3)
                 elif isinstance(reg_key,tuple):
                     region = s.pick_regions[ reg_key[0] ]
                     elec, case, peak = reg_key
