@@ -646,6 +646,7 @@ class Picker(QtGui.QMainWindow):
                 #keep_items = [k for k in s.region_elecs.keys]+[v for k,v in s.plots.items]
                 s.curves = {}
                 value_texts = [ v for k,v in s.plot_texts.items() ]
+                text_visible = s.textToggle.isChecked()
                 for elec in s.app_data['displayed channels']:
                     plot = s.plots[elec]
                     # clear plot
@@ -658,6 +659,9 @@ class Picker(QtGui.QMainWindow):
                     for ecp, marker in s.peak_markers.items():
                         if ecp[0] == elec:
                             plot.removeItem( marker )
+                    for text in value_texts:
+                        text.setText('')
+                        text.setVisible(text_visible)
 
                     for reg in s.region_elecs:
                         reg.setVisible(False)
@@ -680,9 +684,11 @@ class Picker(QtGui.QMainWindow):
                     plot.setYRange(s.ylims[0], s.ylims[1])
 
                     # peak text
-                    peak_text = pg.TextItem(text='', anchor=(-0.1, 0.3))
-                    plot.addItem(peak_text)
-                    s.plot_texts[plot.vb] = peak_text
+                    if plot.vb not in s.plot_texts:
+                        peak_text = pg.TextItem(text='', anchor=(-0.1, 0.3))
+                        plot.addItem(peak_text)
+                        s.plot_texts[plot.vb] = peak_text
+
                     s.adjust_text(plot.vb)
                     if elec == s.app_data['displayed channels'][0]:
                         s.debug(['peak texts:',datetime.now()-T_1],3)
