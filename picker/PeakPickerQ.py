@@ -62,7 +62,7 @@ class Picker(QtGui.QMainWindow):
                 ' aod_6_a1_40063010_avg.h1 err_8_a1_40251004_avg.h1 vp3_5_a1_40017006_avg.h1'+\
                 ' cas_1_e1_40701003_avg.h1'
     debug_dir = '/active_projects/programs/picker/debug'
-    temp_store_dir = '/active_projects/picker/store'
+    temp_store_dir = '/active_projects/programs/picker/store'
 #s.dir_paths_by_exp['ant'][1]
 
     ignore = ['BLANK']
@@ -559,6 +559,8 @@ class Picker(QtGui.QMainWindow):
             s.debug(['Loaded', experiment, ',', len(paths), 'paths, ind:', ind, ', info:', eeg.file_info],2)
             s.app_data['current experiment'] = experiment
             s.app_data['experiment cases'] = eeg.case_list
+            s.app_data['pick state']['case'] = None
+            s.app_data['pick state']['peak'] = None
 
             s.peak_data = {}
             s.peak_edges = {}
@@ -1656,7 +1658,12 @@ class Picker(QtGui.QMainWindow):
         s.debug(['apply selections, mode:',mode],3)
         case = s.app_data['pick state']['case']
         peak = s.app_data['pick state']['peak']
-        polarity = peak[0].lower()
+        if peak:
+            polarity = peak[0].lower()
+        else:
+            s.debug( ['Apply clicked without initialization'],2)
+            s.status_message('Apply clicked, but no pick initialized')
+            return
         starts = []
         finishes = []
         elecs = []
