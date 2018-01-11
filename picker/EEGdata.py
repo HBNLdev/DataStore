@@ -125,18 +125,17 @@ class avgh1:
         outD = {cD['case_type']: cD for cN, cD in s.cases.items()}
         return outD
 
-    def build_mt(s, cases, peaks, amp, lat):
+    def build_mt(s, cases, peaks_by_case, amp, lat):
         s.extract_subject_data()
         s.extract_exp_data()
         s.extract_transforms_data()
         s.extract_case_data()
-        s.build_mt_header(cases, peaks)
-        s.build_mt_body(cases, peaks, amp, lat)
+        s.build_mt_header(cases, peaks_by_case)
+        s.build_mt_body(cases, peaks_by_case, amp, lat)
         s.mt = s.mt_header + s.mt_body
 
-    def build_mt_header(s, cases, peaks):
+    def build_mt_header(s, cases, peaks_by_case):
         chans = s.electrodes[0:31] + s.electrodes[32:62]
-        n_peaks = len(peaks)
         s.mt_header = ''
         s.mt_header += '#nchans ' + str(len(chans)) + '; '
         s.mt_header += 'filter ' + str(s.transforms['hi_pass_filter']) + '-' \
@@ -144,9 +143,9 @@ class avgh1:
         s.mt_header += 'thresh ' + str(s.exp['threshold_value']) + ';\n'
         for case in cases:
             s.mt_header += '#case ' + str(case) + ' (' + s.cases[case]['case_type'] + '); npeaks ' + str(
-                n_peaks) + ';\n'
+                len(peaks_by_case[case])) + ';\n'
 
-    def build_mt_body(s, cases, peaks, amp, lat):
+    def build_mt_body(s, cases, peaks_by_case, amp, lat):
         # indices
         sid = s.subject['subject_id']
         expname = s.exp['exp_name']
@@ -156,15 +155,20 @@ class avgh1:
         # cases 	= list(s.cases.keys())
         chans = s.electrodes_61  # only head chans
         # peaks 	= ['N1','P3'] # test case
+        peak_list = []
+        for case, peaks in peaks_by_case.items():
+            peak_list.extend(peaks)
+        all_peaks = sorted(list(set(peak_list)))
+
         indices = [[sid], [expname], [expver], [gender], [age],
-                   cases, chans, peaks]
+                   cases, chans, all_peaks]
         index = pd.MultiIndex.from_product(indices,
                                            names=MT_File.columns[:-3])
 
         # data
         rt = []
         for case in cases:
-            rt.extend([s.cases[case]['mean_resp_time']] * len(peaks) * len(chans))
+            rt.extend([s.cases[case]['mean_resp_time']] * len(all_peaks) * len(chans))
         data = {'amplitude': amp, 'latency': lat, 'mean_rt': rt}
 
         # making CSV structure

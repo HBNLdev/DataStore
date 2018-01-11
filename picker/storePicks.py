@@ -24,6 +24,7 @@ def save_mt( ):
     picked_cp = save_data['picks']
     cases_Ns = list(set([(cp[0], eeg.case_num_map[cp[0]]) for cp in picked_cp]))
     peaks = list(set([cp[1] for cp in picked_cp]))
+    peaks_by_case = {}
 
     n_cases = len(cases_Ns)
     n_chans = 61  # only core 61 chans
@@ -36,6 +37,8 @@ def save_mt( ):
         case_name = case_N[0]
         for ichan, chan in enumerate( eeg.electrodes_61 ):  # only core 61 chans
             case_peaks = [cp[1] for cp in picked_cp if cp[0] == case_name]
+            if case_name not in peaks_by_case:
+                peaks_by_case[case_N[1]] = case_peaks
             case_peaks.sort()
             for peak in case_peaks:
                 ipeak = peaks.index(peak)
@@ -47,12 +50,13 @@ def save_mt( ):
                 else:
                     print(['Missing peak data for:',pd_key],3)
 
+
     # reshape into 1d arrays
     amps1d = amps.ravel('F')
     lats1d = lats.ravel('F')
 
     # build mt text (makes default output location), write to a test location
-    eeg.build_mt([cn[1] for cn in cases_Ns], peaks, amps1d, lats1d)
+    eeg.build_mt([cn[1] for cn in cases_Ns], peaks_by_case, amps1d, lats1d)
 
     if not os.path.exists(save_data['save dir']):
         os.mkdir(save_data['save dir'])
