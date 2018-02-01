@@ -11,10 +11,10 @@ from bokeh.palettes import brewer
 from scipy.signal import argrelextrema
 
 try:
-    from db.file_handling import parse_filename, MT_File
+    from db.utils.filename_parsing import parse_filename
 except:
     sys.path.append( os.path.join(os.path.split(__file__)[0],'../db') )
-    from file_handling import parse_Filename, MT_File
+    from file_handling import parse_Filename
 
 
 
@@ -125,7 +125,7 @@ class avgh1:
         outD = {cD['case_type']: cD for cN, cD in s.cases.items()}
         return outD
 
-    def build_mt(s, cases, peaks, amp, lat):
+    def build_mt(s, cases, peaks_by_case, amp, lat):
         s.extract_subject_data()
         s.extract_exp_data()
         s.extract_transforms_data()
@@ -134,9 +134,8 @@ class avgh1:
         s.build_mt_body(cases, peaks, amp, lat)
         s.mt = s.mt_header + s.mt_body
 
-    def build_mt_header(s, cases, peaks):
+    def build_mt_header(s, cases, peaks_by_case):
         chans = s.electrodes[0:31] + s.electrodes[32:62]
-        n_peaks = len(peaks)
         s.mt_header = ''
         s.mt_header += '#nchans ' + str(len(chans)) + '; '
         s.mt_header += 'filter ' + str(s.transforms['hi_pass_filter']) + '-' \
@@ -144,9 +143,9 @@ class avgh1:
         s.mt_header += 'thresh ' + str(s.exp['threshold_value']) + ';\n'
         for case in cases:
             s.mt_header += '#case ' + str(case) + ' (' + s.cases[case]['case_type'] + '); npeaks ' + str(
-                n_peaks) + ';\n'
+                len(peaks_by_case[case]) + ';\n'
 
-    def build_mt_body(s, cases, peaks, amp, lat):
+    def build_mt_body(s, cases, peaks_by_case, amp, lat):
         # indices
         sid = s.subject['subject_id']
         expname = s.exp['exp_name']
@@ -156,15 +155,19 @@ class avgh1:
         # cases 	= list(s.cases.keys())
         chans = s.electrodes_61  # only head chans
         # peaks 	= ['N1','P3'] # test case
+        peak_list = []
+        for case, peaks in peaks_by_case.items():
+            peak_list.extend(peaks)
+        all_peaks = sorted(list(set(peak_list)))
         indices = [[sid], [expname], [expver], [gender], [age],
-                   cases, chans, peaks]
+                   cases, chans, all_peaks]
         index = pd.MultiIndex.from_product(indices,
                                            names=MT_File.columns[:-3])
 
         # data
         rt = []
         for case in cases:
-            rt.extend([s.cases[case]['mean_resp_time']] * len(peaks) * len(chans))
+            rt.extend([s.cases[case]['mean_resp_time']] * len(all_peaks) * len(chans))
         data = {'amplitude': amp, 'latency': lat, 'mean_rt': rt}
 
         # making CSV structure
@@ -591,3 +594,300 @@ class avgh1:
         PS['tool generators'] = tool_gen
 
         return PS
+
+class MT_File:
+    ''' manually picked files from eeg experiments
+        initialization only parses the filename, call parse_file to load data
+    '''
+    columns = ['subject_id', 'experiment', 'version', 'gender', 'age', 'case_num',
+               'electrode', 'peak', 'amplitude', 'latency', 'reaction_time']
+
+    cases_peaks_by_experiment = {'aod': {(1, 'tt'): ['N1', 'P3'],
+                                         (2, 'nt'): ['N1', 'P2']
+                                         },
+                                 'vp3': {(1, 'tt'): ['N1', 'P3'],
+                                         (2, 'nt'): ['N1', 'P3'],
+                                         (3, 'nv'): ['N1', 'P3']
+                                         },
+                                 'ant': {(1, 'a'): ['N4', 'P3'],
+                                         (2, 'j'): ['N4', 'P3'],
+                                         (3, 'w'): ['N4', 'P3'],
+                                         # (4, 'p'): ['P3', 'N4']
+                                         }
+                                 }
+
+    # string for reference
+    data_structure = '{(case#,peak):{electrodes:(amplitude,latency),reaction_time:time} }'
+
+    ant_cases_types_lk = [((1, 'A', 'Antonym'),
+                           (2, 'J', 'Jumble'),
+                           (3, 'W', 'Word'),
+                           (4, 'P', 'Prime')),
+                          ((1, 'T', 'jumble'),
+                           (2, 'T', 'prime'),
+                           (3, 'T', 'antonym'),
+                           (4, 'T', 'other')),
+                          ((1, 'T', 'jumble'),
+                           (2, 'T', ' prime'),
+                           (3, 'T', ' antonym'),
+                           (4, 'T', ' other')),
+                          ((1, 'T', 'jumble'),
+                           (2, 'T', 'prime'),
+                           (3, 'T', 'antonym'),
+                           (4, 'T', 'word'))]
+
+    case_fields = ['case_num', 'case_type', 'descriptor']
+
+    ant_case_convD = {0: {1: 1, 2: 2, 3: 3, 4: 4},  # Translates case0 to each case
+                      1: {1: 3, 2: 1, 3: 4, 4: 2},
+                      2: {1: 3, 2: 1, 3: 4, 4: 2},
+                      3: {1: 3, 2: 1, 3: 4, 4: 2}}
+
+    # 4:{1:1,2:2,3:3,4:4} }
+    case_nums2names = {'aod': {1: 't', 2: 'nt'},
+                       'vp3': {1: 't', 2: 'nt', 3: 'nv'},
+                       'ant': {1: 'j', 2: 'p', 3: 'a', 4: 'w'},
+                       'cpt': {1: 'g', 2: 'c', 3: 'cng',
+                               4: 'db4ng', 5: 'ng', 6: 'dad'},
+                       'stp': {1: 'c', 2: 'i'},
+                       }
+
+    query_fields = ['id', 'session', 'experiment']
+
+    def normAntCase(s):
+        query = {k: v for k, v in s.file_info.items() if k in s.query_fields}
+        doc = D.Mdb['avgh1s'].find_one(query)
+        avgh1_path = doc['filepath']
+        case_tup = extract_case_tuple(avgh1_path)
+        case_type = MT_File.ant_cases_types_lk.index(case_tup)
+        return MT_File.ant_case_convD[case_type]
+
+    def __init__(s, filepath):
+        s.fullpath = filepath
+        s.filename = os.path.split(filepath)[1]
+        s.header = {'cases_peaks': {}}
+
+        s.parse_fileinfo()
+
+        s.data = dict()
+        s.data['uID'] = s.file_info['id'] + '_' + s.file_info['session']
+
+        if s.file_info['experiment'] == 'ant':
+            s.normed_cases_calc()
+        s.parse_header()
+
+    def parse_fileinfo(s):
+        s.file_info = parse_filename(s.filename)
+
+    def __repr__(s):
+        return '<mt-file object ' + str(s.file_info) + ' >'
+
+    def parse_header(s):
+        of = open(s.fullpath, 'r')
+        reading_header = True
+        s.header_lines = 0
+        while reading_header:
+            file_line = of.readline()
+            if len(file_line) < 2 or file_line[0] != '#':
+                reading_header = False
+                continue
+            s.header_lines += 1
+
+            line_parts = [pt.strip() for pt in file_line[1:-1].split(';')]
+            if 'nchans' in line_parts[0]:
+                s.header['nchans'] = int(line_parts[0].split(' ')[1])
+            elif 'case' in line_parts[0]:
+                cs_pks = [lp.split(' ') for lp in line_parts]
+                if cs_pks[1][0] != 'npeaks':
+                    s.header['problems'] = True
+                else:
+                    case = int(cs_pks[0][1])
+                    if 'normed_cases' in dir(s):
+                        case = s.normed_cases[case]
+                    s.header['cases_peaks'][case] = int(cs_pks[1][1])
+
+        of.close()
+
+    def normed_cases_calc(s):
+        try:
+            norm_dict = s.normAntCase()
+            s.normed_cases = norm_dict
+        except:
+            s.normed_cases = MT_File.ant_case_convD[0]
+            s.norm_fail = True
+
+    def parse_fileDB(s, general_info=False):
+        s.parse_file()
+        exp = s.file_info['experiment']
+        ddict = {}
+        for k in s.mt_data:  # for
+            case_convdict = s.case_nums2names[exp]
+            case = case_convdict[int(k[0])]
+            peak = k[1]
+            inner_ddict = {}
+            for chan, amp_lat in s.mt_data[k].items():  # chans
+                if type(amp_lat) is tuple:  # if amp / lat tuple
+                    inner_ddict.update(
+                        {chan: {'amp': float(amp_lat[0]),
+                                'lat': float(amp_lat[1])}}
+                    )
+            ddict[case + '_' + peak] = inner_ddict
+        ddict['filepath'] = s.fullpath
+        ddict['run'] = s.file_info['run']
+        ddict['version'] = s.file_info['version']
+
+        if general_info:
+            s.data.update(s.file_info)
+            del s.data['experiment']
+            del s.data['run']
+            del s.data['version']
+            s.data['ID'] = s.data['id']
+
+        s.data[exp] = ddict
+
+    def parse_file(s):
+        of = open(s.fullpath, 'r')
+        data_lines = of.readlines()[s.header_lines:]
+        of.close()
+        s.mt_data = OrderedDict()
+        for L in data_lines:
+            Ld = {c: v for c, v in zip(s.columns, L.split())}
+            if 'normed_cases' in dir(s):
+                Ld['case_num'] = s.normed_cases[int(Ld['case_num'])]
+            key = (int(Ld['case_num']), Ld['peak'])
+            if key not in s.mt_data:
+                s.mt_data[key] = OrderedDict()
+            s.mt_data[key][Ld['electrode'].upper()] = (
+                Ld['amplitude'], Ld['latency'])
+            if 'reaction_time' not in s.mt_data[key]:
+                s.mt_data[key]['reaction_time'] = Ld['reaction_time']
+        return
+
+    def parse_fileDF(s):
+        s.dataDF = pd.read_csv(s.fullpath, delim_whitespace=True,
+                               comment='#', names=s.columns)
+
+    def check_peak_order(s):
+        ''' Pandas Dataframe based '''
+        if 'dataDF' not in dir(s):
+            s.parse_fileDF()
+        if 'normed_cases' in dir(s):
+            case_lk = {v: k for k, v in s.normed_cases.items()}
+        probs = {}
+        # peaks by case number
+        case_peaks = {k[0]: v for k, v in
+                      s.cases_peaks_by_experiment[s.file_info['experiment']].items()}
+        cols_use = ['electrode', 'latency']
+        for case in s.dataDF['case_num'].unique():
+            cDF = s.dataDF[s.dataDF['case_num'] == case]
+            if 'normed_cases' in dir(s):
+                case_norm = case_lk[case]
+            else:
+                case_norm = case
+            if case_norm in case_peaks:
+                pk = case_peaks[case_norm][0]
+                ordDF = cDF[cDF['peak'] == pk][cols_use]
+                ordDF.rename(columns={'latency': 'latency_' + pk}, inplace=True)
+                peak_track = [pk]
+                delta_cols = []
+                if case in case_peaks:
+                    for pk in case_peaks[case][1:]:
+                        pkDF = cDF[cDF['peak'] == pk][cols_use]
+                        pkDF.rename(columns={'latency': 'latency_' + pk}, inplace=True)
+                        # return (ordDF, pkDF)
+                        ordDF = ordDF.join(pkDF, on='electrode', rsuffix=pk)
+                        delta_col = pk + '_' + peak_track[-1] + '_delta'
+                        ordDF[delta_col] = \
+                            ordDF['latency_' + pk] - ordDF['latency_' + peak_track[-1]]
+                        peak_track.append(pk)
+                        delta_cols.append(delta_col)
+
+                for dc in delta_cols:
+                    wrong_order = ordDF[ordDF[dc] < 0]
+                    if len(wrong_order) > 0:
+                        case_name = s.case_nums2names[s.file_info['experiment']][case_norm]
+                        probs[case_name + '_' + dc] = list(wrong_order['electrode'])
+
+        if len(probs) == 0:
+            return True
+        else:
+            return probs
+
+    def check_max_latency(s, latency_thresh=1000):
+        ''' Pandas Dataframe based '''
+        if 'dataDF' not in dir(s):
+            s.parse_fileDF()
+        high_lat = s.dataDF[s.dataDF['latency'] > latency_thresh]
+        if len(high_lat) == 0:
+            return True
+        else:
+            return high_lat[['case_num', 'electorde', 'peak', 'amplitude', 'latency']]
+
+    def build_header(s):
+        if 'mt_data' not in dir(s):
+            s.parse_file()
+        cases_peaks = list(s.mt_data.keys())
+        cases_peaks.sort()
+        header_data = OrderedDict()
+        for cp in cases_peaks:
+            if cp[0] not in header_data:
+                header_data[cp[0]] = 0
+            header_data[cp[0]] += 1
+
+        # one less for reaction_time
+        s.header_text = '#nchans ' + \
+                        str(len(s.mt_data[cases_peaks[0]]) - 1) + '\n'
+        for cs, ch_count in header_data.items():
+            s.header_text += '#case ' + \
+                             str(cs) + '; npeaks ' + str(ch_count) + ';\n'
+
+        print(s.header_text)
+
+    def build_file(s):
+        pass
+
+    def check_header_for_experiment(s):
+        expected = s.cases_peaks_by_experiment[s.file_info['experiment']]
+        if len(expected) != len(s.header['cases_peaks']):
+            return 'Wrong number of cases'
+        case_problems = []
+        for pknum_name, pk_list in expected.items():
+            if s.header['cases_peaks'][pknum_name[0]] != len(pk_list):
+                case_problems.append(
+                    'Wrong number of peaks for case ' + str(pknum_name))
+        if case_problems:
+            return str(case_problems)
+
+        return True
+
+    def check_peak_identities(s):
+        if 'mt_data' not in dir(s):
+            s.parse_file()
+        for case, peaks in s.cases_peaks_by_experiment[s.file_info['experiment']].items():
+            if (case[0], peaks[0]) not in s.mt_data:
+                return False, 'case ' + str(case) + ' missing ' + peaks[0] + ' peak'
+            if (case[0], peaks[1]) not in s.mt_data:
+                return False, 'case ' + str(case) + ' missing ' + peaks[1] + ' peak'
+        return True
+
+    def check_peak_orderNmax_latency(s, latency_thresh=1000):
+        if 'mt_data' not in dir(s):
+            s.parse_file()
+        for case, peaks in s.cases_peaks_by_experiment[s.file_info['experiment']].items():
+            try:
+                latency1 = float(s.mt_data[(case[0], peaks[0])]['FZ'][1])
+                latency2 = float(s.mt_data[(case[0], peaks[1])]['FZ'][1])
+            except:
+                print(s.fullpath + ': ' +
+                      str(s.mt_data[(case[0], peaks[0])].keys()))
+            if latency1 > latency_thresh:
+                return (
+                    False,
+                    str(case) + ' ' + peaks[0] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
+            if latency2 > latency_thresh:
+                return (
+                    False,
+                    str(case) + ' ' + peaks[1] + ' ' + 'exceeds latency threshold (' + str(latency_thresh) + 'ms)')
+            if latency1 > latency2:
+                return False, 'Wrong order for case ' + str(case)
+        return True
