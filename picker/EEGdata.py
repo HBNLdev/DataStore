@@ -125,16 +125,17 @@ class avgh1:
         outD = {cD['case_type']: cD for cN, cD in s.cases.items()}
         return outD
 
-    def build_mt(s, cases, peaks_by_case, amp, lat):
+    def build_mt(s, peakDF):#cases, peaks_by_case, amp, lat):
+        cases = peakDF['case'].unique()
         s.extract_subject_data()
         s.extract_exp_data()
         s.extract_transforms_data()
         s.extract_case_data()
-        s.build_mt_header(cases, peaks_by_case)
-        s.build_mt_body(cases, peaks_by_case, amp, lat)
+        s.build_mt_header(cases, peakDF)
+        s.build_mt_body(cases, peakDF)
         s.mt = s.mt_header + s.mt_body
 
-    def build_mt_header(s, cases, peaks_by_case):
+    def build_mt_header(s, cases, peakDF):#peaks_by_case):
         chans = s.electrodes[0:31] + s.electrodes[32:62]
         s.mt_header = ''
         s.mt_header += '#nchans ' + str(len(chans)) + '; '
@@ -142,45 +143,36 @@ class avgh1:
                        + str(s.transforms['lo_pass_filter']) + '; '
         s.mt_header += 'thresh ' + str(s.exp['threshold_value']) + ';\n'
         for case in cases:
-            s.mt_header += '#case ' + str(case) + ' (' + s.cases[case]['case_type'] + '); npeaks ' + str(
-                len(peaks_by_case[case])) + ';\n'
+            peaks = [ p for p in peakDF[ peakDF['case']==case ]['peak'].unique() if not pd.isnull(p) ]
+            s.mt_header += '#case ' + str(s.case_num_map[case]) + ' (' + case + '); npeaks '\
+             + str(len(peaks)) + ';\n'
 
-    def build_mt_body(s, cases, peaks_by_case, amp, lat):
+    def build_mt_body(s, cases, peakDF):#cases, peaks_by_case, amp, lat):
         # indices
         sid = s.subject['subject_id']
         expname = s.exp['exp_name']
         expver = s.exp['exp_version']
         gender = s.subject['gender']
         age = int(s.subject['age'])
-        # cases 	= list(s.cases.keys())
-        chans = s.electrodes_61  # only head chans
-        # peaks 	= ['N1','P3'] # test case
-        peak_list = []
-        for case, peaks in peaks_by_case.items():
-            peak_list.extend(peaks)
-        all_peaks = sorted(list(set(peak_list)))
 
-        indices = [[sid], [expname], [expver], [gender], [age],
-                   cases, chans, all_peaks]
-        index = pd.MultiIndex.from_product(indices,
-                                           names=MT_File.columns[:-3])
+        dfR = peakDF.copy()
+        dfR['ID'] = sid
+        dfR['exp'] = expname
+        dfR['version'] = expver
+        dfR['sex'] = gender
+        dfR['age'] = age
 
-        # data
-        rt = []
-        for case in cases:
-            rt.extend([s.cases[case]['mean_resp_time']] * len(all_peaks) * len(chans))
-        data = {'amplitude': amp, 'latency': lat, 'mean_rt': rt}
-
-        # making CSV structure
-        df = pd.DataFrame(data, index=index)
-
-        dfR = df.reset_index()
+        dfR['case_num'] = dfR['case'].map( s.case_num_map )
+        case_rt_map = {case:s.cases[ s.case_num_map[case] ]['mean_resp_time'] for case in cases}
+        dfR['mean_rt'] = dfR['case'].map( case_rt_map )
         elecIndex = dict(zip(s.save_elec_order, range(len(s.save_elec_order))))
         dfR['elec_rank'] = dfR['electrode'].map(elecIndex)
+
         dfR.sort_values(['case_num', 'elec_rank', 'peak'], inplace=True)
-        dfR.drop('elec_rank', 1, inplace=True)
 
         dfR.dropna(inplace=True)
+        dfR = dfR[ ['ID', 'exp', 'version', 'sex', 'age', 'case_num', 'electrode', 'peak',
+                        'amplitude', 'latency', 'mean_rt'] ]
         mt_string = dfR.to_string(buf=None, header=False, na_rep='NaN',
                                   float_format='%.3f', index=False,
                                   formatters={'mean_rt': lambda x: '%.1f' % x})
