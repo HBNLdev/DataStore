@@ -13,6 +13,14 @@ data_path = sys.argv[1]
 with open(data_path,'rb') as rf:
     save_data = pickle.load(rf)
 
+# check for rejection
+mode = 'picked'; rejFstr = ''
+if 'reject' in save_data:
+    mode='rejected'
+    rejFstr = '_rej'
+
+
+
 print('save_data keys:', [k for k in save_data.keys()])
 
 eeg = avgh1(save_data['avgh1 path'])
@@ -43,7 +51,7 @@ def save_mt( ):
 
 def save_pdf():
     filename = os.path.split(save_data['avgh1 path'])[1]
-    with PdfPages(os.path.join(save_data['save dir'], filename + '.pdf')) as pdf:
+    with PdfPages(os.path.join(save_data['save dir'], filename +rejFstr+ '.pdf')) as pdf:
         output_page(save_data['plot desc'][:8])
         pdf.savefig()
         plt.close()
@@ -52,6 +60,10 @@ def save_pdf():
         plt.close()
 
 def output_page(layout_desc):
+    reject_text = ''
+    if mode == 'rejected':
+        reject_text = 'REJECTED by '+save_data['reject']
+
     # setup
     xlim = [-100, 850]
     xticks = [0, 250, 500, 750]
@@ -114,17 +126,20 @@ def output_page(layout_desc):
                                 color=ccn, clip_on=False,
                                 linewidth=linewidth)
 
-                        peak_keys = [k for k in save_data['peak data'].keys() if k[0] == elec and k[1] == case]
-                        for pk in peak_keys:
-                            if pk[2][0] == 'P':
-                                arrow_len = arrow_size
-                            else:
-                                arrow_len = -arrow_size
-                            amp, lat = save_data['peak data'][pk]
-                            ax.annotate('', (lat, amp), (lat, amp + arrow_len),
-                                        size=7, clip_on=False, annotation_clip=False,
-                                        arrowprops=dict(arrowstyle='-|>',
-                                                        fc=ccn, ec=ccn))
+                        if mode == 'picked':
+                            peak_keys = [k for k in save_data['peak data'].keys()\
+                                                        if k[0] == elec and k[1] == case]
+                            for pk in peak_keys:
+                                if pk[2][0] == 'P':
+                                    arrow_len = arrow_size
+                                else:
+                                    arrow_len = -arrow_size
+                                amp, lat = save_data['peak data'][pk]
+                                ax.annotate('', (lat, amp), (lat, amp + arrow_len),
+                                            size=7, clip_on=False, annotation_clip=False,
+                                            arrowprops=dict(arrowstyle='-|>',
+                                                            fc=ccn, ec=ccn))
+    
     # info row on bottom
     file_info = save_data['info']
     subD = eeg.subject_data()
@@ -139,7 +154,6 @@ def output_page(layout_desc):
     # print('run data',runD)
     # print( 'eeg cases',casesD )
 
-
     filename = os.path.split(save_data['avgh1 path'])[1]
     desc_ax = plt.subplot(nrows + 1, ncols, spNum + 1)
     desc_ax.set_frame_on(False)
@@ -150,9 +164,9 @@ def output_page(layout_desc):
     desc_ax.text(0, 0, filename + '\n' + \
                  ' '.join([str(round(subD['age'] * 100) / 100)[:5], ' ', subD['gender'],
                            ' ', subD['handedness'], '  ', 'artf thresh',
-                           str(expD['threshold_value'])]) + ' uV \n' + \
+                           str(expD['threshold_value'])]) + ' uV '+'   '+reject_text+'\n' + \
                  runD['run_date_time'],
-                 fontsize=9)
+                 fontsize=9, clip_on=False)
 
     trials_table_rows_ax = plt.subplot(nrows + 1, ncols, spNum + 3)
     trials_table_rows_ax.set_frame_on(False)
@@ -200,6 +214,7 @@ def output_page(layout_desc):
     fig.tight_layout()
 
 print('Saving ...')
-save_mt()
+if mode =='picked':
+    save_mt()
 save_pdf()
 print('Finished background save')

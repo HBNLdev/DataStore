@@ -2,7 +2,7 @@
 
     Just run me with python3 in conda 'upgrade' environment.
 '''
-
+print('DevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDev')
 import os
 import sys
 import subprocess
@@ -289,6 +289,7 @@ class Picker(QtGui.QMainWindow):
         s.pickModeToggle.clicked.connect(s.mode_toggle)
 
         nav_buttons = [('Save', s.save),
+                        ('Reject',s.reject),
                        ('Prev', s.previous_file),
                        ('Next', s.next_file)]
 
@@ -767,21 +768,31 @@ class Picker(QtGui.QMainWindow):
 
         return curve
 
-    def save(s):
+    def reject(s):
+        s.save(mode='reject')
+
+    def save(s,mode='picked'):
         # save picks in pickle file
-        s.debug(['Save'],2)
-        pickD = {'picks':s.app_data['picks'],
-                'peak data':s.peak_data,
-                'avgh1 path':s.eeg.filepath,
+        s.debug(['Save','mode=',mode],2)
+        
+        pickD = {'avgh1 path':s.eeg.filepath,
                 'save dir':s.app_data['working directory'],
                 'plot props':s.plot_props,
+                'plot desc':s.plot_desc,
                 'experiment cases':s.app_data['experiment cases'],
                 'working cases':s.app_data['working cases'],
                 'case aliases':s.app_data['case aliases'],
                 'current data':s.current_data,
                 'info':s.app_data['info'],
-                'plot desc':s.plot_desc,
                 }
+
+        if mode=='reject':
+            pickD['reject'] = s.app_data['user']+' '+str(datetime.now().strftime('%-m/%-d/%Y'))
+
+        elif mode == 'picked':
+            pickD['picks']= s.app_data['picks'],
+            pickD['peak data']= s.peak_data,
+            
         store_name = s.app_data['user']+'_'+os.path.split(s.eeg.filepath)[1]+'.p'
         store_path = os.path.join(s.temp_store_dir,store_name)
         with open( store_path,'wb') as of:
