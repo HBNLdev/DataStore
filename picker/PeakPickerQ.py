@@ -62,7 +62,7 @@ class Picker(QtGui.QMainWindow):
                 ' aod_6_a1_40063010_avg.h1 err_8_a1_40251004_avg.h1 vp3_5_a1_40017006_avg.h1'+\
                 ' cas_1_e1_40701003_avg.h1'
     debug_dir = '/active_projects/programs/picker/debug'
-    temp_store_dir = '/active_projects/programs/picker/store'
+    temp_store_dir = '/active_projects/programs/picker/store'   
 #s.dir_paths_by_exp['ant'][1]
 
     ignore = ['BLANK']
@@ -769,9 +769,13 @@ class Picker(QtGui.QMainWindow):
         return curve
 
     def reject(s):
-        s.save(mode='reject')
+        s.save_engine(mode='reject')
+        s.status_message(text='Rejected, saving pdf')
 
-    def save(s,mode='picked'):
+    def save(s):
+        s.save_engine(mode='picked')
+
+    def save_engine(s,mode='picked'):
         # save picks in pickle file
         s.debug(['Save','mode=',mode],2)
         
@@ -790,8 +794,8 @@ class Picker(QtGui.QMainWindow):
             pickD['reject'] = s.app_data['user']+' '+str(datetime.now().strftime('%-m/%-d/%Y'))
 
         elif mode == 'picked':
-            pickD['picks']= s.app_data['picks'],
-            pickD['peak data']= s.peak_data,
+            pickD['picks']= s.app_data['picks']
+            pickD['peak data']= s.peak_data
             
         store_name = s.app_data['user']+'_'+os.path.split(s.eeg.filepath)[1]+'.p'
         store_path = os.path.join(s.temp_store_dir,store_name)
