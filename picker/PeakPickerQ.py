@@ -270,7 +270,7 @@ class Picker(QtGui.QMainWindow):
 
         pick_buttons = [('Pick', s.pick_init), ('Apply', s.apply_selections),
                         ('Back', s.previous_apply), ('Forward', s.next_apply),
-                        ('Fix', s.fix_peak),('Settings',s.settings)]
+                        ('Fix', s.fix_peak)]
         # s.add_buttons(s.pickNavControls,pick_buttons)
         for label, handler in pick_buttons:
             s.buttons[label] = QtGui.QPushButton(label)
@@ -288,7 +288,8 @@ class Picker(QtGui.QMainWindow):
 
         s.pickModeToggle.clicked.connect(s.mode_toggle)
 
-        nav_buttons = [('Save', s.save),
+        nav_buttons = [('Settings',s.settings),
+                        ('Save', s.save),
                         ('Reject',s.reject),
                        ('Prev', s.previous_file),
                        ('Next', s.next_file)]
