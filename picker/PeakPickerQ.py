@@ -1272,34 +1272,37 @@ class Picker(QtGui.QMainWindow):
                 if item != s.pick_regions['zoom']:
                     s.zoomPlot.removeItem( item )
 
+            s.zoomDialog.show()
+            s.zoomDialog._open = True
+
+            x_lines, y_lines = s.plot_props['XY gridlines']
+            grid_pen = s.plot_props['grid color']
+            for xval in x_lines:
+                s.zoomPlot.addLine(x=xval, pen=grid_pen)
+            for yval in y_lines:
+                s.zoomPlot.addLine(y=yval, pen=grid_pen)
+
+            for case in s.app_data['working cases']:
+                s.zoom_curves[case] = s.plot_curve(s.zoomPlot, elec, case)
+                # s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
+                peak_keys = [ecp for ecp in s.peak_data.keys() if ecp[0] == elec and ecp[1] == case]
+                for pK in peak_keys:
+                    zkey = (pK[0] + '_zoom', pK[1], pK[2])
+                    marker = s.show_zoom_marker( s.peak_data[pK] )
+                    s.peak_markers[zkey] = marker
+
+            s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
+            zoomTitle = elec
             if Pstate['case']:
-                s.zoomDialog.show()
-                s.zoomDialog._open = True
+                zoomTitle += ' - ' + Pstate['case'] + ' - ' + Pstate['peak'] 
+            zoomTitle += '     '
 
-                x_lines, y_lines = s.plot_props['XY gridlines']
-                grid_pen = s.plot_props['grid color']
-                for xval in x_lines:
-                    s.zoomPlot.addLine(x=xval, pen=grid_pen)
-                for yval in y_lines:
-                    s.zoomPlot.addLine(y=yval, pen=grid_pen)
+            s.zoomDialog.setWindowTitle(zoomTitle)
 
-                for case in s.app_data['working cases']:
-                    s.zoom_curves[case] = s.plot_curve(s.zoomPlot, elec, case)
-                    # s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
-                    peak_keys = [ecp for ecp in s.peak_data.keys() if ecp[0] == elec and ecp[1] == case]
-                    for pK in peak_keys:
-                        zkey = (pK[0] + '_zoom', pK[1], pK[2])
-                        marker = s.show_zoom_marker( s.peak_data[pK] )
-                        s.peak_markers[zkey] = marker
+            s.update_zoom_region()
 
-                s.zoomDialog.setGeometry(*s.app_data['display props']['zoom position'])
-                s.zoomDialog.setWindowTitle(elec + ' - ' + \
-                                            Pstate['case'] + ' - ' + Pstate['peak'] + '     ')
-
-                s.update_zoom_region()
-
-                for case in s.app_data['working cases']:  # unsure why this doesn't work in above loop, maybe timing
-                    s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
+            for case in s.app_data['working cases']:  # unsure why this doesn't work in above loop, maybe timing
+                s.set_case_display(case, s.zoomCaseToggles[case].isChecked(), zoom=True)
 
             s.update_curve_weights()
 
