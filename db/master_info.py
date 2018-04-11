@@ -61,7 +61,7 @@ def load_master(preloaded=None, force_reload=False, custom_path=None):
                              converters={'ID': ID_nan_strint, 'famID': ID_nan_strint,
                                          'mID': ID_nan_strint, 'fID': ID_nan_strint,
                                          'genoID': ID_nan_strint,
-                                         'EEfamGWAS-fam': ID_nan_strint,
+                                         'EAfamGWAS-fam': ID_nan_strint,
                                          'COGA11k-fam': ID_nan_strint},
                              na_values='.', low_memory=False)
         master.set_index('ID', drop=False, inplace=True)
@@ -314,6 +314,37 @@ def prprint(message,priority,threshold = 3):
         if isinstance(message,list):
             message = [message]
         print( *message )
+
+
+def check_exclusions(master,noexp_listDFs):
+    ''' Takes a master object and a dictionary of dataframes 
+    of not included experiments by their paths.
+    Returns lists of exclusions and those missing from the master'''
+
+    subject_exclusions = {}
+    for f,df in noexp_listDFs.items():
+        for ix,subject in df.iterrows():
+            sub_col = df.columns[0]
+            ex_col = df.columns[4]
+            ID = str(subject[sub_col]).strip()
+            exclusions = str(subject[ex_col]).strip().split('_')
+            if ID in subject_exclusions:
+                subject_exclusions[ID][0].extend(exclusions)
+                subject_exclusions[ID][1].append(f)
+            else:
+                subject_exclusions[ID] = (exclusions,[f])
+
+    missing = {}
+    for subID,ex_files in subject_exclusions.items():
+        ex, files = ex_files
+        if subID in master.index:
+            master_exclusions = [ '-'.join(e) for e in excluded_experiments(master,subID)]
+            diff = set(ex).difference(master_exclusions)
+        else: diff = ex
+        if len(diff) > 0:
+            missing[subID] = list(diff)
+
+    return subject_exclusions, missing
 
 def update(master_path,access_path, verbose=True, log='auto'):
 
