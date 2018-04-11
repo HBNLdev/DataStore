@@ -289,7 +289,7 @@ def interpret_by(s, by_stage, data_dims, data_dimlvls):
                     vals.append(np.where(s.demog_df[by_stage[0]] == lbl)[0])
             print('vals to iterate on are', vals)
     else:
-        print('variable not found in data or demogs')
+        print('variable', by_stage[0], 'not found in data or demogs')
         raise
     dims = [dim] * len(vals)
     return dims, vals, labels
