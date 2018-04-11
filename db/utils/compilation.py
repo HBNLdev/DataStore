@@ -10,7 +10,19 @@ import pandas as pd
 from .filename_parsing import site_hash
 
 
-# csv import functions
+# tabular data import functions
+
+dispatch = {'.csv':pd.read_csv,
+            '.xls':pd.read_excel,
+           '.xlsx':pd.read_excel}
+def dirToDFs(directory,ID_field = 'ID'):
+    DFs = {}
+    for f in os.listdir(directory):
+        dum, ext = os.path.splitext(f)
+        #print(ext)
+        if ext in dispatch:
+            DFs[f] = dispatch[ext](os.path.join(directory,f),converters={ID_field:str},na_values=['.'])
+    return DFs
 
 
 def readcsv_uID(csv_path, inds=['ID', 'session']):
