@@ -459,10 +459,12 @@ class EROStack:
                                winds[fl][2]:winds[fl][3] + 1].mean(axis=(1, 2))
                 for chan in win_chans:
                     try:
-                        chan_ind = cinds[cl][chan]
+                        nchans = data_vec.shape[0] # there are some discrepancies with cl determined above
+                        chan_ind = cinds[ nchans ][chan]
                         mean_array[fpi, wci] = data_vec_win[chan_ind]
                     except KeyError:
                         pass
+
                     wci += 1
             fpi += 1
 
