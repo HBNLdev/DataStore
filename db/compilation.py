@@ -36,7 +36,7 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                                                     'IRPG-Ctl']},
                                     'site': 'suny'},
                     'PhaseIV': {'Phase4-session':
-                                    {'$in': ['a', 'b', 'c', 'd']}},
+                                    {'$in': ['a', 'b', 'c', 'd']},'RELTYPE':'C'},
                     'p-subjects': {'POP': 'P'},
                     'smokeScreen': {'SmS': {'$ne': np.nan}},
                     'bigsmokeScreen': {'$or': [{'SmS': {'$ne': np.nan}},
