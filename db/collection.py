@@ -129,10 +129,11 @@ class MongoCollection(object):
         # use reIndex
         pass
 
-    def add_uniqueID(s,fields=['ID','session'],sep='_'):
+    def add_uniqueID(s,fields=['ID','session'],sep='_',name='uID'):
         ''' update each document with a 'uID' field composed of fields connected by sep'''
         for doc in D.Mdb[s.collection_name].find({ f:{'$exists':True} for f in fields }):
-            doc.update()
+            D.Mdb[s.collection_name].update({'_id':doc['_id']},
+                            {'$set':{name:str(doc[fields[0]])+sep+str(doc[fields[1]])}})
 
     def class_name(s):
         return type(s).__name__
@@ -152,7 +153,7 @@ class Subjects(MongoCollection):
 
     def update_from_followups(s):
         fup_query = {'session': {'$exists': True}}
-        fup_fields = ['ID', 'session', 'followup', 'date']
+        fup_fields = ['ID', 'session', 'followup', 'date','RELTYPE']
         fup_proj = {f: 1 for f in fup_fields}
         fup_proj['_id'] = 0
         fup_docs = D.Mdb['followups'].find(fup_query, fup_proj)
@@ -171,9 +172,13 @@ class Subjects(MongoCollection):
             session = row['session']
             fup_field = session + '-fup'
             date_field = session + '-fdate'
+            reltype = None
+            if 'RELTYPE' in row:
+                reltype = row['RELTYPE']
             D.Mdb[s.collection_name].update_one({'_id': row['_id']},
                                                 {'$set': {fup_field: row['followup'],
-                                                          date_field: row['date']}})
+                                                          date_field: row['date'],
+                                                          'RELTYPE': reltype}})
 
     def reset_update(s):
 
@@ -183,6 +188,7 @@ class Subjects(MongoCollection):
             date_field = sletter + '-fdate'
             s.clear_field(fup_field)
             s.clear_field(date_field)
+            s.clear_field('RELTYPE')
 
 
 class Sessions(MongoCollection):
@@ -215,8 +221,11 @@ class Sessions(MongoCollection):
                     rec['followup'] = calc_followupcol({'Phase4-session':sub['Phase4-session'],
                                                             'session':letter})
                 except:
-                    print(sub['ID'],sub['Phase4-session'])
-                
+                    if sub:
+                        print(sub['ID'],sub['Phase4-session'])
+                    else:
+                        print('subject missing for access row',ses)
+
                 so = D.MongoDoc(s.collection_name, rec)
                 so.storeNaTsafe()
         # master, master_mtime = load_master()
