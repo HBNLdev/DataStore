@@ -3,16 +3,16 @@
 
 # defining maximum followups
 
-most_recent_distribution = 82
-max_fups = 6
+most_recent_distribution = 87
+max_fups = 7
 
 # definitions of zork URLs
 
 base_url = 'https://zork5.wustl.edu/coganew/data/available_data'
 
 # updated often!
-core_url = '/pheno_all/core_pheno_20170918.zip'
-allrels_file = 'allrelsweb201709.sas7bdat.csv'
+core_url = '/pheno_all/core_pheno_20180321.zip'
+allrels_file = 'allrelsweb201803.sas7bdat.csv'
 
 # updated semi-often
 cal_url = '/Phase_IV/CalFoms01.26.2017_sas.zip'
@@ -30,13 +30,13 @@ zork_p123_path = '/processed_data/zork/zork-phase123/'
 p123_master_path = zork_p123_path + 'subject/master/master.sas7bdat.csv'
 
 zork_p4_path = '/processed_data/zork/zork-phase4-' + str(most_recent_distribution) + '/'
-p4_master_path = zork_p4_path + 'subject/master/master4_19sep2017.sas7bdat.csv'
+p4_master_path = zork_p4_path + 'subject/master/master4.sas7bdat.csv'
 
 # can stay at 69 if they haven't changed
 internalizing_dir = '/processed_data/zork/zork-phase4-69/subject/internalizing/'
 internalizing_file = 'INT_Scale_All-Total-Scores_n11281.csv'
 
-externalizing_dir = '/processed_data/zork/zork-phase4-69/subject/vcuext/'
+externalizing_dir = '/processed_data/zork/zork-phase4-87/subject/vcuext/'
 externalizing_file = 'vcu_ext_all_121112.sas7bdat.csv'
 
 fham_file = 'bigfham4.sas7bdat.csv'
