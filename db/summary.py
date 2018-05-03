@@ -9,6 +9,8 @@ from matplotlib import pyplot as plt
 from pandas.tools.plotting import table
 
 from db.utils.text import multi_filter
+from db.knowledge import experiments as exK
+from db import erp_peaks_projection as ep
 
 # Info for labelling, etc
 # Race and ethnicity definitions
@@ -50,6 +52,12 @@ QtyVars = {'ssa_AL4a': 'Weeks drank \n last 6 mo',
 DrinkingVars = DiagSymp.copy()
 DrinkingVars.update(QtyVars)
 
+coll_order = ['subjects','sessions','followups',
+              'ERPpeaks','cnth1s','avgh1s','raw_eegdata','resting_power',
+              'STinverseMats','EEGbehavior',
+                'neuropsych',
+              'allrels','core','externalizing','ssaga','questionnaires',
+              'internalizing','fham','fhd']
 
 # Utilities
 def expand_RE_aliases(aliases, race_type):
@@ -82,12 +90,12 @@ def update_tick_labels(plot, axis, trFun, trIns=None):
     return plot
 
 
-def session_counts(df):
+def repeat_counts(df,rep_col='session'):
     drop = 'ID' in df.columns
     df = df.reset_index( drop = drop)
-    df = df.set_index(['ID', 'session'])
-    ses_counts = df.groupby(level=0).count()
-    return ses_counts
+    df = df.set_index(['ID', rep_col])
+    rep_counts = df.groupby(level=0).count()
+    return rep_counts
 
 
 # data cleaning
@@ -193,6 +201,87 @@ def groups_for_column(df, col, max_groups=6, num_groups=2, group_labelsF=False):
     print(Counter(df[gcol]))
     return gcol, groups
 
+# High level breakdowns
+def db_summary(db):
+    coll_names = multi_filter( db.collection_names(), outs=['system.indexes'])
+    
+    counts = []
+    subs = []
+    for coll in coll_names:
+        counts.append( db[coll].count() )
+        subs.append( len(db[coll].distinct('ID')) )
+    
+    sumDF = pd.DataFrame( {'name':coll_names,
+                           'documents':counts,
+                          'subjects':subs} )
+    sumDF.set_index('name',inplace=True)
+    sumDF.index = pd.CategoricalIndex(sumDF.index,categories=coll_order, ordered=True)
+    sumDF.sort_index(inplace=True)
+    return sumDF[ ['subjects','documents'] ]
+
+def coll_breakdown(db,coll,sub_field,sub_name='sub collection',
+                linked_counts=None, link_field='uID',
+                return_cols=['subjects','documents'],include_docs = False,
+                prefer='Counter'):
+    ''' linked collections must have uID field
+    '''
+    
+    sc_names = sorted(db[coll].distinct(sub_field))
+    counts = []; subs = []; linkIDs = {};
+    for sc in sc_names:
+        q = db[coll].find({sub_field:sc},{'ID':True,link_field:True})
+        counts.append( q.count() )
+        subs.append( len(set([d['ID'] for d in q]) ) )
+        q.rewind()
+        linkIDs[sc] = [ d.get(link_field,None) for d in q ]
+    bdDF = pd.DataFrame( {sub_name:sc_names,
+                         'documents':counts,
+                         'subjects':subs } )
+    bdDF.set_index(sub_name,inplace=True)
+    bdDF.sort_index(inplace=True)
+    link_cols = []
+    if linked_counts:
+        print([(k,len(v)) for k,v in linkIDs.items()])
+        for lcoll,field in linked_counts:
+            counts = {}; cats = set()
+            for sc in sc_names:
+
+                if lcoll == 'ERPpeaks':
+                    experiments = list(exK.exp_cases.keys())
+                    field = 'experiment'    
+                    labels = []
+                    for d in db[lcoll].find({link_field:{'$in':linkIDs[sc]}}): 
+                        [ labels.append(f) for f in d if f in experiments ]         
+                else:
+                        labels = [ d[field] for d in db[lcoll].find({link_field:{'$in':linkIDs[sc]}}) ]
+                    
+                counts[sc] = Counter(labels)
+                cats.update([k for k in counts[sc].keys()])
+                
+            for cat in sorted(list(cats)):
+                #cat_count = counts[sc][cat]
+                cat_col = []
+                for sc in sc_names:
+                    ind_count = db[lcoll].find({field:cat,sub_field:sc}).count()
+                    calc_count = counts[sc].get(cat,0) 
+                    if ind_count == calc_count or prefer=='Counter':
+                        use_count = calc_count
+                    else:
+                        use_count = ind_count
+
+                    cat_col.append( use_count )
+                col_name = (lcoll+' '+field, cat)
+                link_cols.append( col_name )
+                bdDF[ col_name ] = cat_col
+
+        bdDF.columns = [('','documents'),('','subjects')]+link_cols
+        if not include_docs:
+            bdDF = bdDF[ bdDF.columns[1:] ]
+        bdDF.columns = pd.MultiIndex.from_tuples(bdDF.columns)
+    return bdDF#[ return_cols ]
+
+
+# Classes
 
 class GroupwiseAnalysis:
     def __init__(s, data, group_cols_Ns):
@@ -328,6 +417,23 @@ def add_REdefs(df, coreRaceCol='core-race'):
 
 
 # Standard groups
+
+def followup_info(df,folder,name,fup_order=None):
+
+    fup_counts = repeat_counts(df,rep_col='followup')
+    fig = plt.figure(figsize=[8, 4])
+    gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1])
+    sp = plt.subplot(gs[0])
+    sp.set_title('Interview counts')    
+    ses_count_hist = histogram(fup_counts, 'fID', ax=sp)
+    sp = plt.subplot(gs[1], frame_on=False)
+    sp.xaxis.set_visible(False)
+    sp.yaxis.set_visible(False)
+    fup_count_table = histogram(fup_counts, 'fID', type='table')
+    fup_count_table.sort_index(inplace=True)
+    table(sp, fup_count_table, loc='center')
+    fig.savefig(os.path.join(folder, name + '_fupHist.png'))
+
 def sessions_info(df, folder, name, fup_order=None):
     if not os.path.exists(folder):
         os.makedirs(folder, exist_ok=True)
@@ -336,7 +442,7 @@ def sessions_info(df, folder, name, fup_order=None):
           len(df), 'sessions')
 
     # Sessions histogram    
-    ses_counts = session_counts(df)
+    ses_counts = repeat_counts(df)
     fig = plt.figure(figsize=[8, 4])
     gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1])
     sp = plt.subplot(gs[0])
@@ -389,3 +495,12 @@ def sessions_info(df, folder, name, fup_order=None):
         # update_tick_labels(sg,'y',expand_RE_aliases,{'race_type':'self-reported'})
         # fig.savefig( os.path.join(folder,name+'_sessions_ethnicity.png'),
         #                 bbox_inches='tight' )
+
+def characterize_ERP_exp(db,exp,measures=['amp','lat'],COGAonly=False,electrode='CZ'):
+    cond_peaks = ep.erp_condpeaks[exp]
+    uIDs = [doc['uID'] for doc in db['ERPpeaks'].find({exp:{'$exists':True}},{'uID':True})]
+    if COGAonly:
+        uIDs = [uid for uid in uIDs if uid[0] not in 'achp8']
+    comp = ep.create_mtdf(uIDs, experiments=[exp], 
+                             cond_peaks=cond_peaks, channels=[electrode], measures=measures)
+    return comp.describe()
