@@ -11,8 +11,8 @@ from .utils.compilation import ID_nan_strint
 from .utils.dates import calc_date_w_Qs
 from .utils.filename_parsing import site_fromIDstr
 
-master_path = '/active_projects/mort/EEG-master-file2017/update_9/EEG-master-file-26.csv'#/processed_data/master-file/EEG-master-file-25.csv'
-access_path = '/active_projects/mort/EEG-master-file2017/update_9/masterFile_9-2017_cl.csv'
+master_path = '/processed_data/master-file/EEG-master-file-28.csv'
+access_path = '/processed_data/master-file/masterFile_4-2018_cl.csv'
 
 subjects_sparser_sub = \
     ['famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP',
