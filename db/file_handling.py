@@ -1143,28 +1143,31 @@ class Neuropsych_XML:
     def assure_quality(s):
         ''' after results have been extracted, perform quality assurance checks on them '''
 
-        # check if TOLT or CBST data is missing - if so, set motivation to none
-        if s.data['tolt_5b_mim'] is None:
-            s.data['motiv_tolt'] = None
-        if s.data['vst_f_tat'] is None:
-            s.data['motiv_cbst'] = None
-        # then re-calculate mean
-        motivs = [motiv for motiv in (s.data['motiv_tolt'], s.data['motiv_cbst']) if motiv]
-        if motivs:
-            s.data['motiv_avg'] = np.mean(motivs)
-        else:
-            s.data['motiv_avg'] = None
+        try:
+            # check if TOLT or CBST data is missing - if so, set motivation to none
+            if 'tolt_5b_mim' not in s.data or s.data['tolt_5b_mim'] is None:
+                s.data['motiv_tolt'] = None
+            if 'vst_f_tat' not in s.data or s.data['vst_f_tat'] is None:
+                s.data['motiv_cbst'] = None
+            # then re-calculate mean
+            motivs = [motiv for motiv in (s.data['motiv_tolt'], s.data['motiv_cbst']) if motiv]
+            if motivs:
+                s.data['motiv_avg'] = np.mean(motivs)
+            else:
+                s.data['motiv_avg'] = None
 
-        # set CBST fields of 0 to be None
-        # if any forward field is 0, set all forward to None
-        # if any backward field is 0, set all backward to None
-        if s.data['vst_f_span'] == 0:
-            for field in ['vst_f_tc', 'vst_f_span', 'vst_f_tcat', 'vst_f_tat']:
-                s.data[field] = None
-        if s.data['vst_b_span'] == 0:
-            for field in ['vst_b_tc', 'vst_b_span', 'vst_b_tcat', 'vst_b_tat']:
-                s.data[field] = None
-
+            # set CBST fields of 0 to be None
+            # if any forward field is 0, set all forward to None
+            # if any backward field is 0, set all backward to None
+            if s.data['vst_f_span'] == 0:
+                for field in ['vst_f_tc', 'vst_f_span', 'vst_f_tcat', 'vst_f_tat']:
+                    s.data[field] = None
+            if s.data['vst_b_span'] == 0:
+                for field in ['vst_b_tc', 'vst_b_span', 'vst_b_tcat', 'vst_b_tat']:
+                    s.data[field] = None
+        except KeyError:
+            print('Missing key in ',s.data['filepath'])
+            return None
 
 class Neuropsych_Summary:
     def __init__(s, filepath):
