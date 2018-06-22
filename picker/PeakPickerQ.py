@@ -2,7 +2,7 @@
 
     Just run me with python3 in conda 'upgrade' environment.
 '''
-#print('DevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDev')
+print('DevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDev')
 import os
 import sys
 import subprocess
@@ -535,6 +535,7 @@ class Picker(QtGui.QMainWindow):
             #     s.applied_region_limits = {}
             eeg = avgh1(paths[ind])
             s.eeg = eeg
+            show_only = [el for el in s.show_only if el in s.eeg.electrodes]
             experiment = eeg.file_info['experiment']
             s.gather_info(eeg)
             cases = eeg.case_list
@@ -603,7 +604,6 @@ class Picker(QtGui.QMainWindow):
             data_sourceD, peak_sourcesD = eeg.make_data_sources(empty_flag=initialize,
                                                                 time_range=s.app_data['display props']['time range'])
             s.current_data = data_sourceD
-
             # channel layout determined by this
             s.app_data['displayed channels'] = [ch for ch in chans if (ch not in s.ignore)]
             s.app_data['active channels'] = [ch for ch in chans if (ch not in s.show_only + s.ignore)]

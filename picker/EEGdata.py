@@ -475,7 +475,7 @@ class avgh1:
             for row in layout:
                 plots.append([])
                 for cell in row:
-                    if cell is None:
+                    if cell is None or cell not in s.electrodes:
                         plots[-1].append(None)
                     else:
                         eind = s.electrodes.index(cell)
