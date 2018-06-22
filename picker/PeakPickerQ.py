@@ -496,7 +496,7 @@ class Picker(QtGui.QMainWindow):
         case_info = ['cases: trials accepted/total']
         trials_str = ''
         for caseN, caseD in eeg.cases.items():
-            trials_str += caseD['case_type'] + ': ' + str(caseD['n_trials_accepted']) + '/' \
+            trials_str += caseD[eeg.case_field] + ': ' + str(caseD['n_trials_accepted']) + '/' \
                           + str(caseD['n_trials']) + ',   '
         trials_str = trials_str[:-4]
         case_info.append(trials_str)
@@ -605,8 +605,9 @@ class Picker(QtGui.QMainWindow):
                                                                 time_range=s.app_data['display props']['time range'])
             s.current_data = data_sourceD
             # channel layout determined by this
-            s.app_data['displayed channels'] = [ch for ch in chans if (ch not in s.ignore)]
-            s.app_data['active channels'] = [ch for ch in chans if (ch not in s.show_only + s.ignore)]
+            s.app_data['displayed channels'] = [ch for ch in chans if (ch not in s.ignore) and 'nd' not in ch]
+            s.app_data['active channels'] = [ch for ch in chans if (ch not in s.show_only + s.ignore)\
+                                                                                    and 'nd' not in ch]
             s.plot_desc = eeg.selected_cases_by_channel( cases=s.app_data['working cases'],
                                         time_range=s.app_data['display props']['time range'],
                                         channels=s.app_data['active channels'], mode='server', style='layout')

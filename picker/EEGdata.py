@@ -25,6 +25,9 @@ class avgh1:
                        'FPZ', 'FC4', 'FC3', 'C6', 'C5', 'F2', 'F1', 'TP8', 'TP7', 'AFZ', 'CP3', 'CP4',
                        'P5', 'P6', 'C1', 'C2', 'PO7', 'PO8', 'FCZ', 'POZ', 'OZ', 'P2', 'P1', 'CPZ']
 
+    case_field_guide = {'neuroscan':'case_type',
+                        'masscomp':'descriptor'}
+
     def __init__(s, filepath):
 
         s.filepath = filepath
@@ -103,6 +106,8 @@ class avgh1:
 
     def extract_case_data(s, output=False):
         if 'cases' not in dir(s):
+            case_field = s.case_field_guide[s.file_info['system']]
+            s.case_field = case_field
             case_info = s.loaded['file']['run']['case']['case']
             s.cases = OrderedDict()
             s.case_num_map = {}
@@ -112,9 +117,10 @@ class avgh1:
                 dvals = [v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in vals]
                 caseD = {n: v for n, v in zip(case_info.dtype.names, dvals)}
                 s.cases[caseD['case_num']] = caseD
-                s.case_list.append(caseD['case_type'])
-                s.case_num_map[caseD['case_type']] = caseD['case_num']
-                s.case_ind_map[caseD['case_type']] = c_ind
+                
+                s.case_list.append(caseD[case_field])
+                s.case_num_map[caseD[case_field]] = caseD['case_num']
+                s.case_ind_map[caseD[case_field]] = c_ind
             s.num_case_map = {v: k for k, v in s.case_num_map.items()}
             s.case_ind_D = caseD
         else:
@@ -552,7 +558,7 @@ class avgh1:
         for chan in channels:
             ch_ind = s.electrodes.index(chan)
             for cs_num, cs in s.cases.items():
-                case_name = cs['case_type']
+                case_name = cs[s.case_field]
                 cs_ind = s.case_ind_map[case_name]
                 if empty_flag:
                     pot_source_dict[chan + '_' + case_name] = []
