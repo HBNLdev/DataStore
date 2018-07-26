@@ -128,7 +128,8 @@ class avgh1:
 
     def case_data(s):
         s.extract_case_data()
-        outD = {cD['case_type']: cD for cN, cD in s.cases.items()}
+        case_field = s.case_field_guide[s.file_info['system']]
+        outD = {cD[case_field]: cD for cN, cD in s.cases.items()}
         return outD
 
     def build_mt(s, peakDF):#cases, peaks_by_case, amp, lat):
