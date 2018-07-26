@@ -611,8 +611,8 @@ class Picker(QtGui.QMainWindow):
             s.plot_desc = eeg.selected_cases_by_channel( cases=s.app_data['working cases'],
                                         time_range=s.app_data['display props']['time range'],
                                         channels=s.app_data['active channels'], mode='server', style='layout')
-            s.ylims = s.plot_desc[0][1]['props']['yrange']
-            s.times = s.plot_desc[1][1]['props']['times']
+            s.ylims = s.plot_desc[2][2]['props']['yrange']
+            s.times = s.plot_desc[2][2]['props']['times']
 
             T_prelims = datetime.now()
             if not initialize:
