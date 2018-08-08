@@ -16,7 +16,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from datetime import datetime
 
-from picker.EEGdata import avgh1
+from picker.EEGdata import avgh1, case_parser, exp_cases_lk, exp_case_descriptions_lk
 
 Qt = QtCore.Qt
 
@@ -538,16 +538,54 @@ class Picker(QtGui.QMainWindow):
             show_only = [el for el in s.show_only if el in s.eeg.electrodes]
             experiment = eeg.file_info['experiment']
             s.gather_info(eeg)
-            cases = eeg.case_list
-            if experiment in s.app_data['case display']:
-                exp_cases_aliases = s.app_data['case display'][experiment]
-                s.app_data['working cases'] = [ca[0] for ca in exp_cases_aliases]
-                s.app_data['case aliases'] = dict(exp_cases_aliases)
+            if eeg.file_info['system'] == 'neuroscan':
+                cases = eeg.case_list #same as internal cases
+                if experiment in s.app_data['case display']:
+                    exp_cases_aliases = s.app_data['case display'][experiment]
+                    s.app_data['working cases'] = [ca[0] for ca in exp_cases_aliases]
+                    s.app_data['case aliases'] = dict(exp_cases_aliases)
+                else:
+                    s.app_data['working cases'] = cases
+                    s.app_data['case aliases'] = {c:a for c,a in zip(cases, eeg.case_alias_list) }
+                s.app_data['case inds'] = {c:cases.index(c) for c in s.app_data['working cases']}
+                s.app_data['case alias lookup'] = {a:c for c,a in s.app_data['case aliases'].items()}
             else:
-                s.app_data['working cases'] = cases
-                s.app_data['case aliases'] = {c:c for c in cases}
-            s.app_data['case inds'] = {c:cases.index(c) for c in s.app_data['working cases']}
-            s.app_data['case alias lookup'] = {a:c for c,a in s.app_data['case aliases'].items()}
+                if experiment in s.app_data['case display']:
+                    disp_aliases = dict(s.app_data['case display'][experiment])
+                else:
+                    disp_aliases = ['func', exp_case_descriptions_lk,'file_info.experiment']
+
+                mc_case_field = 'descriptor'
+                if experiment == 'aod':
+                    mc_case_field = 'case_type'
+                    s.eeg.extract_case_data(case_field=mc_case_field)
+                    
+                Cparser = case_parser(s.eeg,cats_paths={'internal':['switch','file_info.system',
+                                                    {'masscomp':mc_case_field,
+                                                    'neuroscan':'case_type'}],
+                                        'standard':['func', exp_cases_lk,'file_info.experiment'],
+                                        'display':disp_aliases
+                    })
+                Cparser.parse_names()
+                Cparser.align_category_names('standard')
+
+                s.app_data['working cases'] = s.eeg.case_list#Cparser.names_by_cat['internal']
+                #Check casing of working cases
+                #print('working cases before', s.app_data['working cases'], 'eeg.case_list',eeg.case_list)
+                if s.app_data['working cases'][0][0].istitle() and not s.eeg.case_list[0][0].istitle():
+                    s.app_data['working cases'] = [cs.lower() for cs in s.app_data['working cases']]
+                elif not s.app_data['working cases'][0][0].istitle() and s.eeg.case_list[0][0].istitle():
+                    s.app_data['working cases'] = [cs.upper() for cs in s.app_data['working cases']]
+                #print('working cases after', s.app_data['working cases'], 'eeg.case_list',eeg.case_list)
+                dispD = Cparser.names_by_cat['display']
+                als = Cparser.alignments['internal']
+                s.debug(['parser internal alignment',als, 'working cases', s.app_data['working cases']],3)
+                s.app_data['case aliases'] = { int_case:dispD[als[int_case]] for int_case in\
+                                                Cparser.names_by_cat['internal'] }
+                #s.app_data['case aliases'] = Cparser.names_by_cat['display']
+                s.app_data['case inds'] = {c:s.app_data['working cases'].index(c)\
+                                                for c in s.app_data['working cases']}
+                s.app_data['case alias lookup'] = {a:c for c,a in s.app_data['case aliases'].items()}
 
             chans = eeg.electrodes
 
@@ -608,6 +646,7 @@ class Picker(QtGui.QMainWindow):
             s.app_data['displayed channels'] = [ch for ch in chans if (ch not in s.ignore) and 'nd' not in ch]
             s.app_data['active channels'] = [ch for ch in chans if (ch not in s.show_only + s.ignore)\
                                                                                     and 'nd' not in ch]
+            #print('working cases', s.app_data['working cases'], 'eeg.case_list', s.eeg.case_list)
             s.plot_desc = eeg.selected_cases_by_channel( cases=s.app_data['working cases'],
                                         time_range=s.app_data['display props']['time range'],
                                         channels=s.app_data['active channels'], mode='server', style='layout')
@@ -1083,7 +1122,7 @@ class Picker(QtGui.QMainWindow):
         ''' Pick inside the Pick tab (start picking a certain peak) '''
 
         case_alias = s.caseChooser.currentText().strip()
-        case = s.app_data['case alias lookup'][case_alias] 
+        case = s.app_data['case alias lookup'][case_alias]; #print('pick init', case)
         peak = s.peakChooser.currentText().strip()
         s.app_data['pick state']['case'] = case
         s.app_data['pick state']['peak'] = peak
@@ -1675,8 +1714,10 @@ class Picker(QtGui.QMainWindow):
 
     def apply_selections(s,state,mode='new',regions=None):
         ''' find the extremum in the given region '''
-        s.debug(['apply selections, mode:',mode],3)
+        s.debug(['apply selections, mode:',mode, ' pick state:',s.app_data['pick state']],3)
         case = s.app_data['pick state']['case']
+        if case in s.app_data['case alias lookup']:
+            case = s.app_data['case alias lookup'][case]
         peak = s.app_data['pick state']['peak']
         if peak:
             polarity = peak[0].lower()
@@ -1697,13 +1738,16 @@ class Picker(QtGui.QMainWindow):
                 s.buttons['Back'].setEnabled(True)
 
         for elec,start_finish in regions.items():
-            if elec != 'zoom':
+            if elec in s.eeg.electrodes:#elec != 'zoom':
                 elec_case_peak = (elec, case, peak)
                 elecs.append( elec )
                 starts.append(start_finish[0])
                 finishes.append(start_finish[1])
                 if mode =='new':
-                    s.applied_region_limits[elec_case_peak].append(start_finish)
+                    if elec_case_peak in s.applied_region_limits:
+                        s.applied_region_limits[elec_case_peak].append(start_finish)
+                    else:
+                        s.debug(['missing elec_case_peak from applied region limits',elec_case_peak],3)
                 # s.applied_region_limits[elec_case_peak].append(start_finish)
                 # s.previous_peak_limits[(elec_case_peak[0], peak)] = start_finish
         #print(s.app_data['applied region limit histories'])

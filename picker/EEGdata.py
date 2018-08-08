@@ -9,14 +9,111 @@ import numpy as np
 import pandas as pd
 from bokeh.palettes import brewer
 from scipy.signal import argrelextrema
+from fuzzywuzzy import fuzz
 
 try:
     from db.file_handling import parse_filename, MT_File
+    from db.knowledge import experiments as exK
 except:
     sys.path.append( os.path.join(os.path.split(__file__)[0],'../db') )
     from file_handling import parse_Filename, MT_File
 
 
+def exp_cases_lk(exp):
+    return exK.exp_cases[exp]
+
+def exp_case_descriptions_lk(exp):
+    return exK.exp_cases_desc[exp]
+
+def uppered(list_or_D):
+    if isinstance(list_or_D,dict):
+        return { k.upper():v for k,v in list_or_D.items() }
+    else:
+        return [ v.upper() for v in list_or_D ]
+
+class case_parser:
+
+    def __init__(s,avgh1,cats_paths={'internal':['switch','file_info.system',
+                                            {'masscomp':'descriptor',
+                                            'neuroscan':'case_type'}],
+                                    'standard':['func',exp_cases_lk,'file_info.experiment'],
+                                    'display':['func',exp_case_descriptions_lk,'file_info.experiment']
+                }):
+        
+        s.cats_paths = cats_paths
+        s.avgh1 = avgh1
+        if 'cases' not in dir(s.avgh1):
+            s.avgh1.extract_case_data()
+
+    def parse_names(s):
+        def get_field(ob,path_str):
+            path_list = path_str.split('.')
+            val = ob
+            for fd in path_list:
+                if isinstance(val,dict):
+                    val = val[fd]
+                else:
+                    val = getattr(val,fd)
+            return val
+
+        s.names_by_cat = {}
+
+        for cat,path in s.cats_paths.items():
+            if isinstance(path,list) or isinstance(path,tuple):
+                path_type = path[0]
+            else:
+                path_type = 'literal'
+
+            if path_type == 'func':
+                s.names_by_cat[cat] = path[1](get_field(s.avgh1,path[2]))
+            elif path_type == 'switch':
+                switch_fd = get_field(s.avgh1,path[1])
+                case_fd = path[2][switch_fd]
+                val_order = [ cD[case_fd] for num,cD in s.avgh1.cases.items() ]
+                s.names_by_cat[cat] = val_order
+            else:
+                #print(cat,path)
+                s.names_by_cat[cat] = path                
+
+    def align_category_names(s,order_cat,):
+        s.alignments = {}
+        s.alignment_orders = {}
+        base = s.names_by_cat[order_cat]
+        for cat,names in s.names_by_cat.items():
+            matches = []; order_mats = {}
+            if cat not in [order_cat,'display']:
+                mx_sc = 0
+                for Onm in base:
+                    order_mat = sorted([ [fuzz.ratio(nm,Onm),ind] for ind,nm in enumerate(names) ])
+                    mx_sc = max([mx_sc]+[ om[0] for om in order_mat])
+                    order_mats[Onm] = order_mat
+                    matches.append([Onm]+order_mat[-1]) # matches have [order_name, ratio, cat_ind]
+                title_lk = {True:lambda s: s.upper(), False:lambda s: s.lower()}
+                if mx_sc == 0: # try upper case
+                    matches = []
+                    case_fun = title_lk[ Onm[0].istitle() ]
+                    for Onm in base:
+                        order_mat = sorted([ [fuzz.ratio(case_fun(nm),Onm),ind] for ind,nm in enumerate(names) ])
+                        mx_sc = max([mx_sc]+[ om[0] for om in order_mat])
+                        order_mats[Onm] = order_mat
+                        matches.append([Onm]+order_mat[-1])
+
+                # check completeness for category
+                matched_order_names = [base[match[2]] for match in matches]
+                #print(order_mats)
+                #print(matched_order_names)
+                Nmatched = len(set(matched_order_names))
+                if Nmatched < len(base):
+                    print('not all names matched in internal case alignment')
+                    if len(base) - Nmatched == 1:
+                        discs = sorted([ (om[-1][0]/om[-2][0],cat) for cat,om in order_mats.items() ])
+                        min_disc_cat = discs[0][1]
+                        matches[base.index(min_disc_cat)] = [min_disc_cat]+order_mats[min_disc_cat][1]
+                    else:
+                        print('Too many misalignemts to sort')
+
+                s.alignments[cat] = { names[match[2]]:match[0] for match in matches }
+                s.alignment_orders[cat] = [ match[2] for match in matches ]
 
 class avgh1:
     save_elec_order = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ', 'F4', 'F3', 'FC6', 'FC5', 'FC2',
@@ -104,23 +201,30 @@ class avgh1:
         s.extract_transforms_data()
         return s.transforms
 
-    def extract_case_data(s, output=False):
-        if 'cases' not in dir(s):
-            case_field = s.case_field_guide[s.file_info['system']]
-            s.case_field = case_field
+    def extract_case_data(s, output=False,case_field=None):
+        if 'cases' not in dir(s) or case_field:
+            if not case_field:
+                case_field = s.case_field_guide[s.file_info['system']]
+                s.case_field = case_field
+            else:
+                s.case_field = case_field
             case_info = s.loaded['file']['run']['case']['case']
             s.cases = OrderedDict()
             s.case_num_map = {}
             s.case_ind_map = {}
+            s.case_field_name_map = {}
             s.case_list = []
+            s.case_alias_list = []
             for c_ind, vals in enumerate(case_info.value):
                 dvals = [v[0].decode() if type(v[0]) == np.bytes_ else v[0] for v in vals]
                 caseD = {n: v for n, v in zip(case_info.dtype.names, dvals)}
                 s.cases[caseD['case_num']] = caseD
                 
                 s.case_list.append(caseD[case_field])
+                s.case_alias_list.append(caseD['case_type'])
                 s.case_num_map[caseD[case_field]] = caseD['case_num']
                 s.case_ind_map[caseD[case_field]] = c_ind
+                s.case_field_name_map[caseD['case_type']] = caseD[case_field]
             s.num_case_map = {v: k for k, v in s.case_num_map.items()}
             s.case_ind_D = caseD
         else:
@@ -548,7 +652,7 @@ class avgh1:
                 case_name = s.case_list[int(case) - 1]
                 peak_sourcesD[case_name]['peaks'].append(peak)
                 for chan in channels:
-                    if chan not in ['X', 'Y', 'BLANK']:
+                    if chan.strip() not in ['X', 'Y', 'BLANK','nd']:
                         peak_sourcesD[case_name][chan + '_pot'].append(float(s.mt_data[c_pk][chan][0]))
                         peak_sourcesD[case_name][chan + '_time'].append(float(s.mt_data[c_pk][chan][1]))
                     else:

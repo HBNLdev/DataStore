@@ -13,6 +13,41 @@ exp_cases = {'ant': ['a', 'j', 'w', 'p'],  # need renaming (for masscomp files, 
              'gng': ['g', 'ng'],
              'stp': ['c', 'in'], }
 
+exp_cases_desc= {'ant': {'a':'antonym',
+                          'j':'jumble',
+                          'w':'word',
+                          'p':'prime'},  # need renaming (for masscomp files, tttt --> ajwp)
+             'aod': {'tt':'target',
+                    'nt':'non-target'},  # need renaming (t --> tt)
+             'vp3': {'tt':'target',
+                      'nt':'non-target',
+                      'nv':'novel'},
+             'ans': {'r1':'tone1',
+                      'f2':'tone2',
+                      'f3':'tone3',
+                      'f4':'tone4',
+                      'f5':'tone5',
+                      'f6':'tone6',
+                      'f7':'tone7',
+                      'f8':'tone8'},
+             'cpt': {'cg':'cue go',
+                      'c':'cue',
+                      'cn':'cue no-go',
+                      'un':'uncued no-go',
+                      'dn':'distractor no-go',
+                      'dd':'distractor distractor'},
+             'ern': {'n50':'negative 50',
+                      'n10':'negative 10',
+                      'p10':'positive 10',
+                      'p50':'positive 50'},
+             'err': {'p':'positive',
+                      'n':'negative'},
+             'gng': {'g':'go',
+                      'ng':'no-go'},
+             'stp': {'c':'congruent',
+                    'in':'incongruent'}
+                    }
+
 # maps experiments to possible #s of chans
 exp_nchans = {'ant': ['21', '32', '64'],
               'aod': ['21', '32', '64'],
