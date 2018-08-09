@@ -376,7 +376,7 @@ class Picker(QtGui.QMainWindow):
                 if p_desc:
                     elec = p_desc['electrode']
                     pick_elec = False
-                    if elec not in s.ignore + s.show_only:
+                    if elec in s.eeg.electrodes and (elec not in s.ignore + s.show_only):
                         pick_elec = True
                         s.pick_electrodes.append(elec)
                     plot = s.plotsGrid.addPlot(rN + 1, cN)  # ,title=elec)
@@ -536,6 +536,7 @@ class Picker(QtGui.QMainWindow):
             eeg = avgh1(paths[ind])
             s.eeg = eeg
             show_only = [el for el in s.show_only if el in s.eeg.electrodes]
+            s.pick_electrodes = [el for el in s.eeg.electrodes if el not in s.ignore + s.show_only]
             experiment = eeg.file_info['experiment']
             s.gather_info(eeg)
             if eeg.file_info['system'] == 'neuroscan':
