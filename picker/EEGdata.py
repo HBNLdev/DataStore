@@ -31,6 +31,21 @@ def uppered(list_or_D):
     else:
         return [ v.upper() for v in list_or_D ]
 
+def score_alignments(ref,work):
+    matches = []; comps = {}; discs = []; max_sc = 0
+    for R in ref:
+        order_mat = sorted([ [fuzz.ratio(w,R),ind] for ind,w in enumerate(work) ])
+        comps[R] = order_mat
+        if order_mat[-2][0] == 0:
+            disc = np.inf if order_mat[-1][0] > 0 else 0
+        else:
+            disc = order_mat[-1][0]/order_mat[-2][0]
+        discs.append(disc)
+        matches.append(work[order_mat[-1][1]])
+        max_sc = max([max_sc,order_mat[-1][0]])
+
+    return matches, comps, discs, max_sc
+
 class case_parser:
 
     def __init__(s,avgh1,cats_paths={'internal':['switch','file_info.system',
@@ -75,45 +90,42 @@ class case_parser:
                 #print(cat,path)
                 s.names_by_cat[cat] = path                
 
-    def align_category_names(s,order_cat,):
+    def align_category_names(s,order_cat,aliases=None):
+        title_lk = {True:lambda s: s.upper(), False:lambda s: s.lower()}
         s.alignments = {}
         s.alignment_orders = {}
         base = s.names_by_cat[order_cat]
         for cat,names in s.names_by_cat.items():
-            matches = []; order_mats = {}
             if cat not in [order_cat,'display']:
-                mx_sc = 0
-                for Onm in base:
-                    order_mat = sorted([ [fuzz.ratio(nm,Onm),ind] for ind,nm in enumerate(names) ])
-                    mx_sc = max([mx_sc]+[ om[0] for om in order_mat])
-                    order_mats[Onm] = order_mat
-                    matches.append([Onm]+order_mat[-1]) # matches have [order_name, ratio, cat_ind]
-                title_lk = {True:lambda s: s.upper(), False:lambda s: s.lower()}
-                if mx_sc == 0: # try upper case
-                    matches = []
-                    case_fun = title_lk[ Onm[0].istitle() ]
-                    for Onm in base:
-                        order_mat = sorted([ [fuzz.ratio(case_fun(nm),Onm),ind] for ind,nm in enumerate(names) ])
-                        mx_sc = max([mx_sc]+[ om[0] for om in order_mat])
-                        order_mats[Onm] = order_mat
-                        matches.append([Onm]+order_mat[-1])
+                best_matches, compSC, discr, mx = score_alignments(base,names)
+                if mx == 0:
+                    case_fun = title_lk[ base[0][0].istitle() ]
+                    baseC = [ case_fun(b) for b in base ]
+                    matchesC, compSC, discr, mx = score_alignments(baseC,names)
+                    print(baseC,matchesC)
+                    best_matches = matchesC
 
-                # check completeness for category
-                matched_order_names = [base[match[2]] for match in matches]
-                #print(order_mats)
-                #print(matched_order_names)
-                Nmatched = len(set(matched_order_names))
+                if aliases:
+                    baseA = [ s.names_by_cat[aliases][b] for b in base ]
+                    matchesA, compSC_A, discrA, mxA = score_alignments(baseA,names)
+                    if sum([b>a for a,b in zip(discr,discrA)]) > len(base)/2:
+                        best_matches = matchesA
+                        compSC = compSC_A
+                        discr = discrA
+                        mx = mxA
+                print('best matches',best_matches)
+                Nmatched = len(set(best_matches))
+                if Nmatched == len(base)-1:
+                    min_disc_ind = discr.index(min(discr))
+                    min_disc_cat = base[ min_disc_ind ]
+                    best_matches[ min_disc_ind ] = list(set(names).difference(best_matches))[0]
+
+                Nmatched = len(set(best_matches))
                 if Nmatched < len(base):
-                    print('not all names matched in internal case alignment')
-                    if len(base) - Nmatched == 1:
-                        discs = sorted([ (om[-1][0]/om[-2][0],cat) for cat,om in order_mats.items() ])
-                        min_disc_cat = discs[0][1]
-                        matches[base.index(min_disc_cat)] = [min_disc_cat]+order_mats[min_disc_cat][1]
-                    else:
-                        print('Too many misalignemts to sort')
-
-                s.alignments[cat] = { names[match[2]]:match[0] for match in matches }
-                s.alignment_orders[cat] = [ match[2] for match in matches ]
+                    print('alignemnt failed for',cat)
+                else:
+                    s.alignments[cat] = { bm:bn for bm,bn in zip(best_matches,base) }
+                    s.alignment_orders[cat] = [ names.index(bm) for bm in best_matches]
 
 class avgh1:
     save_elec_order = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ', 'F4', 'F3', 'FC6', 'FC5', 'FC2',

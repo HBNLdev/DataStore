@@ -568,7 +568,7 @@ class Picker(QtGui.QMainWindow):
                                         'display':disp_aliases
                     })
                 Cparser.parse_names()
-                Cparser.align_category_names('standard')
+                Cparser.align_category_names('standard',aliases='display')
 
                 s.app_data['working cases'] = s.eeg.case_list#Cparser.names_by_cat['internal']
                 #Check casing of working cases
