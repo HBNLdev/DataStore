@@ -46,7 +46,7 @@ def score_alignments(ref,work):
 
     return matches, comps, discs, max_sc
 
-class case_parser:
+class caseParser:
 
     def __init__(s,avgh1,cats_paths={'internal':['switch','file_info.system',
                                             {'masscomp':'descriptor',
@@ -92,6 +92,7 @@ class case_parser:
 
     def align_category_names(s,order_cat,aliases=None):
         title_lk = {True:lambda s: s.upper(), False:lambda s: s.lower()}
+        s.order_category = order_cat
         s.alignments = {}
         s.alignment_orders = {}
         base = s.names_by_cat[order_cat]
@@ -126,6 +127,28 @@ class case_parser:
                 else:
                     s.alignments[cat] = { bm:bn for bm,bn in zip(best_matches,base) }
                     s.alignment_orders[cat] = [ names.index(bm) for bm in best_matches]
+
+    def translate_name(s,name,cat_in,cat_out):
+        in_names = al_names = s.names_by_cat[cat_in]
+        if isinstance(in_names,dict):
+            al_names = s.names_by_cat['standard']
+        nm_ind = al_names.index(name)
+
+        out_names = s.names_by_cat[cat_out]
+        if isinstance(out_names,dict):
+            st_name = s.names_by_cat['standard'][nm_ind]
+            trans = out_names[st_name]
+        else:
+            trans = out_names[nm_ind]
+
+        return trans
+
+    def ordered_names_for_cat(s,category):
+        cat_names = ord_names = s.names_by_cat[category]
+        if isinstance(cat_names,dict):
+            ord_names = [ cat_names[nm] for nm in s.names_by_cat[s.order_category] ]
+
+        return ord_names
 
 class avgh1:
     save_elec_order = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ', 'F4', 'F3', 'FC6', 'FC5', 'FC2',
@@ -239,6 +262,8 @@ class avgh1:
                 s.case_field_name_map[caseD['case_type']] = caseD[case_field]
             s.num_case_map = {v: k for k, v in s.case_num_map.items()}
             s.case_ind_D = caseD
+
+            s.standard_cases = s.case_list
         else:
             return
 
@@ -247,6 +272,25 @@ class avgh1:
         case_field = s.case_field_guide[s.file_info['system']]
         outD = {cD[case_field]: cD for cN, cD in s.cases.items()}
         return outD
+
+    def parse_cases(s,cats_paths=None,align_cat='standard',alias_cat=None):
+        s.case_data()
+        if cats_paths:
+            s.parser = caseParser(s,cats_paths)
+        else:
+            s.parser = caseParser(s)
+
+        s.parser.parse_names()
+        s.parser.align_category_names(align_cat,aliases=alias_cat)
+
+        if 'standard' in s.parser.names_by_cat and align_cat == 'standard':
+            s.standard_cases = [s.parser.alignments['internal'][cs] for cs in s.case_list ]
+
+    def case_letter_from_number(s, number, category='internal'):
+        if category == 'internal':
+            return s.cases[int(number)]['case_type']
+        else:
+            return s.parser.ordered_names_for_cat(category)[int(number)]
 
     def build_mt(s, peakDF):#cases, peaks_by_case, amp, lat):
         cases = peakDF['case'].unique()
@@ -348,6 +392,8 @@ class avgh1:
                 ext_lmi = local_extreme_inds[local_extreme_tmp_ind]
             return ext_lmi
 
+        if 'parser' in dir(s):
+            case = s.parser.translate_name(case,'standard','internal')
         caseN = s.case_ind_map[case]
         lats, erps = s.prepare_plot_data()
         n_tms = lats.shape[0]
@@ -427,9 +473,6 @@ class avgh1:
         peak_ms = lats[peak_pt]  # convert to ms if necessary
 
         return peak_val, peak_ms
-
-    def case_letter_from_number(s, number):
-        return s.cases[int(number)]['case_type']
 
     def get_yscale(s, potentials=None, channels=None, cases=None):
         if potentials is None:
@@ -677,6 +720,9 @@ class avgh1:
             for cs_num, cs in s.cases.items():
                 case_name = cs[s.case_field]
                 cs_ind = s.case_ind_map[case_name]
+                if 'parser' in dir(s):
+                    case_name = s.parser.translate_name(case_name,'internal','standard')
+                
                 if empty_flag:
                     pot_source_dict[chan + '_' + case_name] = []
                 else:

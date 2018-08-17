@@ -16,7 +16,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from datetime import datetime
 
-from picker.EEGdata import avgh1, case_parser, exp_cases_lk, exp_case_descriptions_lk
+from picker.EEGdata import avgh1, exp_cases_lk, exp_case_descriptions_lk
 
 Qt = QtCore.Qt
 
@@ -549,6 +549,7 @@ class Picker(QtGui.QMainWindow):
                     s.app_data['working cases'] = cases
                     s.app_data['case aliases'] = {c:a for c,a in zip(cases, eeg.case_alias_list) }
                 s.app_data['case inds'] = {c:cases.index(c) for c in s.app_data['working cases']}
+                s.app_data['internal working cases'] = s.app_data['working cases']
                 s.app_data['case alias lookup'] = {a:c for c,a in s.app_data['case aliases'].items()}
             else:
                 if experiment in s.app_data['case display']:
@@ -560,30 +561,41 @@ class Picker(QtGui.QMainWindow):
                 if experiment == 'aod':
                     mc_case_field = 'case_type'
                     s.eeg.extract_case_data(case_field=mc_case_field)
-                    
-                Cparser = case_parser(s.eeg,cats_paths={'internal':['switch','file_info.system',
+
+                s.eeg.parse_cases(cats_paths={'internal':['switch','file_info.system',
                                                     {'masscomp':mc_case_field,
                                                     'neuroscan':'case_type'}],
                                         'standard':['func', exp_cases_lk,'file_info.experiment'],
-                                        'display':disp_aliases
-                    })
-                Cparser.parse_names()
-                Cparser.align_category_names('standard',aliases='display')
+                                        'display':disp_aliases},
+                                    align_cat='standard',
+                                    alias_cat = 'display')
+                Cparser = eeg.parser    
+                # Cparser = case_parser(s.eeg,cats_paths={'internal':['switch','file_info.system',
+                #                                     {'masscomp':mc_case_field,
+                #                                     'neuroscan':'case_type'}],
+                #                         'standard':['func', exp_cases_lk,'file_info.experiment'],
+                #                         'display':disp_aliases
+                #     })
+                # Cparser.parse_names()
+                # Cparser.align_category_names('standard',aliases='display')
 
-                s.app_data['working cases'] = s.eeg.case_list#Cparser.names_by_cat['internal']
+                s.app_data['working cases'] = cases = s.eeg.parser.ordered_names_for_cat('standard')
+                s.app_data['internal working cases'] = s.eeg.parser.ordered_names_for_cat('internal')
                 #Check casing of working cases
                 #print('working cases before', s.app_data['working cases'], 'eeg.case_list',eeg.case_list)
-                if s.app_data['working cases'][0][0].istitle() and not s.eeg.case_list[0][0].istitle():
-                    s.app_data['working cases'] = [cs.lower() for cs in s.app_data['working cases']]
-                elif not s.app_data['working cases'][0][0].istitle() and s.eeg.case_list[0][0].istitle():
-                    s.app_data['working cases'] = [cs.upper() for cs in s.app_data['working cases']]
+
+                # if s.app_data['working cases'][0][0].istitle() and not s.eeg.case_list[0][0].istitle():
+                #     s.app_data['working cases'] = [cs.lower() for cs in s.app_data['working cases']]
+                # elif not s.app_data['working cases'][0][0].istitle() and s.eeg.case_list[0][0].istitle():
+                #     s.app_data['working cases'] = [cs.upper() for cs in s.app_data['working cases']]
+                
                 #print('working cases after', s.app_data['working cases'], 'eeg.case_list',eeg.case_list)
                 dispD = Cparser.names_by_cat['display']
                 als = Cparser.alignments['internal']
                 s.debug(['parser internal alignment',als, 'working cases', s.app_data['working cases']],3)
-                s.app_data['case aliases'] = { int_case:dispD[als[int_case]] for int_case in\
-                                                Cparser.names_by_cat['internal'] }
-                #s.app_data['case aliases'] = Cparser.names_by_cat['display']
+                # s.app_data['case aliases'] = { int_case:dispD[als[int_case]] for int_case in\
+                #                                 Cparser.names_by_cat['internal'] }
+                s.app_data['case aliases'] = Cparser.names_by_cat['display']
                 s.app_data['case inds'] = {c:s.app_data['working cases'].index(c)\
                                                 for c in s.app_data['working cases']}
                 s.app_data['case alias lookup'] = {a:c for c,a in s.app_data['case aliases'].items()}
@@ -600,7 +612,7 @@ class Picker(QtGui.QMainWindow):
 
             s.debug(['Loaded', experiment, ',', len(paths), 'paths, ind:', ind, ', info:', eeg.file_info],2)
             s.app_data['current experiment'] = experiment
-            s.app_data['experiment cases'] = eeg.case_list
+            s.app_data['experiment cases'] = cases
             s.app_data['pick state']['case'] = None
             s.app_data['pick state']['peak'] = None
 
@@ -648,7 +660,7 @@ class Picker(QtGui.QMainWindow):
             s.app_data['active channels'] = [ch for ch in chans if (ch not in s.show_only + s.ignore)\
                                                                                     and 'nd' not in ch]
             #print('working cases', s.app_data['working cases'], 'eeg.case_list', s.eeg.case_list)
-            s.plot_desc = eeg.selected_cases_by_channel( cases=s.app_data['working cases'],
+            s.plot_desc = eeg.selected_cases_by_channel( cases=s.app_data['internal working cases'],
                                         time_range=s.app_data['display props']['time range'],
                                         channels=s.app_data['active channels'], mode='server', style='layout')
             s.ylims = s.plot_desc[2][2]['props']['yrange']
@@ -827,6 +839,7 @@ class Picker(QtGui.QMainWindow):
                 'plot desc':s.plot_desc,
                 'experiment cases':s.app_data['experiment cases'],
                 'working cases':s.app_data['working cases'],
+                'internal working cases':s.app_data['internal working cases'],
                 'case aliases':s.app_data['case aliases'],
                 'current data':s.current_data,
                 'info':s.app_data['info'],
@@ -1573,7 +1586,6 @@ class Picker(QtGui.QMainWindow):
                         zkey = (el_cs_pk[0] + '_zoom', el_cs_pk[1], el_cs_pk[2])
                         s.peak_markers[zkey] = zoom_marker
 
-                c_ind = s.app_data['experiment cases'].index(el_cs_pk[1])
                 if el_cs_pk in s.peak_edges and s.peak_edges[el_cs_pk]:
                     sym = 'x'
                     sz = 16
