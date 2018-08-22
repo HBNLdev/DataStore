@@ -40,7 +40,7 @@ def save_mt( ):
         peak_dicts.append(peakD)
     peakDF = pd.DataFrame.from_dict(peak_dicts)
 
-    eeg.build_mt(peakDF)
+    eeg.build_mt(peakDF,save_data['internal working cases'])
     if not os.path.exists(save_data['save dir']):
         os.mkdir(save_data['save dir'])
     fullpath = os.path.join( save_data['save dir'], eeg.mt_name)
@@ -117,18 +117,19 @@ def output_page(layout_desc):
                 ax.xaxis.set_ticks_position('bottom')
                 ax.yaxis.set_ticks_position('left')
                 for caseN, case in enumerate(save_data['experiment cases']):
-                    if case in save_data['working cases']:
-                        workingN = save_data['working cases'].index(case)
+                    if case in save_data['internal working cases']:
+                        workingN = save_data['internal working cases'].index(case)
+                        standard_case = save_data['working cases'][workingN]
                         # case_color = s.plot_props['line colors'][caseN]
                         ccn = ccns[workingN]  # [v / 255 for v in case_color]
                         ax.plot(save_data['current data']['times'],
-                                save_data['current data'][elec + '_' + case],
+                                save_data['current data'][elec + '_' + standard_case],
                                 color=ccn, clip_on=False,
                                 linewidth=linewidth)
 
                         if mode == 'picked':
                             peak_keys = [k for k in save_data['peak data'].keys()\
-                                                        if k[0] == elec and k[1] == case]
+                                                        if k[0] == elec and k[1] == standard_case]
                             for pk in peak_keys:
                                 if pk[2][0] == 'P':
                                     arrow_len = arrow_size

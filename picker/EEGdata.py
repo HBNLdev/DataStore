@@ -1,6 +1,6 @@
 '''reading and handling EEG data
 '''
-
+print('EEGdata Dev Dev Dev')
 import os, sys
 from collections import OrderedDict
 
@@ -292,29 +292,29 @@ class avgh1:
         else:
             return s.parser.ordered_names_for_cat(category)[int(number)]
 
-    def build_mt(s, peakDF):#cases, peaks_by_case, amp, lat):
-        cases = peakDF['case'].unique()
+    def build_mt(s, peakDF, used_cases):#cases, peaks_by_case, amp, lat):
+        save_cases = peakDF['case'].unique()
         s.extract_subject_data()
         s.extract_exp_data()
         s.extract_transforms_data()
         s.extract_case_data()
-        s.build_mt_header(cases, peakDF)
-        s.build_mt_body(cases, peakDF)
+        s.build_mt_header(save_cases, peakDF, used_cases)
+        s.build_mt_body(save_cases, peakDF, used_cases)
         s.mt = s.mt_header + s.mt_body
 
-    def build_mt_header(s, cases, peakDF):#peaks_by_case):
+    def build_mt_header(s, cases, peakDF, cases_used):#peaks_by_case):
         chans = s.electrodes[0:31] + s.electrodes[32:62]
         s.mt_header = ''
         s.mt_header += '#nchans ' + str(len(chans)) + '; '
         s.mt_header += 'filter ' + str(s.transforms['hi_pass_filter']) + '-' \
                        + str(s.transforms['lo_pass_filter']) + '; '
         s.mt_header += 'thresh ' + str(s.exp['threshold_value']) + ';\n'
-        for case in cases:
-            peaks = [ p for p in peakDF[ peakDF['case']==case ]['peak'].unique() if not pd.isnull(p) ]
-            s.mt_header += '#case ' + str(s.case_num_map[case]) + ' (' + case + '); npeaks '\
+        for sv_case, int_case in zip(cases,cases_used):
+            peaks = [ p for p in peakDF[ peakDF['case']==sv_case ]['peak'].unique() if not pd.isnull(p) ]
+            s.mt_header += '#case ' + str(s.case_num_map[int_case]) + ' (' + int_case + '); npeaks '\
              + str(len(peaks)) + ';\n'
 
-    def build_mt_body(s, cases, peakDF):#cases, peaks_by_case, amp, lat):
+    def build_mt_body(s, cases, peakDF, cases_used):#cases, peaks_by_case, amp, lat):
         # indices
         sid = s.subject['subject_id']
         expname = s.exp['exp_name']
@@ -330,7 +330,8 @@ class avgh1:
         dfR['age'] = age
 
         dfR['case_num'] = dfR['case'].map( s.case_num_map )
-        case_rt_map = {case:s.cases[ s.case_num_map[case] ]['mean_resp_time'] for case in cases}
+        case_rt_map = {sv_case:s.cases[ s.case_num_map[int_case] ]['mean_resp_time']\
+                                        for sv_case, int_case in zip(cases,cases_used)}
         dfR['mean_rt'] = dfR['case'].map( case_rt_map )
         elecIndex = dict(zip(s.save_elec_order, range(len(s.save_elec_order))))
         dfR['elec_rank'] = dfR['electrode'].map(elecIndex)

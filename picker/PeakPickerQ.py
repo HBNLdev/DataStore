@@ -787,13 +787,19 @@ class Picker(QtGui.QMainWindow):
         picked_file_exists = s.eeg.extract_mt_data()
         if picked_file_exists:
             s.debug(['Already picked'],1)
+            # handle both neuroscan - unparsed cases and masscomp - parsed cases
+            if 'parser' in dir(s.eeg):
+                case_cat = 'standard'
+            else: case_cat = 'internal'
             for cs_pk in s.eeg.case_peaks:
                 s.app_data['picks'].add((s.eeg.num_case_map[int(cs_pk[0])], cs_pk[1]))
 
             for elec in s.pick_electrodes:
                 for cs_pk in s.eeg.case_peaks:
-                    s.peak_data[(elec, s.eeg.case_letter_from_number(cs_pk[0]), cs_pk[1])] = \
-                        tuple([float(v) for v in s.eeg.get_peak_data(elec, cs_pk[0], cs_pk[1])])
+                    s.peak_data[ (elec,
+                                    s.eeg.case_letter_from_number(cs_pk[0], category=case_cat),
+                                        cs_pk[1])] = \
+                    tuple([float(v) for v in s.eeg.get_peak_data(elec, cs_pk[0], cs_pk[1])])
             s.debug(['picks', s.app_data['picks']],1)
             s.show_peaks()
             s.show_state()
