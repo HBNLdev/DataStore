@@ -40,7 +40,7 @@ def save_mt( ):
         peak_dicts.append(peakD)
     peakDF = pd.DataFrame.from_dict(peak_dicts)
 
-    eeg.build_mt(peakDF,save_data['internal working cases'])
+    eeg.build_mt(peakDF,save_data['working cases'],save_data['internal working cases'])
     if not os.path.exists(save_data['save dir']):
         os.mkdir(save_data['save dir'])
     fullpath = os.path.join( save_data['save dir'], eeg.mt_name)

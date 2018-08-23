@@ -558,9 +558,9 @@ class Picker(QtGui.QMainWindow):
                     disp_aliases = ['func', exp_case_descriptions_lk,'file_info.experiment']
 
                 mc_case_field = 'descriptor'
-                if experiment == 'aod':
-                    mc_case_field = 'case_type'
-                    s.eeg.extract_case_data(case_field=mc_case_field)
+                # if experiment == 'aod':
+                #     mc_case_field = 'case_type'
+                #     s.eeg.extract_case_data(case_field=mc_case_field)
 
                 s.eeg.parse_cases(cats_paths={'internal':['switch','file_info.system',
                                                     {'masscomp':mc_case_field,

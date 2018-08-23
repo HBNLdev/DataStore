@@ -103,7 +103,7 @@ class caseParser:
                     case_fun = title_lk[ base[0][0].istitle() ]
                     baseC = [ case_fun(b) for b in base ]
                     matchesC, compSC, discr, mx = score_alignments(baseC,names)
-                    print(baseC,matchesC)
+                    #print(baseC,matchesC)
                     best_matches = matchesC
 
                 if aliases:
@@ -114,7 +114,7 @@ class caseParser:
                         compSC = compSC_A
                         discr = discrA
                         mx = mxA
-                print('best matches',best_matches)
+                #print('best matches',best_matches)
                 Nmatched = len(set(best_matches))
                 if Nmatched == len(base)-1:
                     min_disc_ind = discr.index(min(discr))
@@ -263,7 +263,7 @@ class avgh1:
             s.num_case_map = {v: k for k, v in s.case_num_map.items()}
             s.case_ind_D = caseD
 
-            s.standard_cases = s.case_list
+            s.standard_cases = s.case_list # cover for files that don't require parsing
         else:
             return
 
@@ -292,14 +292,14 @@ class avgh1:
         else:
             return s.parser.ordered_names_for_cat(category)[int(number)]
 
-    def build_mt(s, peakDF, used_cases):#cases, peaks_by_case, amp, lat):
+    def build_mt(s, peakDF, used_cases, internal_used_cases):#cases, peaks_by_case, amp, lat):
         save_cases = peakDF['case'].unique()
         s.extract_subject_data()
         s.extract_exp_data()
         s.extract_transforms_data()
         s.extract_case_data()
-        s.build_mt_header(save_cases, peakDF, used_cases)
-        s.build_mt_body(save_cases, peakDF, used_cases)
+        s.build_mt_header(save_cases, peakDF, internal_used_cases)
+        s.build_mt_body(save_cases, peakDF, used_cases, internal_used_cases)
         s.mt = s.mt_header + s.mt_body
 
     def build_mt_header(s, cases, peakDF, cases_used):#peaks_by_case):
@@ -314,7 +314,7 @@ class avgh1:
             s.mt_header += '#case ' + str(s.case_num_map[int_case]) + ' (' + int_case + '); npeaks '\
              + str(len(peaks)) + ';\n'
 
-    def build_mt_body(s, cases, peakDF, cases_used):#cases, peaks_by_case, amp, lat):
+    def build_mt_body(s, cases, peakDF, cases_used, internal_cases):#cases, peaks_by_case, amp, lat):
         # indices
         sid = s.subject['subject_id']
         expname = s.exp['exp_name']
@@ -329,9 +329,16 @@ class avgh1:
         dfR['sex'] = gender
         dfR['age'] = age
 
-        dfR['case_num'] = dfR['case'].map( s.case_num_map )
+        DFcases = peakDF['case'].unique()
+        if any([cs not in s.case_num_map for cs in DFcases]):
+            int2st_map = {ic:sc for ic,sc in zip(internal_cases,cases_used)}
+            case_num_map_use = { int2st_map[cs]:N\
+                                    for cs,N in s.case_num_map.items() }
+        else:
+            case_num_map_use = s.case_num_map
+        dfR['case_num'] = dfR['case'].map( case_num_map_use )
         case_rt_map = {sv_case:s.cases[ s.case_num_map[int_case] ]['mean_resp_time']\
-                                        for sv_case, int_case in zip(cases,cases_used)}
+                                        for sv_case, int_case in zip(cases,internal_cases)}
         dfR['mean_rt'] = dfR['case'].map( case_rt_map )
         elecIndex = dict(zip(s.save_elec_order, range(len(s.save_elec_order))))
         dfR['elec_rank'] = dfR['electrode'].map(elecIndex)
