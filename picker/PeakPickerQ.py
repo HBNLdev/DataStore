@@ -65,7 +65,7 @@ class Picker(QtGui.QMainWindow):
     temp_store_dir = '/active_projects/programs/picker/store'   
 #s.dir_paths_by_exp['ant'][1]
 
-    ignore = ['BLANK']
+    ignore = ['BLANK','nd','nd ']
     show_only = ['X', 'Y']
     repick_modes = ('all', 'single')
     peak_choices = ['P1', 'P2', 'P3', 'P4', 'N1', 'N2', 'N3', 'N4']
