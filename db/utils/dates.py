@@ -5,6 +5,10 @@ from datetime import datetime
 import numpy as np
 
 
+def calc_age(dob,date):
+    ''' given dob and date, calculate age in years '''
+    return (date - dob).days / 365.25
+
 def calc_currentage(dob):
     ''' given a DOB, calculate current age '''
 

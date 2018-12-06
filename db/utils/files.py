@@ -113,3 +113,18 @@ def list_to_file(lst, filename, replace=False):
             of.write(str(item) + '\n')
         of.close()
     return
+
+def match_files(path,beginning='',end='',included=[],excluded=[]):
+    files = os.listdir(path)
+    if beginning:
+        files = [f for f in files if f[:len(beginning)] == beginning]
+    if end:
+        files = [f for f in files if f[-len(end):] == end]
+    if included:
+        for inc in included:
+            files = [f for f in files if inc in f]
+    if excluded:
+        for exc in excluded:
+            files = [f for f in files if exc not in f]
+
+    return [os.path.join(path,f) for f in files]

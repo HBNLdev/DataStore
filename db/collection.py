@@ -31,7 +31,7 @@ from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup
                                 build_parentID, df_fromcsv)
 from .utils.filename_parsing import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
 from .utils.files import identify_files
-from .utils.dates import calc_date_w_Qs
+from .utils.dates import calc_date_w_Qs, calc_age
 
 
 # maps collection objects to their collection names
@@ -288,6 +288,18 @@ class Followups(MongoCollection):
                               fup_field='followup', fup_val=fup,
                               match_datefield='date')
 
+    def add_age(s):
+        ''' update each with age calculated from date and DOB'''
+        for doc in D.Mdb[s.collection_name].find():
+            try:
+                dob = D.Mdb['subjects'].find_one({'ID':doc['ID']})['DOB']
+                if dob and doc['date']:
+                    age = calc_age(dob,doc['date'])
+                    D.Mdb[s.collection_name].update({'_id':doc['_id']},
+                            {'$set':{'age':age}})
+            except:
+                 pass
+
     def reset_update(s):
         s.clear_field('session')
         s.clear_field('date_session')
@@ -351,6 +363,8 @@ class ERPPeaks(MongoCollection):
                     erpO.compare()  # to get update query
                     erpO.update()
 
+        s.add_uniqueID(fields=['ID','session'],name='uID')
+
 
 class Neuropsych(MongoCollection):
     ''' results of neuropsychological tests '''
@@ -364,6 +378,8 @@ class Neuropsych(MongoCollection):
             xmlO.data['date'] = xmlO.data['testdate']
             nsO = D.MongoDoc(s.collection_name, xmlO.data)
             nsO.store()
+
+        s.add_uniqueID(fields=['ID','session'],name='uID')
 
     def update_from_sfups(s):
         max_npsych_fups = max(D.Mdb[s.collection_name].distinct('np_followup'))
@@ -396,6 +412,8 @@ class Questionnaires(MongoCollection):
         for qname in kmap.keys():
             print(qname)
             import_questfolder_ph123(qname, kmap, path, s.collection_name)
+
+        s.add_uniqueID(fields=['ID','followup'],name='fID')
 
     def questionnaires_ph4(s):
         # takes  ~20 seconds per questionnaire
@@ -439,6 +457,8 @@ class SSAGAs(MongoCollection):
         for qname in kmap.keys():
             print(qname)
             import_questfolder_ssaga_ph123(qname, kmap, path, s.collection_name)
+
+        s.add_uniqueID(fields=['ID','followup'],name='fID')
 
     def ssaga_ph4(s):
         # SSAGA
@@ -500,6 +520,8 @@ class Internalizing(MongoCollection):
                 fup = '_'.join(pieces[-2:])
 
                 col_tups.append((info, fup))
+
+            s.add_uniqueID(fields=['ID','followup'],name='fID')
 
             return pd.MultiIndex.from_tuples(col_tups, names=('', 'followup'))
 
@@ -593,6 +615,7 @@ class Externalizing(MongoCollection):
             ro = D.MongoDoc(s.collection_name, drec)
             ro.store()
 
+        s.add_uniqueID(fields=['ID','followup'],name='fID')
 
 class AllRels(MongoCollection):
     ''' all relatives file info '''
@@ -660,6 +683,7 @@ class RawEEGData(MongoCollection):
             except:
                 print('problem with', cnt_path)
 
+        s.add_uniqueID(fields=['ID','session'],name='uID')
 
 class EEGData(MongoCollection):
     ''' *.cnt.h1 file containing continuous EEG data '''
@@ -676,6 +700,7 @@ class EEGData(MongoCollection):
             eegO = D.MongoDoc(s.collection_name, data)
             eegO.store()
 
+        s.add_uniqueID(fields=['ID','session'],name='uID')
 
 class ERPData(MongoCollection):
     ''' *.avg.h1 file containing ERP data '''
