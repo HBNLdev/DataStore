@@ -3,9 +3,11 @@
 import numpy as np
 import pandas as pd
 
+from db import eromat as EM
 from .compilation import prepare_joindata, get_colldocs, prepare_indices
 from .knowledge.questionnaires import max_fups
 from .utils.records import flatten_dict
+
 
 map_allothers = {'neuropsych': {'date_lbl': 'testdate'},
                  'EEGbehavior': {'date_lbl': 'date'}}
@@ -326,3 +328,55 @@ def careful_join_ssaga(comp_df, raw=False,
     print('------------')
 
     return comp_dfj_out
+
+# utility functions
+def compile_ERO(baseDF,proc_types,pwr_types,exs_cases,elecs,ex_tf_wins):
+    compD = {}
+    compDF = baseDF.reset_index().set_index(['ID','session'])
+    start_cols = compDF.columns.copy()
+    for typ in proc_types:
+        colsB = compDF.columns
+        compDF = EM.add_eropaths( compDF, typ, exp_cases=exs_cases, power_types=pwr_types)
+        new_cols = set(compDF.columns).difference(colsB)
+        new_path_cols = [ c for c in new_cols if typ in c]
+        for col in new_path_cols:
+            exp = [ ex for ex in exs_cases.keys() if ex in col][0]
+            if col not in compD:
+                try:
+                    stack = EM.EROStack( compDF[col].tolist() )
+                    compD[col] = stack.tfmean_multiwin_chans( ex_tf_wins[exp], elecs )
+                except Exception as err:
+                    print(err)
+                    
+        return compD, compDF
+    
+def clean_col(col):
+    if col[1] == '':
+        return col[0]
+    else: return col    
+    
+def cols_for_join(DF):
+    names = DF.index.names
+    DFw = DF.reset_index().set_index(['ID','session'])
+    DFw.columns = [clean_col(col) for col in DFw.columns.tolist()]
+    #print(list(DFw.columns))\
+    suffix = ''
+    for nm in names:
+        if nm not in ['ID','session']:
+            val = DFw[nm].unique()
+            if len(val) > 1:
+                print(nm+' has multiple values')
+                return
+            suffix += '_'+val[0]
+            DFw.drop(nm,axis=1,inplace=True)
+            
+    DFw.columns = [ '_'.join(c)+suffix for c in DFw.columns.tolist() ]            
+    #DFw.columns = ['_'.join(c) if isinstance(c,tuple) else c for c in DFw.columns]
+    return DFw                  
+    
+def join_compiled_ERO(DF,comps):
+    jDF = DF.copy().reset_index()
+    for comp in comps.values():
+        jDF = jDF.join(cols_for_join(comp),on=['ID','session'])
+        
+    return jDF.set_index(['ID','session'])
