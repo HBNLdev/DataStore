@@ -222,14 +222,21 @@ def db_summary(db):
 def coll_breakdown(db,coll,sub_field,sub_name='sub collection',
                 linked_counts=None, link_field='uID',
                 return_cols=['subjects','documents'],include_docs = False,
-                prefer='Counter'):
+                prefer='Counter','add_query'={}):
     ''' linked collections must have uID field
     '''
     
     sc_names = sorted(db[coll].distinct(sub_field))
+    ensure_link = {}
+    if link_field:
+        print('Note documents without link_field being excluded')
+        ensure_link = {link_field:{'$exists':True}}
     counts = []; subs = []; linkIDs = {};
     for sc in sc_names:
-        q = db[coll].find({sub_field:sc},{'ID':True,link_field:True})
+        qD = {sub_field:sc}
+        qD.update(ensure_link)
+        qD.update(add_query)
+        q = db[coll].find(qD,{'ID':True,link_field:True})
         counts.append( q.count() )
         subs.append( len(set([d['ID'] for d in q]) ) )
         q.rewind()
@@ -245,19 +252,19 @@ def coll_breakdown(db,coll,sub_field,sub_name='sub collection',
         for lcoll,field in linked_counts:
             counts = {}; cats = set()
             for sc in sc_names:
-
+                lfQD = {link_field:{'$in':linkIDs[sc]},field:{'$exists':True}}
                 if lcoll == 'ERPpeaks':
                     experiments = list(exK.exp_cases.keys())
                     field = 'experiment'    
                     labels = []
-                    for d in db[lcoll].find({link_field:{'$in':linkIDs[sc]}}): 
+                    for d in db[lcoll].find(lfQD): 
                         [ labels.append(f) for f in d if f in experiments ]         
                 else:
-                        labels = [ d[field] for d in db[lcoll].find({link_field:{'$in':linkIDs[sc]}}) ]
+                        labels = [ d[field] for d in db[lcoll].find(lfQD) ]
                     
                 counts[sc] = Counter(labels)
                 cats.update([k for k in counts[sc].keys()])
-                
+
             for cat in sorted(list(cats)):
                 #cat_count = counts[sc][cat]
                 cat_col = []

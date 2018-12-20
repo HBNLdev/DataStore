@@ -152,7 +152,7 @@ class Subjects(MongoCollection):
         D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
     def update_from_followups(s):
-        fup_query = {'session': {'$exists': True}}
+        fup_query = {}#'session': {'$exists': True}}
         fup_fields = ['ID', 'session', 'followup', 'date','RELTYPE']
         fup_proj = {f: 1 for f in fup_fields}
         fup_proj['_id'] = 0
@@ -169,16 +169,23 @@ class Subjects(MongoCollection):
         comb_df = subject_df.join(fup_df)
 
         for ID, row in tqdm(comb_df.iterrows()):
-            session = row['session']
-            fup_field = session + '-fup'
-            date_field = session + '-fdate'
+            uD = {}
             reltype = None
             if 'RELTYPE' in row:
                 reltype = row['RELTYPE']
+            uD['RELTYPE'] = reltype
+
+            if 'session' in row:
+                session = row['session']
+                if isinstance(session,str):
+                    fup_field = session + '-fup'
+                    date_field = session + '-fdate'
+                
+                    uD[fup_field] = row['followup']
+                    uD[date_field] = row['date']
+
             D.Mdb[s.collection_name].update_one({'_id': row['_id']},
-                                                {'$set': {fup_field: row['followup'],
-                                                          date_field: row['date'],
-                                                          'RELTYPE': reltype}})
+                                                {'$set': uD } )
 
     def reset_update(s):
 
@@ -277,6 +284,8 @@ class Followups(MongoCollection):
                 fupO = D.MongoDoc(s.collection_name, rec)
                 fupO.storeNaTsafe()
 
+        s.add_age()
+        s.add_uniqueID(fields=['ID','followup'],name='fID')
         D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
     def update_from_sessions(s):
@@ -458,8 +467,6 @@ class SSAGAs(MongoCollection):
             print(qname)
             import_questfolder_ssaga_ph123(qname, kmap, path, s.collection_name)
 
-        s.add_uniqueID(fields=['ID','followup'],name='fID')
-
     def ssaga_ph4(s):
         # SSAGA
         kmap = map_ph4_ssaga.copy()
@@ -471,6 +478,8 @@ class SSAGAs(MongoCollection):
     def build(s):
         s.ssaga_ph123()
         s.ssaga_ph4()
+
+        s.add_uniqueID(fields=['ID','followup'],name='fID') 
 
     def update_from_sessions(s):
         ssaga_subcolls = ['ssaga', 'cssaga', 'pssaga', 'dx_ssaga', 'dx_cssaga', 'dx_pssaga']
