@@ -2,7 +2,7 @@
 
     Just run me with python3 in conda 'upgrade' environment.
 '''
-print('DevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDev')
+print('DevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDevDev ckex')
 import os
 import sys
 import subprocess
@@ -24,7 +24,8 @@ Qt = QtCore.Qt
 # If an experiment is included, only specified cases will be shown with their aliases
 default_case_display_aliases = {'ern':[('N50','N50'),('N10','N10'),('P10','P10'),('P50','P50')],
                                 'cpt':[('T','Go'),('CN','Cue No-Go'),('N','No-Go')],
-                                'gng':[('G','Go'),('NG','No-Go')]
+                                'gng':[('G','Go'),('NG','No-Go')],
+				'cas':[('Congruent','Con'),('Incongruent','Inc'),('Negative','Neg'),('Alcohol','Alc'),('Neutral','Ntr')]
                                 }
 
 def break_text(text,chars_per_line):
@@ -490,7 +491,10 @@ class Picker(QtGui.QMainWindow):
         ''' given EEGdata.avgh1 object, gather info about transforms and cases '''
 
         eeg.extract_transforms_data()
-        eeg.extract_case_data()
+        case_fd = None
+        if eeg.file_info['experiment'].lower() == 'cas':
+            case_fd = 'descriptor'
+        eeg.extract_case_data(case_field=case_fd)
         filter_info = 'Filter band: ' + '{:4.3f}'.format(eeg.transforms['hi_pass_filter']) \
                       + ' Hz to ' + '{:4.1f}'.format(eeg.transforms['lo_pass_filter']) + ' Hz'
         case_info = ['cases: trials accepted/total']

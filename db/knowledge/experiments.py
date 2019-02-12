@@ -11,7 +11,8 @@ exp_cases = {'ant': ['a', 'j', 'w', 'p'],  # need renaming (for masscomp files, 
              'ern': ['n50', 'n10', 'p10', 'p50'],
              'err': ['p', 'n'],
              'gng': ['g', 'ng'],
-             'stp': ['c', 'in'], }
+             'stp': ['c', 'in'],
+             'cas':['Con','Inc','Neg','Alc','Ntr','Ins','Prc'] }
 
 exp_cases_desc= {'ant': {'a':'antonym',
                           'j':'jumble',
@@ -45,7 +46,14 @@ exp_cases_desc= {'ant': {'a':'antonym',
              'gng': {'g':'go',
                       'ng':'no-go'},
              'stp': {'c':'congruent',
-                    'in':'incongruent'}
+                    'in':'incongruent'},
+              'cas':{'Alc': 'Alcohol',
+                     'Con': 'Congruent',
+                     'Inc': 'Incongruent',
+                     'Neg': 'Negative',
+                     'Ntr': 'Neutral',
+                     'Ins':'Instruc',
+                     'Prc':'Practice'}
                     }
 
 # maps experiments to possible #s of chans

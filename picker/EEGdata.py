@@ -48,14 +48,18 @@ def score_alignments(ref,work):
 
 class caseParser:
 
-    def __init__(s,avgh1,cats_paths={'internal':['switch','file_info.system',
+    def_cats_paths = {'internal':['switch','file_info.system',
                                             {'masscomp':'descriptor',
                                             'neuroscan':'case_type'}],
                                     'standard':['func',exp_cases_lk,'file_info.experiment'],
                                     'display':['func',exp_case_descriptions_lk,'file_info.experiment']
-                }):
+                }
+
+    def __init__(s,avgh1,cats_paths={}):
         
-        s.cats_paths = cats_paths
+        s.cats_paths = s.def_cats_paths
+        s.cats_paths.update(cats_paths)
+        print(s.cats_paths)
         s.avgh1 = avgh1
         if 'cases' not in dir(s.avgh1):
             s.avgh1.extract_case_data()
@@ -236,6 +240,16 @@ class avgh1:
         s.extract_transforms_data()
         return s.transforms
 
+    def case_data_from_trials(s):
+        ''' currently meant for cas only, case_num 1-indexed in trials table
+        '''
+        with pd.HDFStore(os.path.join(s.filepath)) as hdf:
+            trialDF = hdf.select('/file/run/trial/trial')
+            for c_num,cD in s.cases.items():
+                cDF = trialDF[ trialDF['case_num']==cD['case_num']+1 ]
+                cD['n_trials'] = len(cDF)
+                cD['n_trials_accepted'] = cDF['accepted'].sum()
+
     def extract_case_data(s, output=False,case_field=None):
         if 'cases' not in dir(s) or case_field:
             if not case_field:
@@ -264,13 +278,20 @@ class avgh1:
             s.case_ind_D = caseD
 
             s.standard_cases = s.case_list # cover for files that don't require parsing
+            if len(set(s.case_list)) == 1:
+                delattr(s,'cases')
+                case_fields = [v for v in s.case_field_guide.values()]
+                case_field_new = [f for f in case_fields if f != case_field][0]
+                s.extract_case_data(case_field=case_field_new)
+
+            if s.cases[1]['n_trials'] == 0:
+                s.case_data_from_trials()
         else:
             return
 
     def case_data(s):
         s.extract_case_data()
-        case_field = s.case_field_guide[s.file_info['system']]
-        outD = {cD[case_field]: cD for cN, cD in s.cases.items()}
+        outD = {cD[s.case_field]: cD for cN, cD in s.cases.items()}
         return outD
 
     def parse_cases(s,cats_paths=None,align_cat='standard',alias_cat=None):
