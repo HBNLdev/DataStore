@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import numpy as np
+import pandas as pd
 
 import db.database as D
 from .compilation import buildframe_fromdocs
@@ -15,10 +16,28 @@ npsych_basepath = '/processed_data/neuropsych/neuropsych_all'
 fhd_basepath = '/processed_data/fhd/fhd'
 
 def export_a_collection(df,basepath, suffix=''):
-        writecsv_date(df, basepath, midfix=D.Mdb.name, suffix=suffix )
-        print('saved to', output_str + '.csv')
+        path = writecsv_date(df, basepath, midfix=D.Mdb.name, suffix=suffix )
+        print('saved to', path )
 
-def neuropsych(do_export=True):
+def st_int(v):
+    if pd.isnull(v):
+        return ''
+    else:
+        return str(int(v))
+
+def convert_int_cols_for_export(df):
+    dfw = df.copy()
+    for col in df.columns:
+        intconv = False
+        if df[col].dtype in ['float64','float']:
+            vals = df[col].tolist()
+            intcks = [v-np.round(v) for v in vals if not pd.isnull(v)]
+            if sum(intcks) == 0.0:
+                dfw[col] = dfw[col].apply(st_int)
+    return dfw
+
+def neuropsych(do_export=True,COGA=False):
+    global npsych_basepath
     docs = D.Mdb['neuropsych'].find()
     npsych_df = buildframe_fromdocs(docs, inds=['ID', 'np_followup'])
     npsych_df = get_bestsession(npsych_df)
@@ -45,22 +64,38 @@ def neuropsych(do_export=True):
     export_cols = Neuropsych_XML.cols.copy()
     export_cols.remove('id')
     export_cols.remove('sessioncode')
-    export_cols = ['session_best', 'session', 'date_diff_session', 'followup'] + \
-                  export_cols + ['np_session', 'site', 'filepath', ]
+    export_cols.remove('testdate')
+    export_cols = ['date','session_best', 'session', 'date_diff_session', 'followup'] + \
+                  export_cols + ['np_session', 'site' ]
     for n_ring in ['3b', '4b', '5b', 'tt']:
         last_pos = export_cols.index('tolt_' + n_ring + '_atrti')
         otr_pos = export_cols.index('tolt_' + n_ring + '_otr')
         export_cols.insert(last_pos + 1, export_cols.pop(otr_pos))
 
+    #using lowercase 'id' from here on to satisfy excel import behavior
     npsych_df_export = npsych_df[export_cols]
-    npsych_df_export.rename(columns={'session_best': 'EEG_session_best',
+    npsych_df_export.reset_index(inplace=True)
+    npsych_df_export.rename(columns={'ID':'id',
+                                    'date':'np_date',
+                                    'session_best': 'EEG_session_best',
                                      'session': 'EEG_session',
                                      'followup': 'COGA_followup',
                                      }, inplace=True)
+    npsych_df_export.set_index(['id','np_session'],inplace=True)
     npsych_df_export.sort_index(inplace=True)
 
+    if COGA == True:
+        npsych_basepath = npsych_basepath.replace('_all','_COGA')
+
+        ids = list(set(npsych_df_export.index.get_level_values('id').tolist()))
+        npsych_df_export = npsych_df_export.iloc[\
+            npsych_df_export.index.get_level_values('id').isin([i for i in ids if i[0] not in 'achpg']) ,: ]
+        
+        npsych_df_export = npsych_df_export.reset_index().set_index(['id','np_session'])
+
     if do_export:
-        export_a_collection(npsychDF, npsych_basepath)
+        export_a_collection(convert_int_cols_for_export(npsych_df_export),
+                         npsych_basepath)
 
     return npsych_df_export
 
