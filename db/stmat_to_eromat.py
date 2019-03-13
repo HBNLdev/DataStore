@@ -318,9 +318,13 @@ def create_3dmats(docs, file_lim=None, run_now=False, proc_lim=10):
     return call_lst
 
 
-def run_calls(call_lst, proc_lim=10):
+def run_calls(call_lst, proc_lim=10, directory=None):
     ''' given a list of complete command-line call strings, administer them into a pool of processes.
         use when a list of calls is accessible but the mongo db is not (e.g. on mp3 or mp6). '''
+    
+    if directory:
+        start_dir = os.getcwd()
+        os.chdir(directory)
 
     processes = set()
 
@@ -336,3 +340,6 @@ def run_calls(call_lst, proc_lim=10):
             os.wait()
             processes.difference_update(
                 [p for p in processes if p.poll() is not None])
+
+    if directory:
+        os.chdir(start_dir)
