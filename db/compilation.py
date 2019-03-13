@@ -91,6 +91,7 @@ column_types_by_collection = { 'sessions':{'age':float} }
 # considering a function that lets you set the module-wide DB
 # not sure this is the best implementation
 
+internal_vars = ['_id','insert_time']
 
 def populate_subcolldict():
     ''' make dict whose keys are collections and values are lists of
@@ -209,7 +210,7 @@ def get_colldocs(coll, subcoll=None, add_query={}, add_proj={}):
     return docs
 
 
-def buildframe_fromdocs(docs, inds=['ID', 'session'], column_types={}):
+def buildframe_fromdocs(docs, inds=['ID', 'session'], column_types={},clean=True):
     ''' build a dataframe from a list of docs '''
     df = pd.DataFrame.from_records(
         [flatten_dict(d) for d in list(docs)])
@@ -224,6 +225,10 @@ def buildframe_fromdocs(docs, inds=['ID', 'session'], column_types={}):
     df.sort_index(inplace=True)  # sort
     for col, typ in column_types.items():
         df[col] = df[col].astype(typ)
+
+    if clean:
+        df = df[ [c for c in df.columns if c not in internal_vars] ]
+
     return df
 
 
