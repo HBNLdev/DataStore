@@ -33,7 +33,7 @@ def match_assessments(match_coll, to_coll,
         match_query.update(add_match_query)
     match_proj = {'_id': 1, 'ID': 1, match_datefield: 1, }
     match_docs = match_collection.find(match_query, match_proj)
-    match_df = buildframe_fromdocs(match_docs, inds=['ID'])
+    match_df = buildframe_fromdocs(match_docs, inds=['ID'], clean=False)
     if match_df.empty:
         print('no assessment docs of this kind found')
         return
@@ -46,7 +46,7 @@ def match_assessments(match_coll, to_coll,
     sfup_query = {'ID': {'$in': IDs}}
     sfup_proj = {'_id': 1, 'ID': 1, 'session': 1, 'date': 1, 'followup': 1}
     sfup_docs = D.Mdb[to_coll].find(sfup_query, sfup_proj)
-    sfup_df = buildframe_fromdocs(sfup_docs, inds=['ID'])
+    sfup_df = buildframe_fromdocs(sfup_docs, inds=['ID'], clean=False)
     if sfup_df.empty:
         print('no session docs of this kind found')
         return
@@ -95,9 +95,12 @@ def match_assessments(match_coll, to_coll,
     ID_info_df = pd.DataFrame.from_records(ID_info_lst).set_index('ID')
     ID_info_forupdate = ID_info_df.join(match_df)
 
-    for ind, irow in tqdm(ID_info_forupdate.iterrows()):
-        match_collection.update_one({'_id': irow['match__id']},
+    if 'match__id' in ID_info_forupdate:
+        for ind, irow in tqdm(ID_info_forupdate.iterrows()):
+            match_collection.update_one({'_id': irow['match__id']},
                                     {'$set': {sfup_index: irow['nearest_sfup'],
                                               'date_diff_' + sfup_index: irow['date_diff_sfup'],
                                               'date_' + sfup_index: irow['date_sfup']}
                                      })
+    else:
+        print('missing match__id')
