@@ -16,7 +16,32 @@ except:
     sys.path.append( os.path.join(os.path.split(__file__)[0],'../db') )
     from file_handling import parse_Filename
 
+split_grid_layout = [[None, 'FP1', 'Y', 'FP2', 'X'],
+                      ['F7', 'AF1', None, 'AF2', 'F8'],
+                      [None, 'F3', 'FZ', 'F4', None],
+                      ['FC5', 'FC1', None, 'FC2', 'FC6'],
+                      ['T7', 'C3', 'CZ', 'C4', 'T8'],
+                      ['CP5', 'CP1', None, 'CP2', 'CP6'],
+                      [None, 'P3', 'PZ', 'P4', None],
+                      ['P7', 'PO1', None, 'PO2', 'P8'],
+                      [None, 'O1', None, 'O2', None],
+                      ['AF7', 'FPZ', 'AFZ', None, 'AF8'],
+                      ['F5', 'F1', None, 'F2', 'F6'],
+                      ['FT7', 'FC3', 'FCZ', 'FC4', 'FT8'],
+                      ['C5', 'C1', None, 'C2', 'C6'],
+                      ['TP7', 'CP3', 'CPZ', 'CP4', 'TP8'],
+                      ['P5', 'P1', 'POZ', 'P2', 'P6'],
+                      [None, 'PO7', 'OZ', 'PO8', None]]
 
+full_grid_layout = [[None,None,None,'FP1','FPZ','FP2',None,None,None],
+                    [None,None,'AF7','AF1','AFZ','AF2','AF8',None,None],
+                    ['F7','F5','F3','F1','FZ','F2','F4','F6','F8'],
+                    ['FT7','FC5','FC3','FC1','FCZ','FC2','FC4','FC6','FT8'],
+                    ['T7','C5','C3','C1','CZ','C2','C4','C6','T8'],
+                    ['TP7','CP5','CP3','CP1','CPZ','CP2','CP4','CP6','TP8'],
+                    ['P7','P5','P3','P1','PZ','P2','P4','P6','P8'],
+                    [None,None,'PO7','PO1','POZ','PO2','PO8',None,None],
+                    [None,None,None,'O1','OZ','O2',None,None,None] ]
 
 class avgh1:
     save_elec_order = ['FP1', 'FP2', 'F7', 'F8', 'AF1', 'AF2', 'FZ', 'F4', 'F3', 'FC6', 'FC5', 'FC2',
@@ -142,8 +167,8 @@ class avgh1:
                        + str(s.transforms['lo_pass_filter']) + '; '
         s.mt_header += 'thresh ' + str(s.exp['threshold_value']) + ';\n'
         for case in cases:
-            s.mt_header += '#case ' + str(case) + ' (' + s.cases[case]['case_type'] + '); npeaks ' + str(
-                len(peaks_by_case[case]) + ';\n'
+            s.mt_header += '#case ' + str(case) + ' (' + s.cases[case]['case_type'] + '); npeaks ' +\
+             str(len(peaks_by_case[case])) + ';\n'
 
     def build_mt_body(s, cases, peaks_by_case, amp, lat):
         # indices
@@ -457,22 +482,7 @@ class avgh1:
                 plots[-1].append(splot)
 
         elif style == 'layout':
-            layout = [[None, 'FP1', 'Y', 'FP2', 'X'],
-                      ['F7', 'AF1', None, 'AF2', 'F8'],
-                      [None, 'F3', 'FZ', 'F4', None],
-                      ['FC5', 'FC1', None, 'FC2', 'FC6'],
-                      ['T7', 'C3', 'CZ', 'C4', 'T8'],
-                      ['CP5', 'CP1', None, 'CP2', 'CP6'],
-                      [None, 'P3', 'PZ', 'P4', None],
-                      ['P7', 'PO1', None, 'PO2', 'P8'],
-                      [None, 'O1', None, 'O2', None],
-                      ['AF7', 'FPZ', 'AFZ', None, 'AF8'],
-                      ['F5', 'F1', None, 'F2', 'F6'],
-                      ['FT7', 'FC3', 'FCZ', 'FC4', 'FT8'],
-                      ['C5', 'C1', None, 'C2', 'C6'],
-                      ['TP7', 'CP3', 'CPZ', 'CP4', 'TP8'],
-                      ['P5', 'P1', 'POZ', 'P2', 'P6'],
-                      [None, 'PO7', 'OZ', 'PO8', None]]
+            layout = split_grid_layout
             # if 'FP1' in chans:
             # elif 'FPZ' in chans:
             # layout.append( [None, 'FPZ', None,  None, None]  )
@@ -482,7 +492,7 @@ class avgh1:
             for row in layout:
                 plots.append([])
                 for cell in row:
-                    if cell is None:
+                    if cell is None or cell not in s.electrodes:
                         plots[-1].append(None)
                     else:
                         eind = s.electrodes.index(cell)
@@ -494,7 +504,7 @@ class avgh1:
         if mode == 'server':
             return plots
         else:
-            g = gridplot(plots, border_space=-40)  # , tools=[TapTool()])#tools )
+            g =  GridPlot(plots, border_space=-40)  # , tools=[TapTool()])#tools )
             show(g)
 
     def extract_mt_data(s):
