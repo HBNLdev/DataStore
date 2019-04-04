@@ -28,6 +28,18 @@ def build_fhd_df():
                  'alc_dep_dx',
                  'ald5dx',
                  'ald5sx_max_cnt',
+                 'mj_dep_dx',
+                 'mjd5dx',
+                 'co_dep_dx',
+                 'cod5dx',
+                 'op_dep_dx',
+                 'opd5dx',
+                 'st_dep_dx',
+                 'std5dx',
+                 'sd_dep_dx',
+                 'sdd5dx',
+                 'tb_dep_dx',
+                 'cig_daily',
                  ]
     core_proj = {col: 1 for col in core_cols}
     core_proj['_id'] = 0
@@ -60,9 +72,12 @@ def build_fhd_df():
 
     sub_df_fhd = sub_df.copy()
 
-    # calculating FHD based on dichotomous affectedness
+    # calculating FHD based on dichotomous affectedness'tb_dep_dx'
 
-    dich_aff_cols = ['cor_alc_dep_dx', 'cor_ald5dx']
+    dich_aff_cols = ['cor_alc_dep_dx', 'cor_ald5dx','cor_mj_dep_dx','cor_mjd5dx',
+                    'cor_co_dep_dx','cor_cod5dx','cor_op_dep_dx','cor_opd5dx',
+                    'cor_st_dep_dx','cor_std5dx','cor_sd_dep_dx','cor_sdd5dx',
+                    'cor_tb_dep_dx','cor_cig_daily']
     dich_fh_funcs = [calc_ph, calc_fhd, calc_fhd_pathlen]
 
     for ac in dich_aff_cols:
@@ -99,8 +114,11 @@ def build_fhd_df():
         sub_df_fhd_relthresh.ix[less4_bool, fhd_cols] = np.nan
 
     # drop irrelevant columns
-
-    irrelevant_columns = ['POP', 'cor_alc_dep_dx', 'cor_ald5dx', 'cor_ald5sx_max_cnt',]
+    irrelevant_columns = ['POP', 'cor_alc_dep_dx', 'cor_ald5dx','cor_ald5sx_max_cnt',
+                    'cor_mj_dep_dx','cor_mjd5dx',
+                    'cor_co_dep_dx','cor_cod5dx','cor_op_dep_dx','cor_opd5dx',
+                    'cor_st_dep_dx','cor_std5dx','cor_sd_dep_dx','cor_sdd5dx',
+                    'cor_tb_dep_dx','cor_cig_daily']
     sub_df_fhd_relthresh.drop(irrelevant_columns , axis=1, inplace=True)
 
     return sub_df_fhd_relthresh
