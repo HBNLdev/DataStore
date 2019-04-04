@@ -11,10 +11,11 @@ MongoConn = pymongo.MongoClient(socket_path)
 Mdb = None
 
 
-def set_db(db_name):
+def set_db(db_name,verbose=True):
     global Mdb
     Mdb = MongoConn[db_name]
-    print('you are now accessing the db named', Mdb.name)
+    if verbose:
+        print('you are now accessing the db named', Mdb.name)
 
 
 use_db_name = 'HBNL6'  # the "default" DB

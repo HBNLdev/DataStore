@@ -1,4 +1,6 @@
 ''' tools for compilation '''
+from db import database as D
+from db.utils import text as tU
 
 import os
 from datetime import datetime, timedelta
@@ -591,9 +593,43 @@ def daily_average(drink_df_al):
 def writecsv_date(df, base_path, suffix, midfix=''):
     ''' given dataframe df, a base_path (including directories and any file prefix), and a suffix,
         write the dataframe to a CSV that has a date attached to it '''
-
+    #remove internal fields
+    if '_id' in df:
+        df = df[ [c for c in df.columns if c not in ['_id','insert_time']] ]
     today = datetime.now().strftime('%m-%d-%Y')
     output_str = '_'.join([base_path, midfix, today, suffix])
     output_path = output_str.replace('__','_') + '.csv'
-    df.to_csv(output_path, float_format='%.3f')
+    output_path = output_path.replace('_.','.')
+    df.to_csv(output_path, na_rep='',float_format='%.5f',date_format='%Y/%m/%d')
+    return output_path
 
+def fields_lookup(collection,ins=[],outs=[]):
+    db_name = D.Mdb.name
+    meta_name = db_name+'meta'
+    D.set_db(meta_name)
+    all_vars = D.Mdb['summaries'].find_one({'name':collection})['fields']
+    filt_vars = tU.multi_filter(all_vars,ins=ins,outs=outs)
+    D.set_db(db_name)
+    return filt_vars
+
+def clean_col(col,drops):
+    col_clean = []
+    for f in col:
+        if any([d in f for d in drops]):
+            col_clean.append('')
+        else: col_clean.append(f)
+    return tuple(col_clean)
+
+def clean_join( tup, char='_' ):
+    col = char.join([str(val) for val in tup])
+    while col[0] == char:
+        col = col[1:]
+    while col[-1] == char:
+        col = col[:-1]
+    return col
+
+def ages_for_output(df):
+    ageCs = [c for c in df.columns if c=='age' or '_age' in c]
+    for c in ageCs:
+        df[c] = df[c].apply( lambda a: '{:.2f}'.format(np.round(a,decimals=2)) )
+    df.replace('nan','',inplace=True) 
