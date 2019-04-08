@@ -157,19 +157,19 @@ class Subjects(MongoCollection):
         fup_proj = {f: 1 for f in fup_fields}
         fup_proj['_id'] = 0
         fup_docs = D.Mdb['followups'].find(fup_query, fup_proj)
-        fup_df = buildframe_fromdocs(fup_docs, inds=['ID'])
+        fup_df = buildframe_fromdocs(fup_docs, inds=['ID'], clean=False)
         fup_IDs = list(set(fup_df.index.get_level_values('ID').tolist()))
 
         subject_query = {'ID': {'$in': fup_IDs}}
         subject_fields = ['ID']
         subject_proj = {f: 1 for f in subject_fields}
         subject_docs = D.Mdb[s.collection_name].find(subject_query, subject_proj)
-        subject_df = buildframe_fromdocs(subject_docs, inds=['ID'])
+        subject_df = buildframe_fromdocs(subject_docs, inds=['ID'], clean=False)
 
         comb_df = subject_df.join(fup_df)
 
         for ID, row in tqdm(comb_df.iterrows()):
-            uD = {}
+            uD = {'interview':'x'}
             reltype = None
             if 'RELTYPE' in row:
                 reltype = row['RELTYPE']
@@ -186,6 +186,34 @@ class Subjects(MongoCollection):
 
             D.Mdb[s.collection_name].update_one({'_id': row['_id']},
                                                 {'$set': uD } )
+    def update_from_sessions(s):
+        ses_query = {}
+        ses_fields = {'ID','session','date','raw','age'}
+        ses_proj = {f:1 for f in ses_fields}
+        ses_proj['_id'] = 0
+        ses_df = buildframe_fromdocs( D.Mdb['sessions'].find(ses_query, ses_proj) )
+        ses_IDs = list(set(ses_df.index.get_level_values('ID').tolist()))
+        sdf = ses_df.reset_index()
+
+        subject_query = {'ID':{'$in':ses_IDs}}
+        subject_fields = ['ID','EEG']
+        subject_proj = {f:1 for f in subject_fields}
+        subject_df = buildframe_fromdocs( D.Mdb[s.collection_name].find(
+                            subject_query, subject_proj), inds=['ID'], clean=False)
+
+        comb_df = subject_df.join(ses_df)
+
+        fixedIDs = []
+        for ID,row in tqdm(comb_df.reset_index().groupby('ID').head(1).iterrows()):
+            if not row['EEG'] == 'x':
+                uD = {'EEG':'x'}
+                
+                D.Mdb[s.collection_name].update_one({'_id':row['_id']},
+                                                    {'$set': uD})
+
+            fixedIDs.append(ID)
+
+        return fixedIDs
 
     def reset_update(s):
 
@@ -505,7 +533,7 @@ class Core(MongoCollection):
 
     def build(s):
         # fast
-        folder = zork_p4_path + 'subject/'
+        folder = zork_p4_path + 'subject/core/'
         csv_files = glob(folder + 'core*.csv')
         if len(csv_files) != 1:
             print(len(csv_files), 'csvs found, aborting')
