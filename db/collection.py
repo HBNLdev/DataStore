@@ -157,8 +157,35 @@ class Subjects(MongoCollection):
         fup_proj = {f: 1 for f in fup_fields}
         fup_proj['_id'] = 0
         fup_docs = D.Mdb['followups'].find(fup_query, fup_proj)
-        fup_df = buildframe_fromdocs(fup_docs, inds=['ID'], clean=False)
+        fup_df = buildframe_fromdocs(fup_docs, inds=['ID','followup'], clean=False)
         fup_IDs = list(set(fup_df.index.get_level_values('ID').tolist()))
+
+        # Add missing subs
+        all_subs = D.Mdb[s.collection_name].distinct('ID')
+        subs_missing = set(fup_IDs).difference(all_subs)
+        sex_lk = {1:'M',2:'F'}
+        for sub in subs_missing:
+            sub_fupDF = fup_df.loc[pd.IndexSlice[sub,:], : ].reset_index()
+            sub_row = sub_fupDF.iloc[-1]
+            if 'p4f0' in sub_fupDF['followup']:
+                p4row = sub_fupDF[ sub_fupDF['followup']=='p4f0' ]
+                p4ses = p4row['session'].tolist()[0]
+                p4date = p4row['date'].tolist()[0]
+                p4age = p4row['age'].tolist()[0]
+            else: p4ses = ''; p4date = ''; p4age = ''
+            if 'SEX' in sub_row:
+                sub_sex = sex_lk[sub_row['SEX']]
+            else: sub_sex = ''
+            new_doc = { 'ID':sub_row['ID'],
+                        'sex':sub_sex,
+                        'Phase4-session':p4ses,
+                        'Phase4-testdate':p4date,
+                        'Phase4-age':p4age }
+            so = D.MongoDoc(s.collection_name, new_doc)
+            so.storeNaTsafe()
+
+        D.Mdb[s.collection_name].drop_index('ID_1')
+        D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
         subject_query = {'ID': {'$in': fup_IDs}}
         subject_fields = ['ID']
@@ -168,7 +195,7 @@ class Subjects(MongoCollection):
 
         comb_df = subject_df.join(fup_df)
 
-        for ID, row in tqdm(comb_df.iterrows()):
+        for ID, row in tqdm(comb_df.reset_index().set_index('ID').iterrows()):
             uD = {'interview':'x'}
             reltype = None
             if 'RELTYPE' in row:
@@ -188,7 +215,7 @@ class Subjects(MongoCollection):
                                                 {'$set': uD } )
     def update_from_sessions(s):
         ses_query = {}
-        ses_fields = {'ID','session','date','raw','age'}
+        ses_fields = {'ID','session','date','raw','age','phase4'}
         ses_proj = {f:1 for f in ses_fields}
         ses_proj['_id'] = 0
         ses_df = buildframe_fromdocs( D.Mdb['sessions'].find(ses_query, ses_proj) )
@@ -203,17 +230,22 @@ class Subjects(MongoCollection):
 
         comb_df = subject_df.join(ses_df)
 
-        fixedIDs = []
+        fixedEEG_IDs = []
         for ID,row in tqdm(comb_df.reset_index().groupby('ID').head(1).iterrows()):
             if not row['EEG'] == 'x':
                 uD = {'EEG':'x'}
                 
                 D.Mdb[s.collection_name].update_one({'_id':row['_id']},
                                                     {'$set': uD})
+                fixedIDs.append(ID)
 
-            fixedIDs.append(ID)
+        # p4firsts = comb_df[ comb_df['phase4']==True ].sort_values('session').\
+        #                 groupby('ID').head(1)
+        # for ID,row in tqdm(p4firsts):
+        #     if row['']
 
-        return fixedIDs
+
+        return fixedEEG_IDs
 
     def reset_update(s):
 
@@ -223,7 +255,7 @@ class Subjects(MongoCollection):
             date_field = sletter + '-fdate'
             s.clear_field(fup_field)
             s.clear_field(date_field)
-            s.clear_field('RELTYPE')
+        s.clear_field('RELTYPE')
 
 
 class Sessions(MongoCollection):
@@ -456,7 +488,7 @@ class Questionnaires(MongoCollection):
         # takes  ~20 seconds per questionnaire
         # phase 4 non-SSAGA
         kmap = map_ph4.copy()
-        del kmap['cal']
+        #del kmap['cal']
         path = zork_p4_path + 'session/'
         for qname in kmap.keys():
             print(qname)
