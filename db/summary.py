@@ -8,6 +8,8 @@ from matplotlib import gridspec
 from matplotlib import pyplot as plt
 from pandas.tools.plotting import table
 
+from db import compilation as C
+from db import database as D
 from db.utils.text import multi_filter
 from db.knowledge import experiments as exK
 from db import erp_peaks_projection as ep
@@ -220,17 +222,25 @@ def db_summary(db):
     return sumDF[ ['subjects','documents'] ]
 
 def coll_breakdown(db,coll,sub_field,sub_name='sub collection',
-                linked_counts=None, link_field='uID',
+                linked_counts=None, link_field=None,
                 return_cols=['subjects','documents'],include_docs = False,
-                prefer='Counter','add_query'={}):
+                prefer='Counter',add_query={},population=None):
     ''' linked collections must have uID field
     '''
     
+    if population:
+        valid_ids = [d['ID'] for d in C.get_subjectdocs(population)]
+    else:
+        valid_ids = D.Mdb['subjects'].distinct('ID')
+    add_query.update({'ID':{'$in':valid_ids}})
+
     sc_names = sorted(db[coll].distinct(sub_field))
     ensure_link = {}
     if link_field:
-        print('Note documents without link_field being excluded')
+        print('Note documents without '+ link_field +' being excluded')
         ensure_link = {link_field:{'$exists':True}}
+    else:
+        link_field = sub_field
     counts = []; subs = []; linkIDs = {};
     for sc in sc_names:
         qD = {sub_field:sc}
