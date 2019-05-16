@@ -50,3 +50,11 @@ def show_dict_hierarchy(d, init_space='', total=0):
             print(space + str(len(v)))
             total += len(v)
     return total
+
+def get_SSAGA_doc_var(var,doc,aliasD):
+    varUp = var.upper()
+    if varUp in doc:
+        return doc[varUp]
+    elif var in aliasD:
+        return doc[aliasD[var]]
+    else: return None

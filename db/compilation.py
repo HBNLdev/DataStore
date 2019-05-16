@@ -18,7 +18,8 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     'BrainDysfunction-AC': {'POP': {'$in': ['A', 'C']},
                                             'EEG': 'x'},
                     'ccGWAS': {'ccGWAS': {'$ne': np.nan}},
-                    'COGA': {'POP': {'$in': ['COGA', 'COGA-Ctl', 'IRPG', 'IRPG-Ctl']}, 'EEG': 'x'},
+                    'COGA': {'POP': {'$in': ['COGA', 'COGA-Ctl', 'IRPG', 'IRPG-Ctl']},
+                                    '$or':[{'EEG':'x'},{'interview':'x'}]},
                     'COGA11k': {'COGA11k-fam': {'$ne': np.nan}},
                     'COGA4500': {'4500': 'x'},
                     'c-subjects': {'POP': 'C'},
@@ -35,8 +36,10 @@ subjects_queries = {'AAfamGWAS': {'AAfamGWAS': 'x'},
                     'HighRiskFam': {'POP': {'$in': ['COGA', 'COGA-Ctl', 'IRPG',
                                                     'IRPG-Ctl']},
                                     'site': 'suny'},
-                    'PhaseIV': {'Phase4-session':
-                                    {'$in': ['a', 'b', 'c', 'd']},'RELTYPE':'C'},
+                    'PhaseIV': {'ID':{'$in':[d['ID'] for d in D.Mdb['followups'].find(
+                                    {'followup':'p4f0'})] +\
+                                    [d['ID'] for d in D.Mdb['sessions'].find(
+                                        {'phase4':True})] }, 'RELTYPE':'C' },
                     'p-subjects': {'POP': 'P'},
                     'smokeScreen': {'SmS': {'$ne': np.nan}},
                     'bigsmokeScreen': {'$or': [{'SmS': {'$ne': np.nan}},
@@ -231,6 +234,23 @@ def buildframe_fromdocs(docs, inds=['ID', 'session'], column_types={},clean=True
 
     return df
 
+def buildframe_from_id_list(IDs,collection='sessions',study_filters=None,
+                            limit_assessments=False, inds=['ID','session']):
+    IDs_w = list(IDs)
+    if study_filters:
+        st_filt_IDs = set()
+        for study in study_filters:
+            st_filt_IDs.update([d['ID'] for d in get_subjectdocs(study)])
+
+        IDs_w = list(st_filt_IDs.intersection(IDs_w))
+
+    collFrame = buildframe_fromdocs( D.Mdb[collection].find({'ID':{'$in':IDs_w}}),
+                                inds=inds )
+
+    if limit_assessments:
+        pass # need to add limit columns to assessment collections
+    
+    return collFrame
 
 def format_sparseproj(coll, subcoll=None):
     ''' format a projection to sparsify a collection / subcollection '''
@@ -475,3 +495,25 @@ def get_sessiondatedf(df):
     sdate_df.rename(columns={'date': 'session_date'}, inplace=True)
 
     return sdate_df
+
+def get_parentsdf(df):
+    IDs = df.reset_index()['ID'].tolist()
+    relsDF = buildframe_fromdocs(D.Mdb['allrels'].find({'ID':{'$in':IDs}}))
+    recs = []
+    for ID,row in relsDF.iterrows():
+        recs.append({'cID':ID,'ID':row['mID'],'rel':'M'})
+        recs.append({'cID':ID,'ID':row['fID'],'rel':'F'})
+    parentsDF = pd.DataFrame.from_records(recs).set_index('ID')
+    return parentsDF
+
+def join_parents_to_children(cdf,pdf):
+    pdfw = pdf.copy().reset_index()
+    pdfw.drop('ID',axis=1,inplace=True)
+    fathers = pdf[ pdf['rel'] == 'F' ].rename(columns={'cID':'ID'}).set_index('ID')
+    fathers.drop(['rel'],axis=1)
+    fathers.columns = [c+'_father' for c in fathers.columns]
+    mothers = pdf[ pdf['rel']== 'M' ].rename(columns={'cID':'ID'}).set_index('ID')
+    mothers.drop(['rel'],axis=1)
+    mothers.columns = [c+'_mother' for c in mothers.columns]
+    cdf_out = cdf.join(mothers).join(fathers)
+    return cdf_out
