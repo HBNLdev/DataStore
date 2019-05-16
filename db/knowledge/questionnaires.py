@@ -4,7 +4,7 @@
 import os
 from db.utils import files as fU# defining maximum followups
 
-most_recent_distribution = 94
+most_recent_distribution = 98
 max_fups = 7
 
 # definitions of zork URLs
@@ -12,8 +12,8 @@ max_fups = 7
 base_url = 'https://zork5.wustl.edu/coganew/data/available_data'
 
 # updated often!
-core_url = '/pheno_all/core_pheno_20181011.zip'
-allrels_file = 'allrelsweb201810.sas7bdat.csv'
+core_url = '/pheno_all/core_pheno_20190222.zip'
+allrels_file = 'allrelsweb201901.sas7bdat.csv'
 
 # updated semi-often
 cal_url = '/Phase_IV/CalFoms01.26.2017_sas.zip'
@@ -84,7 +84,7 @@ map_ph4 = {
     'bis': {'file_pfixes': ['bis_a_score4', 'bis_score4'],
             'zip_name': 'biq4',
             'zork_url': '/Phase_IV/biq4.zip'},
-    'cal': {'file_pfixes': 'scored',
+    'cal': {'file_pfixes': ['scored'],
             'zip_name': 'CAL',
             'zork_url': cal_url},
     'craving': {'file_pfixes': ['crv4'],
@@ -216,3 +216,18 @@ map_ph123_ssaga = {'cssaga': {'file_pfixes': ['cssaga', 'csaga2', 'csaga3', 'dx_
                    }
 
 map_ph123_ssaga['ssaga']['joindate_from'] = {k: p123_master_path for k in map_ph123_ssaga['ssaga']['date_lbl'].keys()}
+
+HEvars_interest = ['HE1', 'HE14_1', 'HE14_2', 'HE14_3', 'HE14_4', 'HE14_5', 'HE14_6',
+                'HE14_7', 'HE15_1', 'HE15_2', 'HE15_3', 'HE15_4', 'HE15_5', 'HE15_6',
+            'HE15_7', 'HE1BoxF', 'HE1BoxM', 'HE24', 'HE25', 'HE26', 'HE27', 'HE27a',
+            'HE28', 'HE37a', 'HE37b', 'HE37c', 'HE41a', 'HE41b', 'HE42a', 'HE42b',
+            'HE43a', 'HE43b', 'HE43c', 'HE43d', 'HE44', 'HE44a', 'HE44b', 'HE44c',
+            'HE44d', 'HE45a', 'HE45b', 'HE45c', 'HE45d', 'HE46', 'HE46a', 'HE46b',
+             'HE47a', 'HE47b', 'HE47c', 'HE47d', 'HE48a', 'HE48b', 'HE48c', 'HE48d',
+              'HE51', 'HE51a', 'HE51b', 'HEF19', 'HEF34', 'HEM17b', 'HEM33', 'HEf13',
+              'HEf17a1', 'HEf17a2', 'HEf17a3', 'HEf17a4', 'HEf17a5', 'HEf17a6',
+              'HEf17b', 'HEf18a', 'HEf18b', 'HEf1a', 'HEf1b', 'HEf20a', 'HEf20b',
+                'HEf29a', 'HEf29b', 'HEf30', 'HEf31', 'HEf33', 'HEf36', 'HEf38',
+                'HEm13', 'HEm17a1', 'HEm17a2', 'HEm17a3', 'HEm17a4', 'HEm17a5',
+                'HEm17a6', 'HEm18a', 'HEm18b', 'HEm19', 'HEm1a', 'HEm1b', 'HEm20a',
+                'HEm20b', 'HEm29a', 'HEm29b', 'HEm30', 'HEm31', 'HEm34', 'HEm36','HEm38']

@@ -11,6 +11,8 @@ site_hash = {'a': 'uconn',
              'e': 'washu',
              'f': 'ucsd',
              'h': 'unknown',
+             'n':'no-risk',
+             'r':'risk',
              '1': 'uconn',
              '2': 'indiana',
              '3': 'iowa',
@@ -110,9 +112,8 @@ def parse_filename(filename, include_full_ID=False):
     if os.path.sep in filename:
         filename = os.path.split(filename)[1]
 
-    # neuroscan type
-    if '_' in filename:
-        pieces = filename.split('_')
+    pieces = filename.split('_')    # neuroscan type
+    if len(pieces) > 2:
         experiment = pieces[0]
         version = pieces[1]
         session_piece = pieces[2]
@@ -146,10 +147,13 @@ def parse_filename(filename, include_full_ID=False):
     else:
         system = 'masscomp'
         experiment_short = filename[:2]
-        experiment = experiment_shorthands[experiment_short]
-        site_letter = filename[3].lower()
+        if experiment_short in experiment_shorthands:
+            experiment = experiment_shorthands[experiment_short]
+        else:
+            experiment = experiment_short
+        site_letter = filename[3]
         if filename[4:8] in ['0000', '5000']:  # no family
-            site = site_letter + '-subjects'
+            site = site_letter.lower() + '-subjects'
             family = 0
         else:
             family = filename[4:8]
@@ -164,8 +168,14 @@ def parse_filename(filename, include_full_ID=False):
         else:
             session_letter = 'b'
 
+        site_code = site_hash[site_letter.lower()]
+        if site_code in site_hash_rev:
+            site_num_code = site_hash_rev[site_code]
+        else:
+            site_num_code = 0
+        subject_piece = str(site_num_code) + filename[4:11]
+
         subject = filename[8:11]
-        subject_piece = site_hash_rev[site_hash[site_letter]] + filename[4:11]
         version = filename[2]
 
     output = {'system': system,
@@ -197,7 +207,8 @@ def parse_filename_tester():
              ('vp2c5000027.mt', 'masscomp',
               'vp3', 'c-subjects', 0, 27, 'a', 2),
              ('aod_5_a2_c0000857_avg.h1', 'neuroscan',
-              'aod', 'c-subjects', 0, 857, 'a', 2)
+              'aod', 'c-subjects', 0, 857, 'a', 2),
+             ('an2A0027005_rr.rd', 'masscomp','ant', 'uconn',27,5,'b',1)
              ]
     for case in cases:
         info = parse_filename(case[0])

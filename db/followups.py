@@ -105,7 +105,9 @@ def make_meancols(allphase_master, pcols):
         calc_df = prepare_datedf(allphase_master_means[cols])
         calc_df[fup_meandate_colname] = calc_df.apply(robust_datemean, axis=1)
         calc_df[fup_meandate_colname] = pd.to_datetime(calc_df[fup_meandate_colname])
-        allphase_master_means = allphase_master_means.join(calc_df[fup_meandate_colname])
+        
+        allphase_master_means = allphase_master_means.join(
+                        calc_df[fup_meandate_colname])
 
     return allphase_master_means
 
