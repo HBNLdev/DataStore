@@ -67,8 +67,9 @@ build_order = ['Subjects', 'Sessions', 'Followups', 'SSAGAs', 'Questionnaires', 
 
 incremental_collections = {'ERPPeaks', 'EEGBehavior'}
 
-restingpower_dir = '/processed_data/eeg/complete_result_09_16.d/results/'
-restingpower_ns_file = 'ns_all_tests.dat'
+restingpower_dir_ns = '/processed_data/eeg/results_2019.d/'
+restingpower_dir_mc = '/processed_data/eeg/complete_result_09_16.d/results/'
+restingpower_ns_file = 'eeg_power_fixed_comb_all_ns_2019_results.dat'
 restingpower_mc_fileA = 'mc_1st_test.dat'
 restingpower_mc_fileB = 'mc_2nd_test.dat'
 
@@ -157,13 +158,12 @@ class Subjects(MongoCollection):
         fup_proj = {f: 1 for f in fup_fields}
         fup_proj['_id'] = 0
         fup_docs = D.Mdb['followups'].find(fup_query, fup_proj)
-        fup_df = buildframe_fromdocs(fup_docs, inds=['ID','followup'], clean=False)
+        fup_df = buildframe_fromdocs(fup_docs, inds=['ID'], clean=False)
         fup_IDs = list(set(fup_df.index.get_level_values('ID').tolist()))
 
         # Add missing subs
         all_subs = D.Mdb[s.collection_name].distinct('ID')
         subs_missing = set(fup_IDs).difference(all_subs)
-        sex_lk = {1:'M',2:'F'}
         for sub in subs_missing:
             sub_fupDF = fup_df.loc[pd.IndexSlice[sub,:], : ].reset_index()
             sub_row = sub_fupDF.iloc[-1]
@@ -172,19 +172,16 @@ class Subjects(MongoCollection):
                 p4ses = p4row['session'].tolist()[0]
                 p4date = p4row['date'].tolist()[0]
                 p4age = p4row['age'].tolist()[0]
-            else: p4ses = ''; p4date = ''; p4age = ''
-            if 'SEX' in sub_row:
-                sub_sex = sex_lk[sub_row['SEX']]
-            else: sub_sex = ''
+            else: p4ses = ''
             new_doc = { 'ID':sub_row['ID'],
-                        'sex':sub_sex,
+                        'sex':sub_row['SEXp4'],
                         'Phase4-session':p4ses,
                         'Phase4-testdate':p4date,
                         'Phase4-age':p4age }
             so = D.MongoDoc(s.collection_name, new_doc)
             so.storeNaTsafe()
 
-        D.Mdb[s.collection_name].drop_index('ID_1')
+        D.Mdb[s.collection_name].dropIndex('ID')
         D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
         subject_query = {'ID': {'$in': fup_IDs}}
@@ -195,7 +192,7 @@ class Subjects(MongoCollection):
 
         comb_df = subject_df.join(fup_df)
 
-        for ID, row in tqdm(comb_df.reset_index().set_index('ID').iterrows()):
+        for ID, row in tqdm(comb_df.iterrows()):
             uD = {'interview':'x'}
             reltype = None
             if 'RELTYPE' in row:
@@ -482,8 +479,6 @@ class Questionnaires(MongoCollection):
             print(qname)
             import_questfolder_ph123(qname, kmap, path, s.collection_name)
 
-        s.add_uniqueID(fields=['ID','followup'],name='fID')
-
     def questionnaires_ph4(s):
         # takes  ~20 seconds per questionnaire
         # phase 4 non-SSAGA
@@ -497,6 +492,8 @@ class Questionnaires(MongoCollection):
     def build(s):
         s.questionnaires_ph123()
         s.questionnaires_ph4()
+
+        s.add_uniqueID(fields=['ID','followup'],name='fID')
 
     def update_from_sessions(s):
         quest_subcolls = ['dependence', 'craving', 'sre', 'daily', 'neo', 'sensation', 'aeq', 'bis', 'achenbach']
@@ -784,20 +781,55 @@ class ERPData(MongoCollection):
             erpO = D.MongoDoc(s.collection_name, fO.data)
             erpO.store()
 
+        s.add_uniqueID()
+
+        probs = s.extract_parameters()
+        return probs
+
+    def extract_parameters(s):
+        '''This function identifies a parameter string in each filepath and extracts
+            individual parameters, assuming the order:
+             low-pass,high-pass,threshold, baseline
+        '''
+        print('extracting parameters from ERPData avgh1s')
+        problems = []
+        for doc in tqdm(D.Mdb[s.collection_name].find()):
+            path_parts = doc['filepath'].split(os.path.sep)
+            paramsP = [pp for pp in path_parts if '-h0' in pp and '-t' in pp]
+            if len(paramsP) > 0:
+                paramsS = paramsP[0]
+                params = paramsS.split('-')
+                try:
+                    paramD = {'low-pass':int(params[0].replace('l','')),
+                        'high-pass':float('0.'+params[1][2:]),
+                        'threshold':int(params[2].replace('t','')),
+                        'baseline':int(params[3].replace('b',''))
+                        }
+                    D.Mdb[s.collection_name].update_one({'_id': doc['_id']},
+                                      {'$set': {'parameters': paramD} })
+                except:
+                    problems.append( ('unknown',doc['filepath']) )
+                
+
+            else:
+                problems.append( ('no params string in path',doc['filepath']) )
+
+        return problems
+
 
 class RestingPower(MongoCollection):
     ''' resting state power estimates (calculated by David) '''
 
     def build(s):
-        nsO = RestingDAT(restingpower_dir + restingpower_ns_file)
+        nsO = RestingDAT(restingpower_dir_ns + restingpower_ns_file)
         nsO.ns_to_dataframe()
         rec_lst = nsO.file_df.to_dict(orient='records')
 
-        mcO_A = RestingDAT(restingpower_dir + restingpower_mc_fileA)
+        mcO_A = RestingDAT(restingpower_dir_mc + restingpower_mc_fileA)
         mcO_A.mc_to_dataframe(session='a')
         rec_lst.extend(mcO_A.file_df.to_dict(orient='records'))
 
-        mcO_B = RestingDAT(restingpower_dir + restingpower_mc_fileB)
+        mcO_B = RestingDAT(restingpower_dir_mc + restingpower_mc_fileB)
         mcO_B.mc_to_dataframe(session='b')
         rec_lst.extend(mcO_B.file_df.to_dict(orient='records'))
 
