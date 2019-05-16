@@ -204,14 +204,20 @@ def groups_for_column(df, col, max_groups=6, num_groups=2, group_labelsF=False):
     return gcol, groups
 
 # High level breakdowns
-def db_summary(db):
+def db_summary(db,population=None):
+    if population:
+        valid_ids = [d['ID'] for d in C.get_subjectdocs(population)]
+    else:
+        valid_ids = D.Mdb['subjects'].distinct('ID')    
+
     coll_names = multi_filter( db.collection_names(), outs=['system.indexes'])
     
     counts = []
     subs = []
     for coll in coll_names:
-        counts.append( db[coll].count() )
-        subs.append( len(db[coll].distinct('ID')) )
+        counts.append( db[coll].find({'ID':{'$in':valid_ids}}).count() )
+        all_coll_IDs = db[coll].distinct('ID')
+        subs.append( len(list( set(all_coll_IDs).intersection(valid_ids) )) )
     
     sumDF = pd.DataFrame( {'name':coll_names,
                            'documents':counts,
@@ -234,24 +240,24 @@ def coll_breakdown(db,coll,sub_field,sub_name='sub collection',
         valid_ids = D.Mdb['subjects'].distinct('ID')
     add_query.update({'ID':{'$in':valid_ids}})
 
-    sc_names = sorted(db[coll].distinct(sub_field))
-    ensure_link = {}
+    sf_names = sorted(db[coll].distinct(sub_field))
     if link_field:
         print('Note documents without '+ link_field +' being excluded')
-        ensure_link = {link_field:{'$exists':True}}
     else:
         link_field = sub_field
+    ensure_link = {link_field:{'$exists':True}}
+
     counts = []; subs = []; linkIDs = {};
-    for sc in sc_names:
-        qD = {sub_field:sc}
+    for sf in sf_names:
+        qD = {sub_field:sf}
         qD.update(ensure_link)
         qD.update(add_query)
         q = db[coll].find(qD,{'ID':True,link_field:True})
         counts.append( q.count() )
         subs.append( len(set([d['ID'] for d in q]) ) )
         q.rewind()
-        linkIDs[sc] = [ d.get(link_field,None) for d in q ]
-    bdDF = pd.DataFrame( {sub_name:sc_names,
+        linkIDs[sf] = [ d.get(link_field,None) for d in q ]
+    bdDF = pd.DataFrame( {sub_name:sf_names,
                          'documents':counts,
                          'subjects':subs } )
     bdDF.set_index(sub_name,inplace=True)
@@ -261,8 +267,8 @@ def coll_breakdown(db,coll,sub_field,sub_name='sub collection',
         print([(k,len(v)) for k,v in linkIDs.items()])
         for lcoll,field in linked_counts:
             counts = {}; cats = set()
-            for sc in sc_names:
-                lfQD = {link_field:{'$in':linkIDs[sc]},field:{'$exists':True}}
+            for sf in sf_names:
+                lfQD = {link_field:{'$in':linkIDs[sf]}}
                 if lcoll == 'ERPpeaks':
                     experiments = list(exK.exp_cases.keys())
                     field = 'experiment'    
@@ -270,17 +276,18 @@ def coll_breakdown(db,coll,sub_field,sub_name='sub collection',
                     for d in db[lcoll].find(lfQD): 
                         [ labels.append(f) for f in d if f in experiments ]         
                 else:
-                        labels = [ d[field] for d in db[lcoll].find(lfQD) ]
+                    lfQD.update({field:{'$exists':True}})
+                    labels = [ d[field] for d in db[lcoll].find(lfQD) ]
                     
-                counts[sc] = Counter(labels)
-                cats.update([k for k in counts[sc].keys()])
+                counts[sf] = Counter(labels)
+                cats.update([k for k in counts[sf].keys()])
 
             for cat in sorted(list(cats)):
                 #cat_count = counts[sc][cat]
                 cat_col = []
-                for sc in sc_names:
-                    ind_count = db[lcoll].find({field:cat,sub_field:sc}).count()
-                    calc_count = counts[sc].get(cat,0) 
+                for sf in sf_names:
+                    ind_count = db[lcoll].find({field:cat,sub_field:sf}).count()
+                    calc_count = counts[sf].get(cat,0) 
                     if ind_count == calc_count or prefer=='Counter':
                         use_count = calc_count
                     else:
