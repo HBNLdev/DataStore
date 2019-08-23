@@ -250,7 +250,8 @@ def coll_breakdown(db,coll,sub_field,sub_name='sub collection',
     counts = []; subs = []; linkIDs = {};
     for sf in sf_names:
         qD = {sub_field:sf}
-        qD.update(ensure_link)
+        if link_field != sub_field:
+            qD.update(ensure_link)
         qD.update(add_query)
         q = db[coll].find(qD,{'ID':True,link_field:True})
         counts.append( q.count() )
