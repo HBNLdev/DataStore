@@ -4,16 +4,15 @@
 import os
 from db.utils import files as fU# defining maximum followups
 
-most_recent_distribution = 98
+most_recent_distribution = 103
 max_fups = 7
 
 # definitions of zork URLs
 
 base_url = 'https://zork5.wustl.edu/coganew/data/available_data'
-
 # updated often!
-core_url = '/pheno_all/core_pheno_20190222.zip'
-allrels_file = 'allrelsweb201901.sas7bdat.csv'
+core_url = '/pheno_all/core_pheno_20190710.zip'
+allrels_file = 'allrelsweb201906.sas7bdat.csv'
 
 # updated semi-often
 cal_url = '/Phase_IV/CalFoms01.26.2017_sas.zip'

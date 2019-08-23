@@ -6,13 +6,16 @@ import os
 from datetime import datetime
 
 import pandas as pd
+import numpy as np
 
 from .utils.compilation import ID_nan_strint
-from .utils.dates import calc_date_w_Qs
+from .utils.dates import calc_date_w_Qs, convert_date, date_string_clean
 from .utils.filename_parsing import site_fromIDstr
+from .utils import filename_parsing as fpU
+from tqdm import tqdm
 
-master_path = '/processed_data/master-file/EEG-master-file-29.csv'
-access_path = '/processed_data/master-file/masterFile_10-2018_cl.csv'
+master_path = '/processed_data/master-file/EEG-master-file-31.csv'
+access_path = '/processed_data/master-file/masterFile_asOf_07-11-2019_cl.csv'
 
 subjects_sparser_sub = \
     ['famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP',
@@ -36,6 +39,10 @@ subjects_sparser_add = \
 
 session_sadd = [field for field in subjects_sparser_add if 'age' not in field]
 session_sadd.extend(['session', 'followup', 'age', 'date'])
+
+popD = { '0':'COGA','1':'Relia','2':'COGA-Ctl','3':'IRPG',
+        '4':'Pilot','5':'A','6':'C','7':'H','8':'Alc-chal',
+        '9':'IRPG-Ctl','P':'P','amb':'amb'}
 
 def load_access():
     return pd.read_csv(access_path,converters={'ID':str},na_values=['.'])
@@ -319,7 +326,9 @@ def prprint(message,priority,threshold = 3):
 def check_exclusions(master,noexp_listDFs):
     ''' Takes a master object and a dictionary of dataframes 
     of not included experiments by their paths.
-    Returns lists of exclusions and those missing from the master'''
+    Returns lists of exclusions and those missing from the master
+    The missing dictionary can be used to add exclusions to the database as
+    input to the add_missing_exclusions function on the subjects collection.'''
 
     subject_exclusions = {}
     for f,df in noexp_listDFs.items():
@@ -345,6 +354,192 @@ def check_exclusions(master,noexp_listDFs):
             missing[subID] = list(diff)
 
     return subject_exclusions, missing
+
+def label_correct_session(group,rawname='raw',datename='date'):
+    '''utility for processing access master'''
+    grW = group.copy()
+    grW['ind'] = [i for i in range(len(group))]
+    primary_ind = None
+    #group['primary'] = False # this could be done outside this function
+    dup_inds = []
+    
+    if len(grW) == 1:
+        primary_ind = 0
+    else:
+        # identify bad rawfile values and eliminate them from contention
+        raw_vals = group[rawname].unique()
+        if len(raw_vals) > 1:
+            badF = grW[ (grW[rawname] == 'nodat') | (grW[rawname].isnull()) ]
+            if len(badF) < len(grW):
+                dup_inds.extend(badF['ind'].tolist())
+
+        grck = grW[ ~grW['ind'].isin(dup_inds) ]
+
+        dates = grck[datename].unique()
+        if len(dates) == 1:
+            primary_ind = grck['ind'].tolist()[0]
+        else:
+            dt_inds = [ (date,ind) for date,ind in\
+                       zip(grck[datename].tolist(),grck['ind'].tolist()) ]
+            primary_ind = sorted(dt_inds)[0][1]
+    
+    if isinstance(primary_ind,int):
+        grW.set_value( grW.index[ grW['ind']==primary_ind ][0],'primary',True )
+    
+    return grW, primary_ind
+
+def clean_access_master(acc_path,out_path=None):
+    '''Consolidates session info and writes clean version as a csv,
+        adding the flag '_cl'.  Returns cleanDF, fullDF, problems
+    '''
+    accDF = pd.read_excel(acc_path,converters={'FAMNOSUBNO':str})
+    accDF = accDF.rename(columns={'FAMNOSUBNO':'ID'})
+    accDF['TESTDATE'] = accDF['TESTDATE'].apply(convert_date)
+
+    accDF['primary'] = False
+
+    grDFs = []
+    probs = []
+    for ID,gr in tqdm( accDF.groupby(['ID','REPT']) ):
+        grU, primary = label_correct_session(gr,rawname='RAWFILE',datename='TESTDATE')
+        if not isinstance(primary,int):
+            probs.append(ID)
+        grDFs.append(grU)
+
+    accLab = pd.concat(grDFs)
+    accPrim = accLab[ accLab['primary']==True ]
+
+    if not out_path:
+        out_path = acc_path.replace('.xlsx','_cl.csv')
+
+    outDF = accPrim.rename(columns={'date':'TESTDATE'}).drop(['primary','ind'],axis=1)
+    outDF['TESTDATE'] = outDF['TESTDATE'].apply(date_string_clean)
+    writeDF = outDF.copy()
+    writeDF.sort_values('ID').to_csv(out_path,index=False,na_rep='.',date_format='%m/%d/%Y')
+
+    print(len(accDF), 'entries', len(accPrim), 'primary')
+    outDF.set_index(['ID','REPT']).sort_index().to_csv(acc_path\
+                                        .replace('.xlsx','_cl.csv') )
+
+    return outDF, accDF, probs
+
+sesLets = 'abcdefghijk'
+comp_cols = {'TESTDATE':'date','HAND':'handedness','GENDER':'sex'}
+
+def session_tups(df,rept_col='REPT',lookup_letters=False):
+    tups_num = df.reset_index().set_index(['ID',rept_col]).index.tolist()
+    if lookup_letters:
+        tups_out = [(tn[0],sesLets[tn[1]]) for tn in tups_num if tn[1]!=99]
+    else: tups_out = tups_num
+    return tups_out
+
+def ns_path(row):
+    template = '/vol01/raw_data/neuroscan/__SITE__/__FOLDER__/__ID__/'
+    return template.replace('__SITE__',fpU.site_hash[row['ID'][0]]).\
+            replace('__FOLDER__',row['RAWFILE']).\
+            replace('__ID__',row['ID'])
+
+IDsesPath_cols = ['ID','session','age_yrs','path']
+def compare_and_add_new_sessions(new_clean_df,previous_clean_path,
+                            previous_subs_byIDsesPath_path):
+    all_new = session_tups(new_clean_df,lookup_letters=True)
+    old_clean_df = pd.read_csv(previous_subs_byIDsesPath_path, sep=' ',
+                        converters={'ID':str})
+    old_clean_df.columns = IDsesPath_cols
+    all_old = session_tups(old_clean_df,rept_col='session')
+    new_ses = set(all_new).difference(all_old)
+    new_subs = set([an[0] for an in all_new]).difference(old_clean_df['ID'].tolist())
+    print(len(new_ses),'new sessions')
+    print( len(new_subs),'new subjects:', new_subs)
+
+    not_added_repts = new_ses
+    na_ref = new_clean_df.reset_index()
+    na_ref = na_ref[ na_ref['REPT']!=99 ]
+    na_ref['session'] = na_ref['REPT'].apply(lambda i: sesLets[i])
+    na_ref.set_index(['ID','session'],inplace=True)
+    na_refN = na_ref.ix[not_added_repts].reset_index()
+
+    na_refN['TESTDATE_date'] = na_refN['TESTDATE'].apply(calc_date_w_Qs)
+    na_refN['DOB_date'] = na_refN['DOB'].apply(calc_date_w_Qs)
+    na_refN['age'] = na_refN['TESTDATE_date'].astype(pd.datetime)\
+                        - na_refN['DOB_date'].astype(pd.datetime)
+    na_refN['age_yrs'] = na_refN['age'].apply(lambda a: a.days/365.25)
+    na_refN[ 'path' ] = na_refN.apply(ns_path, axis=1)
+
+    prev_ses = pd.read_csv(previous_subs_byIDsesPath_path,sep=' ')
+    prev_ses.columns = IDsesPath_cols
+
+    comb_ses = prev_ses.append( na_refN[ IDsesPath_cols ] )
+    fname_parts = previous_subs_byIDsesPath_path.split('.')
+    now = datetime.now()
+    date_str = str(now.year)+'-'+str(now.month)+'-'+str(now.day)
+    out_name = '.'.join([fname_parts[0],date_str,fname_parts[-1] ])
+    comb_ses.set_index(['ID','session']).sort_index().to_csv(out_name,sep=' ')
+
+    return na_refN
+
+def compare_values(new_primariesIN,prevDB):
+    from db import database as D
+    from db import compilation as C
+    Ndf = new_primariesIN
+    dbname = D.Mdb.name
+    D.set_db(prevDB)
+    existing_IDs = D.Mdb['subjects'].distinct('ID')
+    new_primaries = Ndf[ Ndf['ID'].isin(existing_IDs) ]
+
+    non_reps = []
+    mults = []
+    discs = []
+    probs = []
+    new = []
+    nck = 0
+    for ID_rep,df in tqdm( new_primaries.groupby(['ID','REPT']) ):
+        ID = ID_rep[0]
+        rep = ID_rep[1]
+        if rep < len(sesLets):
+            ses = sesLets[rep]
+        else:
+            non_reps.append(ID_rep)
+        
+        subD = D.Mdb['subjects'].find_one({'ID':ID},{'_id':0,'DOB':1,'handedness':1,'sex':1})
+        sesDF = C.buildframe_fromdocs(D.Mdb['sessions'].find({'ID':ID,'session':ses}))
+        if len(sesDF) > 1:
+            mults.append( (ID,ses) )
+        
+        if len(sesDF) == 0:
+            new.append(ID_rep)
+        else:
+            for compN,compO in comp_cols.items():
+                multVals=False; prob=False
+                Nval = Ndf[ (Ndf['ID'] == ID) & (Ndf['REPT'] == rep) ][compN].tolist()[0]
+                if compO in sesDF.columns:
+                    Ovals = sesDF[compO].unique()
+                    if compO == 'date':
+                        Ovals = [pd.to_datetime(str(d)) if isinstance(d,np.datetime64) else d\
+                                    for d in Ovals]
+                        Ovals = [date_string_clean(d) for d in Ovals]
+                    if len(Ovals) > 1:
+                        mults.append( (ID_rep,Ovals) )
+                        multVals = True
+                    else:
+                        Oval = Ovals[0]
+                else:
+                    if compO in subD:
+                        Oval = subD[compO]
+                    else:
+                        probs.append( (ID_rep,compN) )
+                        
+                if multVals == False and prob == False:    
+                    if Nval != Oval:
+                        discs.append( (ID_rep, compN, Oval, Nval) )
+                    else:
+                        nck +=1
+
+        
+    D.set_db(dbname)
+    print('val check count',nck)
+    return discs, mults, non_reps, new, probs
+
 
 def update(master_path,access_path, verbose=True, log='auto'):
 
