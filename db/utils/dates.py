@@ -40,6 +40,15 @@ def convert_date_fallback(dstr, dateform):
     else:
         return None
 
+def date_only(ds):
+    dtime = convert_date(ds)
+    try:
+        return datetime(*dtime.utctimetuple()[:3])
+    except: return dtime
+
+def date_string_clean(date):
+    ''' write date as string in American form without zero pads'''
+    return date.strftime('%m/%d/%Y').lstrip("0").replace("/0","/")
 
 def calc_date_w_Qs(dstr):
     ''' given date string of form mm/dd/yyyy, potentially containing ?? in some positions,

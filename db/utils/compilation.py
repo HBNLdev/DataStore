@@ -620,6 +620,9 @@ def clean_col(col,drops):
         else: col_clean.append(f)
     return tuple(col_clean)
 
+def flatten_ERP_columns(df):
+    df.columns = [ '_'.join([str(i) for i in c if not pd.isnull(i)]) for c in df.columns.tolist() ]
+
 def clean_join( tup, char='_' ):
     col = char.join([str(val) for val in tup])
     while col[0] == char:
@@ -628,8 +631,36 @@ def clean_join( tup, char='_' ):
         col = col[:-1]
     return col
 
+def remove_columns(df,removal_strings):
+    keep_cols = [c for c in df.columns\
+                if sum([1 if rs in c else 0 for rs in removal_strings])==0]
+    return df[keep_cols]
+
 def ages_for_output(df):
     ageCs = [c for c in df.columns if c=='age' or '_age' in c]
     for c in ageCs:
         df[c] = df[c].apply( lambda a: '{:.2f}'.format(np.round(a,decimals=2)) )
     df.replace('nan','',inplace=True) 
+
+def merge_cols(df,c1,c2,no_print=False):
+    '''Combine columns for variables that have no overlap
+        Any overlapping data will be catalogued and printed unless the 
+        'no_print' flag input is True 
+    '''
+    cm = c1+'__'+c2
+    df[cm] = None
+    probs = False
+    for ind,row in df.iterrows():
+        vals = [row[c1], row[c2]]
+        good = [v for v in vals if not pd.isnull(v) ]
+        if len(good) == 1:
+            df.set_value(ind,cm,good[0])
+        elif len(good) == 2:
+            probs = True
+            if not no_print:
+                print('two values at',ind,good)
+    if not probs:
+        df.drop([c1,c2],axis=1,inplace=True)
+        df.rename(columns={cm:c1},inplace=True)
+    else:
+        return probs
