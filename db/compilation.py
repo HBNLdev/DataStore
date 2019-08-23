@@ -235,7 +235,12 @@ def buildframe_fromdocs(docs, inds=['ID', 'session'], column_types={},clean=True
     return df
 
 def buildframe_from_id_list(IDs,collection='sessions',study_filters=None,
-                            limit_assessments=False, inds=['ID','session']):
+                            limit_assessments=False, inds=['ID','session'],
+                            add_query={},add_proj={}):
+    '''study_filters - list of studies by which to limit subjects
+        limit_assessments - whether to exclude assessments gathered outside
+                            the scope of studies in filters (not yet implemented)
+    '''
     IDs_w = list(IDs)
     if study_filters:
         st_filt_IDs = set()
@@ -244,10 +249,15 @@ def buildframe_from_id_list(IDs,collection='sessions',study_filters=None,
 
         IDs_w = list(st_filt_IDs.intersection(IDs_w))
 
-    collFrame = buildframe_fromdocs( D.Mdb[collection].find({'ID':{'$in':IDs_w}}),
+    query = {'ID':{'$in':IDs_w}}
+    query.update( add_query )
+    proj = {}
+    proj.update(add_proj)
+    collFrame = buildframe_fromdocs( D.Mdb[collection].find(query,proj),
                                 inds=inds )
 
-    if limit_assessments:
+    if limit_assessments == 'PhaseIV':
+        
         pass # need to add limit columns to assessment collections
     
     return collFrame
@@ -341,7 +351,7 @@ def prepare_joindata(keyDF, coll, subcoll=None, add_query={}, add_proj={},
 
 def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
                     left_join_inds=['ID'], right_join_inds=['ID'],
-                    id_field='ID', flatten=True, prefix=None,
+                    id_field='ID', flatten=True, prefix=None,suffix=None,
                     drop_empty=True, how='left'):
     ''' given a "key" dataframe and target collection,
         join corresponding info '''
@@ -354,7 +364,7 @@ def join_collection(keyDF_in, coll, subcoll=None, add_query={}, add_proj={},
 
     prepare_indices(keyDF, right_join_inds)
 
-    jDF = keyDF.join(newDF, how=how)
+    jDF = keyDF.join(newDF, how=how, rsuffix=suffix )
 
     if drop_empty:  # remove duplicate & empty rows, empty columns
         # jDF.drop_duplicates(inplace=True)
