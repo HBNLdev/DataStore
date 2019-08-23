@@ -24,14 +24,14 @@ from .knowledge.questionnaires import (map_ph4, map_ph4_ssaga, map_ph123, map_ph
                                        zork_p123_path, zork_p4_path,
                                        internalizing_dir, internalizing_file, externalizing_dir, externalizing_file,
                                        allrels_file, fham_file, max_fups)
-from .master_info import load_master, load_access
+from .master_info import load_master, load_access, popD, sesLets
 from .quest_import import (import_questfolder_ph4, import_questfolder_ssaga_ph4, import_questfolder_ph123,
                            import_questfolder_ssaga_ph123, )
 from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup, ID_nan_strintfloat_COGA,
                                 build_parentID, df_fromcsv)
 from .utils.filename_parsing import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
 from .utils.files import identify_files
-from .utils.dates import calc_date_w_Qs, calc_age
+from .utils.dates import calc_date_w_Qs, calc_age, date_only
 
 
 # maps collection objects to their collection names
@@ -143,18 +143,42 @@ class MongoCollection(object):
 class Subjects(MongoCollection):
     ''' subject info, including demographics and sample membership '''
 
-    def build(s):
+    def build(s,master_path='default'):
         # fast
-        master, master_mtime = load_master()
+        if master_path != 'default':
+            master, master_mtime = load_master(custom_path=master_path)
+        else:
+            master, master_mtime = load_master()
         for rec in tqdm(master.to_dict(orient='records')):
             so = D.MongoDoc(s.collection_name, rec)
             so.storeNaTsafe()
 
         D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
+
+    def add_missing_exclusions(s,missing):
+        '''missing exclusions input is producted by check_exclusions function
+            in the master_info module
+        '''
+        for sub,miss_ex in missing.items():
+            sub_doc = D.Mdb[s.collection_name].find_one({'ID':sub})
+            if isinstance(sub_doc,dict):
+                existing = sub_doc['no-exp']
+                print(existing)
+                if isinstance(existing,str):
+                    ex_list = existing.split('_')
+                    ex_list.extend(miss_ex)
+                    upd_list = sorted(ex_list)
+                    updated = '_'.join(upd_list)
+                else:
+                    updated = miss_ex
+
+                D.Mdb[s.collection_name].update_one({'_id':sub_doc['_id']},
+                                                {'$set': {'no-exp':updated}})
+
     def update_from_followups(s):
         fup_query = {}#'session': {'$exists': True}}
-        fup_fields = ['ID', 'session', 'followup', 'date','RELTYPE']
+        fup_fields = ['ID', 'session', 'followup', 'date','RELTYPE','SEXp4']
         fup_proj = {f: 1 for f in fup_fields}
         fup_proj['_id'] = 0
         fup_docs = D.Mdb['followups'].find(fup_query, fup_proj)
@@ -165,14 +189,17 @@ class Subjects(MongoCollection):
         all_subs = D.Mdb[s.collection_name].distinct('ID')
         subs_missing = set(fup_IDs).difference(all_subs)
         for sub in subs_missing:
-            sub_fupDF = fup_df.loc[pd.IndexSlice[sub,:], : ].reset_index()
+            sub_fupDF = fup_df.loc[[sub], : ].reset_index()
             sub_row = sub_fupDF.iloc[-1]
             if 'p4f0' in sub_fupDF['followup']:
                 p4row = sub_fupDF[ sub_fupDF['followup']=='p4f0' ]
                 p4ses = p4row['session'].tolist()[0]
                 p4date = p4row['date'].tolist()[0]
                 p4age = p4row['age'].tolist()[0]
-            else: p4ses = ''
+            else: 
+                p4ses = ''
+                p4date = None
+                p4age = None
             new_doc = { 'ID':sub_row['ID'],
                         'sex':sub_row['SEXp4'],
                         'Phase4-session':p4ses,
@@ -180,8 +207,10 @@ class Subjects(MongoCollection):
                         'Phase4-age':p4age }
             so = D.MongoDoc(s.collection_name, new_doc)
             so.storeNaTsafe()
-
-        D.Mdb[s.collection_name].dropIndex('ID')
+        try:
+            D.Mdb[s.collection_name].dropIndex('ID')
+        except:
+            print("Could not drop index 'ID' from "+s.collection_name+" collection")
         D.Mdb[s.collection_name].create_index([('ID', pymongo.ASCENDING)])
 
         subject_query = {'ID': {'$in': fup_IDs}}
@@ -253,6 +282,100 @@ class Subjects(MongoCollection):
             s.clear_field(fup_field)
             s.clear_field(date_field)
         s.clear_field('RELTYPE')
+
+
+def new_subjects(oldDB,newDB,accDF_clean):
+    '''Utility for adding subjects who are missed in the master update script
+    '''
+    #check coltypes
+    accDF = accDF_clean.copy()
+    #if isinstance(accDF['date'].unique()[0],str):
+    accDF['TESTDATE'] = accDF['TESTDATE'].apply(date_only).astype(datetime)
+    #if isinstance(accDF['DOB'].unique()[0],str):
+    accDF['DOB'] = accDF['DOB'].apply(date_only).astype(datetime)
+        
+    D.set_db(oldDB)
+    oldIDs = [ d['ID'] for d in D.Mdb['subjects'].find( {'EEG':'x'},{'_id':0,'ID':1}) ]
+    D.set_db(newDB)
+    accIDs = accDF['ID'].tolist()
+    eeg_subs = sorted(list(set(oldIDs+accIDs)))
+    
+    for ID in tqdm(eeg_subs):
+        old = False; newP4 = False; old_ses = []; upd_doc = None
+        if ID in oldIDs:
+            old = True
+            D.set_db(oldDB,False)
+            oldD = D.Mdb['subjects'].find_one({'ID':ID})
+            D.set_db(newDB,False)
+            rec = oldD
+            
+            old_ses =[ l for l in [ oldD.get(let+'-run',None) for let in sesLets ] if l]
+
+        if ID in accIDs:
+            accSub = accDF[ accDF['ID']==ID  ]
+            if old == False:
+                newP4 = True
+                if len(accSub) > 1:
+                    mult_missing.append(ID)
+                rec = {'ID':ID,
+                       'famID':ID[:5],
+                       'DOB':accSub['DOB'].tolist()[0],
+                       'handedness':accSub['HAND'].tolist()[0],
+                       'sex':accSub['GENDER'].tolist()[0],
+                       'POP':popD[accSub['POP'].tolist()[0]],
+                       'EEG':'x',
+                       'Phase4-session':'a'}
+
+            acc_ses = [ sesLets[sesI] for sesI in accSub['REPT'].unique() if sesI!=99 ]
+            first_ses = True
+            for  ses in acc_ses:
+                if ses not in old_ses:
+                    accSes = accSub[accSub['REPT']==sesLets.index(ses)]
+                    date = accSes['TESTDATE'].tolist()[0]
+                    DOBa = accSes['DOB'].tolist()[0]
+                    if old:
+                        if DOBa != rec['DOB']:
+                            DOB = 'amb'
+                        else:
+                            DOB = DOBa
+                    else:
+                        DOB = DOBa
+                    if DOB == 'amb':
+                        age = 'amb'
+                    else:
+                        if isinstance(DOB,str):
+                            DOB = calc_date_w_Qs(DOB)
+                        age = calc_age(DOB,date)
+                    if isinstance(age,float):
+                        age_str = '{0:.2f}'.format(age)
+                    else: age_str = age
+                    
+                    upd_doc = {ses+'-run':ses,
+                        ses+'-date':date,
+                        ses+'-raw':accSes['RAWFILE'].tolist()[0],
+                        ses+'-age':age_str }
+                    
+                    if first_ses and old:
+                        if oldD['Phase4-session'] not in 'abcd':
+                            newP4 = True
+                            upd_doc['Phase4-session'] = ses
+                    
+
+                    if newP4:
+                        upd_doc.update({'Phase4-testdate':date,
+                                        'Phase4-age':age_str})        
+                
+                    rec.update(upd_doc)
+                    
+                    first_ses = False
+                    newP4 = False
+                    
+        if old == False:
+            doc = D.MongoDoc('subjects',data=rec)
+            doc.storeNaTsafe()
+        elif upd_doc:
+            D.Mdb['subjects'].update_one({'_id': oldD['_id']},
+                                                {'$set': upd_doc } )
 
 
 class Sessions(MongoCollection):
@@ -380,9 +503,13 @@ class ERPPeaks(MongoCollection):
         mt_files, datemods = identify_files('/processed_data/mt-files/', '*.mt')
         add_dirs = ['ant_phase4__peaks_2014', 'ant_phase4_peaks_2015',
                     'ant_phase4_peaks_2016','ant_phase4__peaks_2017',
+                    'ant_phase4__NewPPicker_peaks_2017','ant_phase4__NewPPicker_peaks_2018',
+                    'ant_phase4__NewPPicker_peaks_2019',
                     'vp3_peak_master',
-                    'vp3_phase4__peaks_2015', 'vp3_phase4__peaks_2016','vp3_phase4__peaks_2017',
+                    'vp3_phase4__peaks_2015', 'vp3_phls ase4__peaks_2016','vp3_phase4__peaks_2017',
+                    'vp3_phase4__NewPPicker_peaks_2018','vp3_phase4__NewPPicker_peaks_2019',
                     'aod_phase4__peaks_2015', 'aod_phase4__peaks_2016','aod_phase4__peaks_2017',
+                    'aod_phase4__NewPPicker_peaks_2018','aod_phase4__NewPPicker_peaks_2019',
                     'cpt_h1_peaks_may_2016',
                     # 'non_coga_vp3',
                     # 'aod_bis_18-25controls',
@@ -432,6 +559,9 @@ class ERPPeaks(MongoCollection):
         s.add_uniqueID(fields=['ID','session'],name='uID')
 
 
+def write_error(info):
+    D.Mdb['build errors'].insert_one(info)
+
 class Neuropsych(MongoCollection):
     ''' results of neuropsychological tests '''
 
@@ -439,11 +569,15 @@ class Neuropsych(MongoCollection):
         # 10 minutes
         xml_files, datemods = identify_files('/raw_data/neuropsych/', '*.xml')
         for fp in tqdm(xml_files):
-            xmlO = Neuropsych_XML(fp)
-            xmlO.assure_quality()
-            xmlO.data['date'] = xmlO.data['testdate']
-            nsO = D.MongoDoc(s.collection_name, xmlO.data)
-            nsO.store()
+            try:
+                xmlO = Neuropsych_XML(fp)
+                xmlO.assure_quality()
+                xmlO.data['date'] = xmlO.data['testdate']
+                nsO = D.MongoDoc(s.collection_name, xmlO.data)
+                nsO.store()
+            except:
+                write_error({'collection':'neuropsych',
+                            'filepath':fp})
 
         s.add_uniqueID(fields=['ID','session'],name='uID')
 
@@ -657,11 +791,18 @@ class Internalizing(MongoCollection):
         print(int_df.shape[0] - comb_df.shape[0], 'internalizing docs could not be matched')
 
         for ID, row in tqdm(comb_df.iterrows()):
-            D.Mdb['internalizing'].update_one({'_id': row['_id']},
+            try:
+                D.Mdb['internalizing'].update_one({'_id': row['_id']},
                                               {'$set': {'session': row['session'],
                                                         'date_diff_session': row['date_diff_session'],
                                                         'date': row['date'], }
                                                })
+            except:
+                write_error( {'collection':'internalizing',
+                        'procedure':'update_from_ssaga',
+                        'ID':row.get('ID'),
+                        'session':row.get('session'),
+                        'doc_id':row.get('_id')} )
 
     def reset_update(s):
 
@@ -930,3 +1071,19 @@ class FHD(MongoCollection):
         for rec in tqdm(sub_df_fhd_relthresh.reset_index().to_dict(orient='records')):
             so = D.MongoDoc(s.collection_name, rec)
             so.store()
+
+def copy_db(old,new,collections=None):
+    D.set_db(old,verbose=False)
+    if collections:
+        to_copy = collections
+    else:
+        to_copy = [c for c in D.Mdb.collection_names() if c != 'system.indexes']
+    for coll in tqdm(to_copy):
+        D.set_db(old,verbose=False)
+        olds = [ d for d in D.Mdb[coll].find() ]
+        D.set_db(new,verbose=False)
+        D.Mdb.drop_collection(coll)
+        for doc in olds:
+            doc.pop('_id')
+            D.Mdb[coll].insert_one(doc)
+    D.set_db(old)
