@@ -145,7 +145,7 @@ def import_questfolder_ssaga_ph4(qname, kmap, path, ssaga_collection_name):
         print('There were no files in the path specified.')
 
     for followup_lbl, files in file_dict.items():
-
+        print(followup_lbl)
         join_df = pd.DataFrame()
 
         for f in files:
@@ -191,15 +191,17 @@ def import_questfolder_ssaga_ph4(qname, kmap, path, ssaga_collection_name):
         print(join_df.shape)
         # convert to records and store in mongo coll, noting followup_lbl,
         # and separately for the full questionnaire and diagnoses
-
+        all_vars = set()
         for drec in join_df[list(nondx_cols) + ['ID', 'date']].to_dict(orient='records'):
             ro = D.Questionnaire(ssaga_collection_name, qname, followup_lbl, data=drec)
+            all_vars.update(drec.keys())
             ro.storeNaTsafe()
 
         for drec in join_df[list(dx_cols) + ['ID', 'date', i['date_lbl']]].to_dict(orient='records'):
             ro = D.Questionnaire(ssaga_collection_name, 'dx_' + qname, followup_lbl, data=drec)
             ro.storeNaTsafe()
 
+    return all_vars
 
 def import_questfolder_ph123(qname, kmap, path, quest_collection_name):
     ''' import all questionnaire data in one folder,
@@ -286,7 +288,7 @@ def import_questfolder_ssaga_ph123(qname, kmap, path, ssaga_collection_name):
     print(file_list)
     if not file_list:
         print('There were no files in the path specified.')
-
+    all_fields = set()
     for f in file_list:
 
         fname = os.path.split(f)[1]
@@ -320,7 +322,7 @@ def import_questfolder_ssaga_ph123(qname, kmap, path, ssaga_collection_name):
 
         # df.set_index('ID', inplace=True)
         df.drop(i['id_lbl'], axis=1, inplace=True)
-
+        print(df.shape)
         if fname[:3] == 'dx_':
             for drec in df.to_dict(orient='records'):
                 ro = D.Questionnaire(ssaga_collection_name, 'dx_' + qname, followup_lbl, data=drec)
@@ -334,3 +336,5 @@ def import_questfolder_ssaga_ph123(qname, kmap, path, ssaga_collection_name):
             for drec in df.to_dict(orient='records'):
                 ro = D.Questionnaire(ssaga_collection_name, qname, followup_lbl, data=drec)
                 ro.storeNaTsafe()
+                all_fields.update(drec.keys())
+    return all_fields
