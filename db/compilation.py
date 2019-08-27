@@ -253,9 +253,12 @@ def buildframe_from_id_list(IDs,collection='sessions',study_filters=None,
     query.update( add_query )
     proj = {}
     proj.update(add_proj)
+    if len(proj) == 0:
+        proj = None
+ 
     collFrame = buildframe_fromdocs( D.Mdb[collection].find(query,proj),
                                 inds=inds )
-
+    
     if limit_assessments == 'PhaseIV':
         
         pass # need to add limit columns to assessment collections

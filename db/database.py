@@ -18,7 +18,7 @@ def set_db(db_name,verbose=True):
         print('you are now accessing the db named', Mdb.name)
 
 
-use_db_name = 'HBNL7'  # the "default" DB
+use_db_name = 'HBNL8'  # the "default" DB
 set_db(use_db_name)  # always set the DB to default on import
 
 
