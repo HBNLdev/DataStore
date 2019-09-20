@@ -418,8 +418,9 @@ def clean_access_master(acc_path,out_path=None):
     writeDF.sort_values('ID').to_csv(out_path,index=False,na_rep='.',date_format='%m/%d/%Y')
 
     print(len(accDF), 'entries', len(accPrim), 'primary')
-    outDF.set_index(['ID','REPT']).sort_index().to_csv(acc_path\
-                                        .replace('.xlsx','_cl.csv') )
+    out_path = acc_path.replace('.xlsx','_cl.csv')
+    outDF.set_index(['ID','REPT']).sort_index().to_csv( out_path )
+    print('Clean access master written to: ',out_path)
 
     return outDF, accDF, probs
 
@@ -475,6 +476,7 @@ def compare_and_add_new_sessions(new_clean_df,previous_clean_path,
     date_str = str(now.year)+'-'+str(now.month)+'-'+str(now.day)
     out_name = '.'.join([fname_parts[0],date_str,fname_parts[-1] ])
     comb_ses.set_index(['ID','session']).sort_index().to_csv(out_name,sep=' ')
+    print( 'updated sessions written to ', out_name )
 
     return na_refN
 
