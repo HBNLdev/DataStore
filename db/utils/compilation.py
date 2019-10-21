@@ -590,7 +590,7 @@ def daily_average(drink_df_al):
     return drink_df_al_na['da']
 
 
-def writecsv_date(df, base_path, suffix, midfix=''):
+def writecsv_date(df, base_path, suffix, midfix='',float_format='%.5f'):
     ''' given dataframe df, a base_path (including directories and any file prefix), and a suffix,
         write the dataframe to a CSV that has a date attached to it '''
     #remove internal fields
@@ -600,7 +600,7 @@ def writecsv_date(df, base_path, suffix, midfix=''):
     output_str = '_'.join([base_path, midfix, today, suffix])
     output_path = output_str.replace('__','_') + '.csv'
     output_path = output_path.replace('_.','.')
-    df.to_csv(output_path, na_rep='',float_format='%.5f',date_format='%Y/%m/%d')
+    df.to_csv(output_path, na_rep='',float_format=float_format,date_format='%Y/%m/%d')
     return output_path
 
 def fields_lookup(collection,ins=[],outs=[]):
@@ -637,7 +637,7 @@ def remove_columns(df,removal_strings):
     return df[keep_cols]
 
 def ages_for_output(df):
-    ageCs = [c for c in df.columns if c=='age' or '_age' in c]
+    ageCs = [c for c in df.columns if c=='age' or '_age' in c or '-age' in c]
     for c in ageCs:
         df[c] = df[c].apply( lambda a: '{:.2f}'.format(np.round(a,decimals=2)) )
     df.replace('nan','',inplace=True) 

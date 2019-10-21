@@ -15,8 +15,8 @@ from .utils.compilation import get_bestsession, writecsv_date
 npsych_basepath = '/processed_data/neuropsych/neuropsych_all'
 fhd_basepath = '/processed_data/fhd/fhd'
 
-def export_a_collection(df,basepath, suffix=''):
-        path = writecsv_date(df, basepath, midfix=D.Mdb.name, suffix=suffix )
+def export_a_collection(df,basepath, suffix='',float_format='%.5f'):
+        path = writecsv_date(df, basepath, midfix=D.Mdb.name, suffix=suffix, float_format=float_format )
         print('saved to', path )
 
 def st_int(v):
@@ -56,23 +56,23 @@ def neuropsych(do_export=True,COGA=False):
     npsych_df['hand'] = npsych_df['hand'].apply(npsych_code_hand)
 
     # setting non-phase-4 followup values to be missing
-    nonp4_bool = npsych_df['followup'].isin(['p1', 'p2', 'p3'])
-    print(nonp4_bool.sum(), 'non-phase4 followup values found, setting to missing')
-    npsych_df.ix[nonp4_bool, 'followup'] = np.nan
+    # nonp4_bool = npsych_df['followup'].isin(['p1', 'p2', 'p3'])
+    # print(nonp4_bool.sum(), 'non-phase4 followup values found, setting to missing')
+    # npsych_df.ix[nonp4_bool, 'followup'] = np.nan
 
     # defining and re-ordering the columns to export
     export_cols = Neuropsych_XML.cols.copy()
     export_cols.remove('id')
     export_cols.remove('sessioncode')
     export_cols.remove('testdate')
-    export_cols = ['date','session_best', 'session', 'date_diff_session', 'followup'] + \
+    export_cols = ['date','session_best', 'session', 'date_diff_session', ] + \
                   export_cols + ['np_session', 'site' ]
     for n_ring in ['3b', '4b', '5b', 'tt']:
         last_pos = export_cols.index('tolt_' + n_ring + '_atrti')
         otr_pos = export_cols.index('tolt_' + n_ring + '_otr')
         export_cols.insert(last_pos + 1, export_cols.pop(otr_pos))
 
-    #using lowercase 'id' from here on to satisfy excel import behavior
+    # using lowercase 'id' from here on to satisfy excel import behavior
     npsych_df_export = npsych_df[export_cols]
     npsych_df_export.reset_index(inplace=True)
     npsych_df_export.rename(columns={'ID':'id',
@@ -83,6 +83,10 @@ def neuropsych(do_export=True,COGA=False):
                                      }, inplace=True)
     npsych_df_export.set_index(['id','np_session'],inplace=True)
     npsych_df_export.sort_index(inplace=True)
+
+    # drop rows missing all measurements
+    m_cols = [c for c in npsych_df_export.columns if any([pref+'_' in c for pref in ['tolt','vst']])]
+    npsych_df_export.dropna(how='all', subset=m_cols, inplace=True)
 
     if COGA == True:
         npsych_basepath = npsych_basepath.replace('_all','_COGA')
@@ -95,7 +99,7 @@ def neuropsych(do_export=True,COGA=False):
 
     if do_export:
         export_a_collection(convert_int_cols_for_export(npsych_df_export),
-                         npsych_basepath)
+                         npsych_basepath,float_format='%.3f')
 
     return npsych_df_export
 
