@@ -1,6 +1,10 @@
 ''' working with record-style dictionaries '''
 
 
+def update_rec(D,collection,old,update,key_field='_id'):
+
+    D.Mdb[collection].update_one({key_field:old[key_field]},{'$set':update})
+
 def flatten_dict(D, delim='_', prefix=''):
     ''' given nested dict, return un-nested dict with str-joined keys '''
     if len(prefix) > 0:
@@ -56,5 +60,4 @@ def get_SSAGA_doc_var(var,doc,aliasD):
     if varUp in doc:
         return doc[varUp]
     elif var in aliasD:
-        return doc[aliasD[var]]
-    else: return None
+        return doc.get(aliasD[var],None)
