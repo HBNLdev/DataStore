@@ -11,6 +11,7 @@ from glob import glob
 import pandas as pd
 import numpy as np
 import pymongo
+import pickle
 from tqdm import tqdm
 
 import db.database as D
@@ -28,7 +29,7 @@ from .master_info import load_master, load_access, popD, sesLets
 from .quest_import import (import_questfolder_ph4, import_questfolder_ssaga_ph4, import_questfolder_ph123,
                            import_questfolder_ssaga_ph123, )
 from .utils.compilation import (calc_followupcol, join_ufields, groupby_followup, ID_nan_strintfloat_COGA,
-                                build_parentID, df_fromcsv)
+                                build_parentID, df_fromcsv, ages_for_output)
 from .utils.filename_parsing import parse_STinv_path, parse_cnt_path, parse_rd_path, parse_cnth1_path
 from .utils.files import identify_files
 from .utils.dates import calc_date_w_Qs, calc_age, date_only
@@ -177,6 +178,8 @@ class Subjects(MongoCollection):
                                                 {'$set': {'no-exp':updated}})
 
     def update_from_followups(s):
+        ''' Adds subjects who only have followups and updates Phase4-information.
+        '''
         fup_query = {}#'session': {'$exists': True}}
         fup_fields = ['ID', 'session', 'followup', 'date','RELTYPE','SEXp4']
         fup_proj = {f: 1 for f in fup_fields}
@@ -240,38 +243,49 @@ class Subjects(MongoCollection):
             D.Mdb[s.collection_name].update_one({'_id': row['_id']},
                                                 {'$set': uD } )
     def update_from_sessions(s):
+        ''' Update EEG assessment fields based on sessions collecion
+        '''
         ses_query = {}
         ses_fields = {'ID','session','date','raw','age','phase4'}
         ses_proj = {f:1 for f in ses_fields}
         ses_proj['_id'] = 0
         ses_df = buildframe_fromdocs( D.Mdb['sessions'].find(ses_query, ses_proj) )
+        ages_for_output(ses_df)
         ses_IDs = list(set(ses_df.index.get_level_values('ID').tolist()))
         sdf = ses_df.reset_index()
 
         subject_query = {'ID':{'$in':ses_IDs}}
-        subject_fields = ['ID','EEG']
-        subject_proj = {f:1 for f in subject_fields}
         subject_df = buildframe_fromdocs( D.Mdb[s.collection_name].find(
-                            subject_query, subject_proj), inds=['ID'], clean=False)
-
+                            subject_query), inds=['ID'], clean=False)
+        ages_for_output(subject_df)
         comb_df = subject_df.join(ses_df)
 
-        fixedEEG_IDs = []
-        for ID,row in tqdm(comb_df.reset_index().groupby('ID').head(1).iterrows()):
+        updatesD = {}
+        for ID,row in tqdm(comb_df.reset_index().groupby('ID').head(1).set_index('ID').iterrows()):
+            uD = {}; update = False
+            subD = subject_df.loc[ID]
             if not row['EEG'] == 'x':
-                uD = {'EEG':'x'}
-                
+                uD['EEG'] = 'x'
+                update = True
+            for ses,sRow in comb_df.loc[ID,:].iterrows():
+                radr_cols = [ses+'-'+c for c in ['run','age','date','raw']]
+                radr_vals = [ses,sRow['age'], sRow['date'], sRow['raw']]
+                for c,v in zip(radr_cols,radr_vals):
+                    if subD[c] != v:
+                        uD[c] = v
+                        update = True
+
+            
+            if update:
                 D.Mdb[s.collection_name].update_one({'_id':row['_id']},
                                                     {'$set': uD})
-                fixedIDs.append(ID)
+                updatesD[ID] = uD
 
-        # p4firsts = comb_df[ comb_df['phase4']==True ].sort_values('session').\
-        #                 groupby('ID').head(1)
-        # for ID,row in tqdm(p4firsts):
-        #     if row['']
+        if len(updatesD):
+            with open('/vol01/processed_data/DB/logs/Subjects_updates_from_sessions_'+D.Mdb.name+'.p','wb') as of:
+                pickle.dump(updatesD,of)
 
-
-        return fixedEEG_IDs
+        return updatesD
 
     def reset_update(s):
 
