@@ -8,6 +8,8 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 
+from db import database as D
+from db import compilation as C
 from .utils.compilation import ID_nan_strint
 from .utils.dates import calc_date_w_Qs, convert_date, date_string_clean
 from .utils.filename_parsing import site_fromIDstr
@@ -323,12 +325,21 @@ def prprint(message,priority,threshold = 3):
         print( *message )
 
 
-def check_exclusions(master,noexp_listDFs):
+def check_exclusions(master_or_DB,noexp_listDFs):
     ''' Takes a master object and a dictionary of dataframes 
     of not included experiments by their paths.
     Returns lists of exclusions and those missing from the master
     The missing dictionary can be used to add exclusions to the database as
     input to the add_missing_exclusions function on the subjects collection.'''
+
+    if not isinstance(master_or_DB,pd.DataFrame):
+        old_db = D.Mdb.name
+        D.set_db(master_or_DB)
+        query = D.Mdb['subjects'].find({},{'ID':1,'no-exp':1})
+        master = C.buildframe_fromdocs(query)
+        D.set_db(old_db)
+    else:
+        master = master_or_DB
 
     subject_exclusions = {}
     for f,df in noexp_listDFs.items():
@@ -441,8 +452,13 @@ def ns_path(row):
             replace('__ID__',row['ID'])
 
 IDsesPath_cols = ['ID','session','age_yrs','path']
+
 def compare_and_add_new_sessions(new_clean_df,previous_clean_path,
                             previous_subs_byIDsesPath_path):
+    '''Updates ID-session-path file with new sessions from a dataframe, writing a
+        space delimited file (to conform to the unix pipeline).
+        Returns a dataframe of the new sessions as formatted for the file.
+    '''
     all_new = session_tups(new_clean_df,lookup_letters=True)
     old_clean_df = pd.read_csv(previous_subs_byIDsesPath_path, sep=' ',
                         converters={'ID':str})
@@ -481,6 +497,15 @@ def compare_and_add_new_sessions(new_clean_df,previous_clean_path,
     return na_refN
 
 def compare_values(new_primariesIN,prevDB):
+    '''Checks access query values versus existing database.
+        Should be run using a cleaned version of the master query, produced using
+        clean_access_master.
+        Returns discrepancies ( [(ID,repeat #), field, old value, new value] ), 
+                multiple copies of the same session,
+                sessions with unusable labels,
+                new session, 
+                problems
+    '''
     from db import database as D
     from db import compilation as C
     Ndf = new_primariesIN
@@ -541,6 +566,99 @@ def compare_values(new_primariesIN,prevDB):
     D.set_db(dbname)
     print('val check count',nck)
     return discs, mults, non_reps, new, probs
+
+
+# Writing
+master_cols = ['ID', 'famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP', 'sex', 
+                'handedness', 'DOB', 'twin', 'EEG', 'system', 'Wave12', 'Wave12-fam', 'fMRI',
+                'Wave3', 'Phase4-session', 'Phase4-testdate', 'Phase4-age', '4500', 'ccGWAS',
+                'AAfamGWAS', 'ExomeSeq', 'EAfamGWAS', 'EEfamGWAS-fam', 'self-reported',
+                'wave12-race', '4500-race', 'ccGWAS-race', 'core-race', 'COGA11k-fam',
+                'COGA11k-race', 'COGA11k-fam-race', 'ruID', 'genoID', 'SmS', 'alc_dep_dx',
+                'alc_dep_ons', 'CA/CO', 'a-run', 'a-raw', 'a-date', 'a-age', 'b-run',
+                'b-raw', 'b-date', 'b-age', 'c-run', 'c-raw', 'c-date', 'c-age', 'd-run',
+                'd-raw', 'd-date', 'd-age', 'e-run', 'e-raw', 'e-date', 'e-age', 'f-run',
+                'f-raw', 'f-date', 'f-age', 'g-run', 'g-raw', 'g-date', 'g-age', 'h-run',
+                'h-raw', 'h-date', 'h-age', 'i-run', 'i-raw', 'i-date', 'i-age', 'j-run',
+                'j-raw', 'j-date', 'j-age', 'k-run', 'k-raw', 'k-date', 'k-age', 'no-exp',
+                'remarks']
+col_classes = {'str':['ID', 'famID', 'mID', 'fID','DNA', 'rel2pro', 'famtype', 'POP', 'sex', 'handedness',
+                     'EEG', 'system', 'Wave12', 'fMRI', 'Wave3', 'Phase4-session',
+                     '4500', 'ccGWAS', 'AAfamGWAS', 'ExomeSeq', 'EAfamGWAS', 'self-reported',
+                      'wave12-race', '4500-race', 'ccGWAS-race', 'core-race','COGA11k-fam', 'COGA11k-race',
+                      'COGA11k-fam-race', 'ruID', 'genoID', 'SmS','CA/CO','a-run', 'a-raw','b-run', 'b-raw',
+                     'c-run','c-raw','d-run','d-raw','e-run','e-raw','f-run','f-raw','g-run','g-raw',
+                     'h-run','h-raw','i-run','i-raw','j-run','j-raw','k-run','k-raw','no-exp', 'remarks'],
+              'date':['DOB','a-date','b-date','c-date','d-date','e-date','f-date',
+                     'g-date','h-date','i-date','j-date','k-date','Phase4-testdate'],
+              'two-digit':['Phase4-age',
+                           'a-age','b-age','c-age','d-age','e-age','f-age',
+                           'g-age','h-age','i-age','j-age','k-age'],
+              'integer':['twin','Wave12-fam','EEfamGWAS-fam','alc_dep_dx','alc_dep_ons']}
+class_finder = {}
+for cl,col_lst in col_classes.items():
+    class_finder.update({col:cl for col in col_lst})
+
+def write_master_file_row(ID_or_dict):
+    errors = []
+    if isinstance(ID_or_dict,str):
+        rowD = D.Mdb['subjects'].find_one({'ID':ID_or_dict})
+    else:
+        rowD = ID_or_dict
+        
+    write_vals = []    
+    for col in master_cols:
+        col_class = class_finder[col]
+        
+        raw_val = rowD.get(col,False)
+        if  col_class !='str' and isinstance(raw_val,str):
+            col_class = 'str'
+        try:
+            if raw_val and not ( isinstance(raw_val,list) or pd.isnull(raw_val)):
+                if col == 'no-exp':
+                    if isinstance(raw_val,list):
+                        raw_val = '_'.join(raw_val)
+                    raw_val = raw_val.replace(',','')
+                    
+                if col_class == 'integer':
+                    val_str = str(int(raw_val))
+                elif col_class == 'two-digit':
+                    val_str = "{0:.2f}".format(round(raw_val,2))
+                elif col_class == 'date':
+                    if isinstance(raw_val,str):
+                        val_str = raw_str
+                    else:
+                        val_str = raw_val.strftime("%m/%d/%Y")
+                elif col_class == 'str': #string
+                    if not isinstance(raw_val,str):
+                        print(rowD['ID'],col,raw_val)
+                    val_str = str(raw_val)
+            else:
+                val_str = '.'
+        except:
+            val_str = 'problem'
+            errors.append( (rowD['ID'],col,raw_val) )
+        write_vals.append(val_str)    
+    
+    if len(write_vals) != len(master_cols):
+        errors.append([rowD['ID'],'too many',rowD])
+            
+    row = ','.join(write_vals)+'\n'
+    return row, errors
+
+def write_master(db='HBNL8b',folder='/active_projects/mort/test/'):
+    old_db = D.Mdb.name
+    D.set_db(db)
+    errors = []
+    with open(folder+'EEG-master-file-'+db+'.csv','w') as mf:
+        mf.writelines([','.join(master_cols)+'\n'])
+        for ID in tqdm(sorted(D.Mdb['subjects'].distinct('ID'))):
+            line, err = write_master_file_row(ID)
+            mf.writelines( line )
+            errors.extend(err)
+    
+    D.set_db(old_db)
+    return errors
 
 
 def update(master_path,access_path, verbose=True, log='auto'):
