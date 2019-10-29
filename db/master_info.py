@@ -16,8 +16,8 @@ from .utils.filename_parsing import site_fromIDstr
 from .utils import filename_parsing as fpU
 from tqdm import tqdm
 
-master_path = '/processed_data/master-file/EEG-master-file-31.csv'
-access_path = '/processed_data/master-file/masterFile_asOf_07-11-2019_cl.csv'
+master_path = '/processed_data/master-file/EEG-master-file-HBNL9b.csv'
+access_path = '/processed_data/master-file/masterFile_asOf_10-10-2019_cl.csv'
 
 subjects_sparser_sub = \
     ['famID', 'mID', 'fID', 'DNA', 'rel2pro', 'famtype', 'POP',
