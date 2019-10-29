@@ -843,7 +843,7 @@ class AllRels(MongoCollection):
 
     def build(s):
         folder = zork_p4_path + 'subject/rels/'
-        path = folder + allrels_file
+        path = folder + os.path.split(allrels_file)[-1]
         # datemod = datetime.fromtimestamp(os.path.getmtime(path))
 
         import_convcols = ['IND_ID', 'FAM_ID', 'F_ID', 'M_ID']
