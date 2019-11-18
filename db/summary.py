@@ -178,6 +178,7 @@ def plot_cols_across_bins(gr_summ, cols, stat, bin_var):
 
 
 def first_char(st):
+    '''util function for grouping'''
     if pd.notnull(st):
         return st[0]
     else:
@@ -185,6 +186,11 @@ def first_char(st):
 
 
 def groups_for_column(df, col, max_groups=6, num_groups=2, group_labelsF=False):
+    '''Form groups for values in a column, limited to a maximum number.
+    If there are more unique values than allowed groups, then, the first character will
+    be used if a string, or the pd.qcut function if numeric. group_labelsF is input to 
+    pd.qcut.
+    '''
     u_vals = df[col].unique()
     if len(u_vals) <= max_groups:
         groups = u_vals

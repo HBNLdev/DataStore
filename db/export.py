@@ -20,12 +20,14 @@ def export_a_collection(df,basepath, suffix='',float_format='%.5f'):
         print('saved to', path )
 
 def st_int(v):
+    '''Utility to stringify and integer, returning an empty string for nulls.'''
     if pd.isnull(v):
         return ''
     else:
         return str(int(v))
 
 def convert_int_cols_for_export(df):
+    '''Create clean string representations of integer only columns for writing ot csv. '''
     dfw = df.copy()
     for col in df.columns:
         intconv = False

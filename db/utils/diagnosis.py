@@ -1,4 +1,10 @@
-'''Diagnosis module
+'''Diagnosis module.
+Diagnoses are made using a framework that collects information from ssaga questionnaires.
+The variables are designated (in lowercase) in utility functions that calculate individual
+criteria. A dictionary of (index,full name,shortname):function key:value pairs is taken
+as input to setup the framework, and each criteria function will then be applied with
+appropraite input variables using introspection and "keyfinder" lookuup dictionaries
+created in the module.
 '''
 from db import database as D
 from db import compilation as C
@@ -11,6 +17,7 @@ from tqdm import tqdm
 from collections import Counter
 from functools import reduce
 
+#Criteria functions for DSM5 alcoholism
 def tolerance5(al9d,al9i):
     if al9d==5 or al9i==5:
             return 5
@@ -99,8 +106,11 @@ def craving5(al19):
     elif np.isnan(al19):
         return 9
     else: return 1
+
+
 def DSM5comp(criteriaD):
-    
+'''Compilation function for DSM5 alcoholism
+'''    
     sList = [nls[1] for nls in sorted([k for k,v in criteriaD.items() if v==5]) ]
     count = len(sList)
     dx = False
@@ -135,7 +145,7 @@ DSM5_criteria = {(10,'tolerance','tolerance'):tolerance5,
 #Need to define a generalized categorization scheme
 #DSM5_severity = 
 
-
+#Assembly of ssaga keyfinder dictionarres for harmonizing across different versions
 db_name = D.Mdb.name
 meta_name = db_name+'meta'
 D.set_db(meta_name)
@@ -174,7 +184,11 @@ def make_diagnosis(framework,measures):
     return Dout
 
 class diagnosticFramework:
-
+'''Generalized framework for diagnoses based on ssaga questionnaires.
+    Initialization takes a name for the diagnosis, criteria dictionary mapping 
+    (index,name,shortname) to criteria functions and a compilation function 
+    that accepts the criteria dictionary.
+'''
     def __init__(s,name,criteriaD,compFun):
         s.name=name
         s.criteria = criteriaD
@@ -218,7 +232,18 @@ class diagnosticFramework:
         
         return ddf
 
+    def evaluate_criteria(s,inputsD):
+        inputs = assVars = {k:np.nan if v==None else v for k,v in inputsD.items()}
+        vals = {}
+        for crit,fun_ins in s.function_guide.items():
+            vals[crit] = fun_ins[0](*[ inputs[var] for var in fun_ins[1] ])
+
+        comp = s.compFun(vals)
+        return vals,comp
+
 def items_for_diagnosis(fIDs,collection,fields):
+'''Utility to retrieve values from ssaga documents.
+'''
     fields = list(set(fields))
     proj = {'ID':1,'followup':1,'fID':1}
     multi_fields = [f for f in fields if f in SSAGA_multi_kfinder]
@@ -244,42 +269,37 @@ def items_for_diagnosis(fIDs,collection,fields):
     print(itemsDF.columns)
     return itemsDF.reset_index().rename(columns=SSAGA_kfind_rev)
 
-#     def evaluate_criteria(s,inputsD):
-#         inputs = assVars = {k:np.nan if v==None else v for k,v in inputsD.items()}
-#         vals = {}
-#         for crit,fun_ins in s.function_guide.items():
-#             vals[crit] = fun_ins[0](*[ inputs[var] for var in fun_ins[1] ])
 
-#         comp = s.compFun(vals)
-#         return vals,comp
 
-# def DSM5_for_fups(fIDs):
-#     DSM5fr = diagnosticFramework('DSM5',DSM5_criteria,DSM5comp)
+def DSM5_for_fups(fIDs):
+'''Wrapper function for DSM5 alcoholism.
+'''
+    DSM5fr = diagnosticFramework('DSM5',DSM5_criteria,DSM5comp)
 
-#     recs = []
-#     it_recs = []
-#     assDs = []
-#     for fID in tqdm(fIDs):
-#         ssagaD = D.Mdb['ssaga'].find_one({'fID':fID,'questname':{'$in':['ssaga','cssaga']}})
-#         if ssagaD:
-#             assD = { it:get_SSAGA_doc_var(it,ssagaD,SSAGA_kfinder) for it in DSM5fr.all_inputs }
-#             assDs.append(assD)
-#             crit,diag = DSM5fr.evaluate_criteria(assD)
-#             rec = {'fID':fID}
-#             it_rec = rec.copy()
-#             rec.update({('diagnosis',k):v for k,v in diag.items()})
-#             rec.update({('criteria',k[1]):v for k,v in crit.items()})
-#             recs.append(rec)
+    recs = []
+    it_recs = []
+    assDs = []
+    for fID in tqdm(fIDs):
+        ssagaD = D.Mdb['ssaga'].find_one({'fID':fID,'questname':{'$in':['ssaga','cssaga']}})
+        if ssagaD:
+            assD = { it:get_SSAGA_doc_var(it,ssagaD,SSAGA_kfinder) for it in DSM5fr.all_inputs }
+            assDs.append(assD)
+            crit,diag = DSM5fr.evaluate_criteria(assD)
+            rec = {'fID':fID}
+            it_rec = rec.copy()
+            rec.update({('diagnosis',k):v for k,v in diag.items()})
+            rec.update({('criteria',k[1]):v for k,v in crit.items()})
+            recs.append(rec)
         
-#         it_rec.update(assD)
-#         it_recs.append(it_rec)
-#     dxDF = pd.DataFrame.from_records(recs).set_index( 'fID' )
-#     itDF = pd.DataFrame.from_records(it_recs).set_index('fID')
+        it_rec.update(assD)
+        it_recs.append(it_rec)
+    dxDF = pd.DataFrame.from_records(recs).set_index( 'fID' )
+    itDF = pd.DataFrame.from_records(it_recs).set_index('fID')
     
-#     dxDF = dxDF[ sorted(dxDF.columns.tolist(),reverse=True) ]
-#     dxDF.columns = pd.MultiIndex.from_tuples(dxDF.columns)
+    dxDF = dxDF[ sorted(dxDF.columns.tolist(),reverse=True) ]
+    dxDF.columns = pd.MultiIndex.from_tuples(dxDF.columns)
 
-#     return dxDF,itDF
+    return dxDF,itDF
 
 
 # class criterion:
