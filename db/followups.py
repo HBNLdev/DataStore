@@ -37,7 +37,7 @@ def import_mastercsv(path):
 def preparefupdfs_forbuild():
     ''' main function, used by build. returns a dictionary
         that maps from phases to followup dataframes '''
-
+    print('Phase IV master path: ',p4_master_path)
     allphase_master_means, pcols = get_allphasemastermeans_pcols()
 
     phase_dfs = make_fupdfs(allphase_master_means, pcols)
