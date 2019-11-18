@@ -5,7 +5,7 @@ import os
 from db.utils import files as fU# defining maximum followups
 
 most_recent_distribution = 105
-max_fups = 8 #This is zero indexed, so 8 means p4f7 is the highest followup designation
+max_fups = 7 #This is zero indexed, so 8 means p4f7 is the highest followup designation
 
 # definitions of zork URLs
 
